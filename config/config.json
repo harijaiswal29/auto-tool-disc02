@@ -1,0 +1,78 @@
+{
+  "project": {
+    "name": "Autonomous Tool Discovery System",
+    "version": "0.1.0",
+    "author": "Your Name",
+    "description": "AI agents that autonomously discover and integrate tools using MCP"
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "log_dir": "data/logs",
+    "max_file_size_mb": 10,
+    "backup_count": 5
+  },
+  
+  "database": {
+    "tool_registry": "data/registry/tools.db",
+    "learning_data": "data/registry/learning.db"
+  },
+  
+  "mcp_servers": {
+    "filesystem": {
+      "command": ["./node_modules/.bin/mcp-server-filesystem"],
+      "args": ["/tmp"],
+      "enabled": true
+    },
+    "brave_search": {
+      "command": ["./node_modules/.bin/mcp-server-brave-search"],
+      "args": [],
+      "enabled": true,
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      }
+    },
+    "postgres": {
+      "command": ["./node_modules/.bin/mcp-server-postgres"],
+      "args": ["${POSTGRES_CONNECTION_STRING}"],
+      "enabled": true,
+      "config": {
+        "connection_string": "${POSTGRES_CONNECTION_STRING}",
+        "default_connection": "postgresql://auto_tool_user:auto_tool_pass@localhost:5432/auto_tool_disc"
+      },
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "${POSTGRES_CONNECTION_STRING}"
+      }
+    },
+    "github": {
+      "command": ["./node_modules/.bin/mcp-server-github"],
+      "args": [],
+      "enabled": true,
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  },
+  
+  "learning": {
+    "algorithm": "q_learning",
+    "parameters": {
+      "learning_rate": 0.1,
+      "discount_factor": 0.9,
+      "epsilon": 0.2,
+      "epsilon_decay": 0.995,
+      "min_epsilon": 0.01
+    }
+  },
+  
+  "intent_recognition": {
+    "model": "all-MiniLM-L6-v2",
+    "similarity_threshold": 0.7
+  },
+  
+  "evaluation": {
+    "metrics": ["accuracy", "response_time", "tool_efficiency"],
+    "baseline_comparison": true,
+    "experiment_repetitions": 5
+  }
+}

@@ -1,0 +1,207 @@
+@startuml Q-Learning Architecture Classes
+!theme plain
+title Q-Learning System Architecture - Class Diagram
+
+skinparam class {
+    BackgroundColor #F0F8FF
+    BorderColor #4682B4
+    ArrowColor #4682B4
+}
+
+package "State Representation" {
+    class StateEncoder {
+        - intent_dim: int = 384
+        - context_dim: int = 10
+        - history_dim: int = 20
+        - metrics_dim: int = 5
+        --
+        + encode_state(intent, context, history): ndarray
+        + decode_state(state_vector): dict
+        + normalize_features(features): ndarray
+    }
+    
+    class IntentVector {
+        - embedding: ndarray[384]
+        - confidence: float
+        - intent_type: str
+        --
+        + from_text(text: str): IntentVector
+        + similarity(other: IntentVector): float
+    }
+    
+    class ContextFeatures {
+        - domain: str
+        - user_history: list
+        - session_state: dict
+        - timestamp: datetime
+        --
+        + extract_features(): ndarray[10]
+    }
+}
+
+package "Action Space" {
+    class ActionSpace {
+        - max_tools: int = 3
+        - tool_registry: ToolRegistry
+        - constraints: dict
+        --
+        + get_valid_actions(state): list[Action]
+        + encode_action(tools: list): str
+        + decode_action(action_id: str): list[Tool]
+    }
+    
+    class Action {
+        - tool_combination: list[str]
+        - estimated_cost: float
+        - constraints_satisfied: bool
+        --
+        + validate(): bool
+        + execute(): ExecutionResult
+    }
+}
+
+package "Q-Learning Core" {
+    class QTable {
+        - q_values: dict[tuple, float]
+        - alpha: float = 0.1
+        - gamma: float = 0.9
+        - update_count: dict[tuple, int]
+        --
+        + get_q_value(state, action): float
+        + update(state, action, reward, next_state): void
+        + get_best_action(state): Action
+        + save_checkpoint(path: str): void
+        + load_checkpoint(path: str): void
+    }
+    
+    class EpsilonGreedyPolicy {
+        - epsilon: float = 0.2
+        - epsilon_decay: float = 0.995
+        - min_epsilon: float = 0.01
+        --
+        + select_action(q_values, valid_actions): Action
+        + update_epsilon(): void
+        + should_explore(): bool
+    }
+    
+    class RewardCalculator {
+        - weights: dict
+        - success_reward: float = 1.0
+        - failure_penalty: float = -0.5
+        --
+        + calculate_reward(result): float
+        + task_completion_reward(success: bool): float
+        + time_penalty(duration: float): float
+        + resource_penalty(usage: dict): float
+        + user_feedback_reward(feedback: str): float
+    }
+}
+
+package "Experience Replay" {
+    class Experience {
+        - state: ndarray
+        - action: str
+        - reward: float
+        - next_state: ndarray
+        - done: bool
+        - priority: float
+        --
+        + to_tuple(): tuple
+        + calculate_td_error(): float
+    }
+    
+    class ExperienceBuffer {
+        - buffer: deque
+        - capacity: int = 10000
+        - priorities: ndarray
+        --
+        + add(experience: Experience): void
+        + sample(batch_size: int): list[Experience]
+        + update_priorities(indices, errors): void
+        + size(): int
+    }
+    
+    class PrioritizedReplay {
+        - alpha: float = 0.6
+        - beta: float = 0.4
+        - beta_increment: float = 0.001
+        --
+        + compute_sampling_probabilities(): ndarray
+        + sample_batch(buffer, batch_size): tuple
+        + update_beta(): void
+    }
+}
+
+package "Pattern Mining" {
+    class PatternMiner {
+        - min_support: float = 0.1
+        - min_confidence: float = 0.8
+        - pattern_database: PatternDB
+        --
+        + mine_sequential_patterns(logs): list[Pattern]
+        + calculate_support(pattern, sequences): float
+        + calculate_confidence(pattern, sequences): float
+        + calculate_lift(pattern, sequences): float
+    }
+    
+    class Pattern {
+        - tool_sequence: list[str]
+        - support: float
+        - confidence: float
+        - lift: float
+        - contexts: list[str]
+        --
+        + matches(execution_sequence): bool
+        + to_dict(): dict
+    }
+    
+    class PatternDB {
+        - patterns: dict[str, Pattern]
+        - usage_stats: dict[str, int]
+        --
+        + store(pattern: Pattern): void
+        + retrieve(context: str): list[Pattern]
+        + update_usage(pattern_id: str): void
+    }
+}
+
+package "Model Persistence" {
+    class ModelCheckpoint {
+        - version: str
+        - timestamp: datetime
+        - q_table_state: dict
+        - pattern_state: dict
+        - metrics: dict
+        --
+        + save(path: str): void
+        + load(path: str): ModelCheckpoint
+        + validate(): bool
+    }
+    
+    class VersionManager {
+        - checkpoints: list[ModelCheckpoint]
+        - max_versions: int = 10
+        --
+        + save_version(model_state): void
+        + load_version(version: str): ModelCheckpoint
+        + rollback(version: str): void
+        + cleanup_old_versions(): void
+    }
+}
+
+' Relationships
+StateEncoder --> IntentVector : uses
+StateEncoder --> ContextFeatures : uses
+ActionSpace --> Action : creates
+QTable --> ActionSpace : queries
+QTable --> RewardCalculator : uses
+EpsilonGreedyPolicy --> QTable : reads
+ExperienceBuffer --> Experience : stores
+PrioritizedReplay --> ExperienceBuffer : samples from
+PatternMiner --> Pattern : creates
+PatternMiner --> PatternDB : stores in
+ModelCheckpoint --> QTable : persists
+ModelCheckpoint --> PatternDB : persists
+VersionManager --> ModelCheckpoint : manages
+
+@enduml

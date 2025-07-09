@@ -1,0 +1,118 @@
+@startuml Component Architecture
+!theme plain
+title Detailed Component Architecture
+
+skinparam component {
+    BackgroundColor #E6F3FF
+    BorderColor #4A90E2
+}
+
+skinparam interface {
+    BackgroundColor #FFE6E6
+    BorderColor #E24A4A
+}
+
+' Define interfaces
+interface "IIntentRecognizer" as IIntent
+interface "IToolDiscovery" as IDiscovery
+interface "IToolSelector" as ISelector
+interface "IExecutor" as IExecutor
+interface "ILearner" as ILearner
+
+' Intent Recognition Components
+package "Intent Recognition Layer" {
+    component "Text Preprocessor" as TextPrep
+    note right of TextPrep
+        - normalize_text()
+        - expand_contractions()
+        - remove_special_chars()
+    end note
+    
+    component "Feature Extractor" as Features
+    note right of Features
+        - extract_semantic_embedding()
+        - extract_keywords()
+        - extract_entities()
+    end note
+    
+    component "Intent Classifier" as IntentClass
+    note right of IntentClass
+        - classify_intent()
+        - calculate_confidence()
+        - handle_compound_queries()
+    end note
+    
+    component "Context Manager" as CtxMgr
+    note right of CtxMgr
+        - maintain_history()
+        - update_session_state()
+        - get_relevant_context()
+    end note
+    
+    TextPrep --> Features : cleaned text
+    Features --> IntentClass : feature vector
+    CtxMgr --> IntentClass : context
+    IntentClass --> IIntent : implements
+}
+
+' Tool Discovery Components
+package "Tool Discovery Layer" {
+    component "Semantic Discovery" as SemDisc
+    component "Graph Explorer" as GraphExp
+    component "Registry Cache" as RegCache
+    component "Discovery Pipeline" as DiscPipe
+    
+    SemDisc --> DiscPipe : semantic matches
+    GraphExp --> DiscPipe : graph results
+    RegCache --> SemDisc : cached data
+    RegCache --> GraphExp : cached data
+    DiscPipe --> IDiscovery : implements
+}
+
+' Tool Selection Components
+package "Tool Selection Layer" {
+    component "Q-Table Manager" as QTable
+    component "Action Space" as Actions
+    component "Epsilon Greedy" as EpsGreedy
+    component "Reward Calculator" as Reward
+    
+    QTable --> EpsGreedy : Q-values
+    Actions --> EpsGreedy : valid actions
+    Reward --> QTable : rewards
+    EpsGreedy --> ISelector : implements
+}
+
+' Execution Components
+package "Execution Layer" {
+    component "Connection Pool" as ConnPool
+    component "Task Queue" as TaskQueue
+    component "Parallel Executor" as ParExec
+    component "Circuit Breaker" as CircBreaker
+    
+    ConnPool --> ParExec : connections
+    TaskQueue --> ParExec : tasks
+    CircBreaker --> ParExec : status
+    ParExec --> IExecutor : implements
+}
+
+' Learning Components
+package "Learning Layer" {
+    component "Pattern Miner" as PatMiner
+    component "Experience Buffer" as ExpBuffer
+    component "Model Persistence" as ModelSave
+    component "Metrics Collector" as Metrics
+    
+    PatMiner --> ExpBuffer : patterns
+    ExpBuffer --> ModelSave : experiences
+    Metrics --> PatMiner : execution data
+    ModelSave --> ILearner : implements
+}
+
+' Interface connections
+IIntent --> IDiscovery : intent vector
+IDiscovery --> ISelector : tool candidates
+ISelector --> IExecutor : selected tools
+IExecutor --> ILearner : execution results
+ILearner --> ISelector : model updates
+
+@enduml

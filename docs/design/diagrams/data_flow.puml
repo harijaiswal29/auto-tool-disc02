@@ -1,0 +1,145 @@
+@startuml Data Flow Diagram
+!theme plain
+title System Data Flow
+
+skinparam activity {
+    BackgroundColor #F0F8FF
+    BorderColor #4682B4
+    DiamondBackgroundColor #FFE4B5
+    DiamondBorderColor #FF8C00
+}
+
+start
+
+:User Query (Natural Language);
+note right
+  Example: "Find all Python files
+  modified in the last week"
+end note
+
+:Text Preprocessing;
+partition "Intent Recognition" {
+    :Tokenization;
+    :Feature Extraction;
+    :Semantic Embedding
+    (384-dim vector);
+    :Context Enrichment;
+}
+
+:Intent Vector;
+note right
+  {
+    "type": "query.search",
+    "confidence": 0.85,
+    "entities": ["Python", "files"],
+    "temporal": "last week"
+  }
+end note
+
+partition "Tool Discovery" {
+    fork
+        :Semantic Search;
+        note right
+          Embedding similarity
+          with tool capabilities
+        end note
+    fork again
+        :Graph Exploration;
+        note right
+          Related tools via
+          relationship graph
+        end note
+    fork again
+        :Category Browse;
+        note right
+          Hierarchical tool
+          categorization
+        end note
+    end fork
+    
+    :Aggregate Results;
+    :Apply Filters & Ranking;
+}
+
+:Candidate Tools List;
+note right
+  [
+    {"id": "filesystem_mcp", "score": 0.92},
+    {"id": "search_mcp", "score": 0.85},
+    {"id": "git_mcp", "score": 0.73}
+  ]
+end note
+
+partition "Tool Selection" {
+    :Load Q-Table State;
+    
+    if (Random < Epsilon?) then (yes)
+        :Exploration:
+        Random Selection;
+    else (no)
+        :Exploitation:
+        Select Max Q-value;
+    endif
+    
+    :Generate Tool Combination;
+    :Validate Constraints;
+}
+
+:Selected Tools;
+note right
+  ["filesystem_mcp", "search_mcp"]
+end note
+
+partition "Execution" {
+    :Acquire MCP Connections;
+    
+    fork
+        :Execute Tool 1;
+        :Monitor Performance 1;
+    fork again
+        :Execute Tool 2;
+        :Monitor Performance 2;
+    end fork
+    
+    :Aggregate Results;
+    :Handle Errors/Retries;
+}
+
+:Execution Results;
+note right
+  {
+    "status": "success",
+    "tools_used": ["filesystem_mcp", "search_mcp"],
+    "duration_ms": 1250,
+    "results": [...],
+    "metrics": {...}
+  }
+end note
+
+partition "Learning Update" {
+    :Calculate Reward;
+    note right
+      reward = 0.5 * success +
+               0.2 * time_efficiency +
+               0.1 * resource_usage +
+               0.2 * user_feedback
+    end note
+    
+    :Update Q-Table;
+    :Extract Patterns;
+    :Update Statistics;
+    
+    fork
+        :Save to Database;
+    fork again
+        :Update Cache;
+    fork again
+        :Log Metrics;
+    end fork
+}
+
+:Return Results to User;
+
+stop
+
+@enduml

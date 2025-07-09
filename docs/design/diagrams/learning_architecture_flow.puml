@@ -1,0 +1,81 @@
+@startuml Learning Process Flow
+!theme plain
+title Q-Learning Process Flow
+
+|Initialize|
+start
+:Load Q-Table;
+:Initialize Experience Buffer;
+:Set Exploration Rate ε;
+
+|Episode Loop|
+while (Training?) is (yes)
+    :Receive User Query;
+    
+    |State Encoding|
+    :Extract Intent Features;
+    :Get Context Information;
+    :Encode State Vector S;
+    
+    |Action Selection|
+    if (Random() < ε?) then (yes)
+        :Exploration:
+        Random Action;
+    else (no)
+        :Exploitation:
+        argmax Q(S,a);
+    endif
+    
+    :Select Tools A;
+    
+    |Execution|
+    :Execute Selected Tools;
+    :Monitor Performance;
+    :Collect Results;
+    
+    |Reward Calculation|
+    :Calculate Task Reward;
+    :Apply Time Penalty;
+    :Apply Resource Penalty;
+    :Include User Feedback;
+    :Total Reward R;
+    
+    |Learning Update|
+    :Observe Next State S';
+    :TD Error = R + γ*max(Q(S',a')) - Q(S,A);
+    :Q(S,A) = Q(S,A) + α * TD Error;
+    
+    |Experience Storage|
+    :Store (S, A, R, S') in Buffer;
+    :Update Priority Based on TD Error;
+    
+    |Experience Replay|
+    if (Buffer Size > Batch Size?) then (yes)
+        :Sample Mini-batch;
+        :Update Q-values for Batch;
+    endif
+    
+    |Pattern Mining|
+    if (Reward > Threshold?) then (yes)
+        :Extract Tool Sequence;
+        :Update Pattern Database;
+    endif
+    
+    |Exploration Decay|
+    :ε = max(ε * decay, min_ε);
+    
+    |Checkpoint|
+    if (Episode % 100 == 0?) then (yes)
+        :Save Q-Table;
+        :Save Patterns;
+        :Save Metrics;
+    endif
+    
+endwhile (no)
+
+|Finalize|
+:Save Final Model;
+:Generate Performance Report;
+stop
+
+@enduml

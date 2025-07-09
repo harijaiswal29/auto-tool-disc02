@@ -1,0 +1,256 @@
+@startuml Deployment Architecture
+!theme plain
+title Deployment Architecture - Production Environment
+
+skinparam node {
+    BackgroundColor #E6F3FF
+    BorderColor #4A90E2
+}
+
+skinparam database {
+    BackgroundColor #FFE6E6
+    BorderColor #E24A4A
+}
+
+skinparam cloud {
+    BackgroundColor #E6FFE6
+    BorderColor #4AE24A
+}
+
+node "Load Balancer" as LB {
+    [nginx/HAProxy]
+    note right
+        - Round-robin distribution
+        - Health checks
+        - SSL termination
+    end note
+}
+
+node "API Server Cluster" as APICluster {
+    node "API Server 1" {
+        [FastAPI App]
+        [Gunicorn]
+    }
+    node "API Server 2" {
+        [FastAPI App]
+        [Gunicorn]
+    }
+    node "API Server 3" {
+        [FastAPI App]
+        [Gunicorn]
+    }
+}
+
+node "Worker Cluster" as Workers {
+    node "Worker 1" {
+        [Task Processor]
+        [MCP Client]
+    }
+    node "Worker 2" {
+        [Task Processor]
+        [MCP Client]
+    }
+    node "Worker 3" {
+        [Task Processor]
+        [MCP Client]
+    }
+    node "Worker 4" {
+        [Task Processor]
+        [MCP Client]
+    }
+    node "Worker 5" {
+        [Task Processor]
+        [MCP Client]
+    }
+}
+
+database "Primary Database" as PrimaryDB {
+    [PostgreSQL Master]
+    note bottom
+        - Tool registry
+        - User data
+        - Execution logs
+    end note
+}
+
+database "Read Replicas" as Replicas {
+    [PostgreSQL Replica 1]
+    [PostgreSQL Replica 2]
+}
+
+database "Cache Layer" as Cache {
+    [Redis Cluster]
+    note bottom
+        - Session storage
+        - Tool metadata cache
+        - Rate limiting
+    end note
+}
+
+database "Q-Learning Storage" as QStorage {
+    [Distributed Storage]
+    note bottom
+        - Sharded by domain
+        - Periodic snapshots
+    end note
+}
+
+cloud "Message Queue" as MQ {
+    [RabbitMQ/Kafka]
+    note right
+        Task distribution
+        Event streaming
+    end note
+}
+
+cloud "MCP Server Farm" as MCPFarm {
+    node "MCP Gateway" {
+        [Connection Pool]
+        [Circuit Breaker]
+    }
+    
+    frame "Tool Servers" {
+        [Filesystem MCP]
+        [SQLite MCP]
+        [Search MCP]
+        [Weather MCP]
+        [News MCP]
+        [Finance MCP]
+    }
+}
+
+cloud "Monitoring Stack" as Monitor {
+    [Prometheus]
+    [Grafana]
+    [ELK Stack]
+    note bottom
+        - Metrics collection
+        - Log aggregation
+        - Alerting
+    end note
+}
+
+cloud "Object Storage" as Storage {
+    [S3/MinIO]
+    note bottom
+        - Model checkpoints
+        - Backup storage
+        - Log archives
+    end note
+}
+
+' Connections
+LB --> APICluster : HTTPS
+APICluster --> Cache : Redis Protocol
+APICluster --> PrimaryDB : PostgreSQL
+APICluster --> Replicas : PostgreSQL (Read)
+APICluster --> MQ : AMQP/Kafka
+
+MQ --> Workers : Task Distribution
+Workers --> MCPFarm : JSON-RPC
+Workers --> QStorage : Read/Write
+Workers --> Cache : Redis Protocol
+
+PrimaryDB --> Replicas : Replication
+Workers --> Monitor : Metrics/Logs
+APICluster --> Monitor : Metrics/Logs
+MCPFarm --> Monitor : Metrics/Logs
+
+QStorage --> Storage : Backup
+PrimaryDB --> Storage : Backup
+Monitor --> Storage : Log Archive
+
+@enduml
+
+@startuml Container Architecture
+!theme plain
+title Container Architecture - Docker/Kubernetes
+
+skinparam rectangle {
+    BackgroundColor #F0F8FF
+    BorderColor #4682B4
+}
+
+rectangle "Kubernetes Cluster" {
+    rectangle "Namespace: auto-tool-disc" {
+        rectangle "API Deployment" {
+            rectangle "Pod: api-1" {
+                [API Container]
+                [Sidecar: Log Agent]
+            }
+            rectangle "Pod: api-2" {
+                [API Container]
+                [Sidecar: Log Agent]
+            }
+            rectangle "Pod: api-3" {
+                [API Container]
+                [Sidecar: Log Agent]
+            }
+        }
+        
+        rectangle "Worker Deployment" {
+            rectangle "Pod: worker-1" {
+                [Worker Container]
+                [Sidecar: Metrics]
+            }
+            rectangle "Pod: worker-2" {
+                [Worker Container]
+                [Sidecar: Metrics]
+            }
+            rectangle "Pod: worker-3" {
+                [Worker Container]
+                [Sidecar: Metrics]
+            }
+        }
+        
+        rectangle "MCP Gateway StatefulSet" {
+            rectangle "Pod: mcp-gateway-0" {
+                [MCP Gateway]
+                [Persistent Volume]
+            }
+            rectangle "Pod: mcp-gateway-1" {
+                [MCP Gateway]
+                [Persistent Volume]
+            }
+        }
+        
+        rectangle "Services" {
+            [Service: api-service]
+            [Service: worker-service]
+            [Service: mcp-service]
+        }
+        
+        rectangle "ConfigMaps & Secrets" {
+            [ConfigMap: app-config]
+            [Secret: api-keys]
+            [Secret: db-credentials]
+        }
+        
+        rectangle "Ingress" {
+            [Ingress Controller]
+            note bottom
+                TLS termination
+                Path-based routing
+            end note
+        }
+    }
+}
+
+rectangle "External Resources" {
+    database "PostgreSQL" {
+        [Primary]
+        [Standby]
+    }
+    
+    database "Redis" {
+        [Master]
+        [Slave]
+    }
+    
+    cloud "External Services" {
+        [MCP Servers]
+        [Monitoring]
+    }
+}
+
+@enduml

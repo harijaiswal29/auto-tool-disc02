@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-07-07T03:06:54.245685",
+  "tests": [
+    {
+      "name": "Configuration",
+      "status": "PASS",
+      "details": {
+        "command": [
+          "npx",
+          "@modelcontextprotocol/server-sqlite"
+        ],
+        "args": [
+          "data/test.db"
+        ],
+        "enabled": true
+      }
+    },
+    {
+      "name": "Client Connection",
+      "status": "PASS",
+      "mode": "mock"
+    },
+    {
+      "name": "Database Operations",
+      "status": "PASS",
+      "operations": [
+        "CREATE",
+        "INSERT",
+        "SELECT",
+        "JOIN"
+      ]
+    },
+    {
+      "name": "Registry Integration",
+      "status": "PASS",
+      "tools_registered": 3
+    },
+    {
+      "name": "Error Handling",
+      "status": "PASS",
+      "scenarios_tested": 3
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "success_rate": 1.0
+  }
+}

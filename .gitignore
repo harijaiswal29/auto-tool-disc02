@@ -1,0 +1,65 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Logs
+*.log
+logs/
+data/logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/registry/*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+data/metrics/
+experiments/results/
+*.tmp
+*.bak
+
+# Secrets and configuration
+.env
+secrets.json
+*_local.json
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation builds
+docs/_build/
+docs/_static/
+docs/_templates/

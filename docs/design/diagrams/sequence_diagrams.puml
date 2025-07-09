@@ -1,0 +1,191 @@
+@startuml Query Processing Sequence
+!theme plain
+title Query Processing Sequence Diagram
+
+actor User
+participant "API Gateway" as API
+participant "Intent\nRecognizer" as Intent
+participant "Tool\nDiscovery" as Discovery
+participant "Q-Learning\nSelector" as Selector
+participant "Execution\nEngine" as Executor
+participant "MCP Server" as MCP
+participant "Learning\nUpdater" as Learner
+database "Tool Registry" as Registry
+database "Q-Table" as QTable
+
+User -> API: POST /query\n{"query": "Find Python files"}
+activate API
+
+API -> Intent: process_query(query, context)
+activate Intent
+Intent -> Intent: extract_features()
+Intent -> Intent: classify_intent()
+Intent -> API: IntentResult
+deactivate Intent
+
+API -> Discovery: discover_tools(intent)
+activate Discovery
+Discovery -> Registry: query_capabilities(intent)
+Registry -> Discovery: matching_tools[]
+Discovery -> Discovery: rank_tools()
+Discovery -> API: candidate_tools[]
+deactivate Discovery
+
+API -> Selector: select_tools(candidates, context)
+activate Selector
+Selector -> QTable: get_q_values(state, actions)
+QTable -> Selector: q_values{}
+Selector -> Selector: epsilon_greedy_selection()
+Selector -> API: selected_tools[]
+deactivate Selector
+
+API -> Executor: execute_tools(selected_tools)
+activate Executor
+
+loop for each tool
+    Executor -> MCP: connect()
+    MCP -> Executor: connection
+    Executor -> MCP: execute_tool(params)
+    activate MCP
+    MCP -> MCP: process_request()
+    MCP -> Executor: tool_result
+    deactivate MCP
+end
+
+Executor -> API: ExecutionResult
+deactivate Executor
+
+API -> User: Response with results
+
+API -> Learner: update_learning(execution_result)
+activate Learner
+Learner -> Learner: calculate_reward()
+Learner -> QTable: update_q_value(state, action, reward)
+Learner -> Learner: mine_patterns()
+deactivate Learner
+
+deactivate API
+
+@enduml
+
+@startuml Tool Discovery Sequence
+!theme plain
+title Tool Discovery Detailed Sequence
+
+participant "Discovery\nOrchestrator" as Orchestrator
+participant "Semantic\nDiscovery" as Semantic
+participant "Graph\nExplorer" as Graph
+participant "Cache\nManager" as Cache
+database "Tool\nRegistry" as Registry
+participant "Aggregator" as Agg
+
+-> Orchestrator: discover_tools(intent_vector)
+activate Orchestrator
+
+Orchestrator -> Cache: check_cache(intent_hash)
+activate Cache
+Cache -> Orchestrator: cache_result (miss)
+deactivate Cache
+
+par Parallel Discovery
+    Orchestrator -> Semantic: semantic_search(intent_vector)
+    activate Semantic
+    Semantic -> Registry: get_tool_embeddings()
+    Registry -> Semantic: embeddings[]
+    Semantic -> Semantic: calculate_similarities()
+    Semantic -> Orchestrator: semantic_matches[]
+    deactivate Semantic
+else
+    Orchestrator -> Graph: graph_search(intent_category)
+    activate Graph
+    Graph -> Registry: get_tool_relationships()
+    Registry -> Graph: relationship_graph
+    Graph -> Graph: traverse_graph()
+    Graph -> Orchestrator: graph_matches[]
+    deactivate Graph
+end
+
+Orchestrator -> Agg: aggregate_results(all_matches)
+activate Agg
+Agg -> Agg: remove_duplicates()
+Agg -> Agg: combine_scores()
+Agg -> Agg: apply_ranking()
+Agg -> Orchestrator: ranked_tools[]
+deactivate Agg
+
+Orchestrator -> Cache: update_cache(intent_hash, ranked_tools)
+activate Cache
+Cache -> Cache: store_with_ttl()
+deactivate Cache
+
+<- Orchestrator: ranked_tools[]
+deactivate Orchestrator
+
+@enduml
+
+@startuml Learning Update Sequence
+!theme plain
+title Learning Update Sequence
+
+participant "Learning\nOrchestrator" as Orchestrator
+participant "Reward\nCalculator" as Reward
+participant "Q-Learning\nEngine" as QLearning
+participant "Pattern\nMiner" as Miner
+participant "Experience\nBuffer" as Buffer
+database "Q-Table" as QTable
+database "Pattern DB" as PatternDB
+
+-> Orchestrator: update_learning(execution_result)
+activate Orchestrator
+
+Orchestrator -> Reward: calculate_reward(execution_result)
+activate Reward
+Reward -> Reward: task_completion_score()
+Reward -> Reward: time_efficiency_score()
+Reward -> Reward: resource_usage_score()
+Reward -> Reward: aggregate_scores()
+Reward -> Orchestrator: total_reward
+deactivate Reward
+
+Orchestrator -> Buffer: add_experience(state, action, reward, next_state)
+activate Buffer
+Buffer -> Buffer: store_experience()
+Buffer -> Buffer: update_priorities()
+deactivate Buffer
+
+Orchestrator -> QLearning: update_q_value(experience)
+activate QLearning
+QLearning -> QTable: get_current_q(state, action)
+QTable -> QLearning: current_q_value
+QLearning -> QTable: get_max_q(next_state)
+QTable -> QLearning: max_next_q
+QLearning -> QLearning: calculate_new_q()
+note right
+  new_q = current_q + α * (reward + γ * max_next_q - current_q)
+end note
+QLearning -> QTable: update_q(state, action, new_q)
+deactivate QLearning
+
+alt If reward > threshold
+    Orchestrator -> Miner: mine_patterns(execution_sequence)
+    activate Miner
+    Miner -> Miner: extract_sequences()
+    Miner -> Miner: calculate_support()
+    Miner -> Miner: filter_patterns()
+    Miner -> PatternDB: store_patterns()
+    deactivate Miner
+end
+
+Orchestrator -> Buffer: sample_batch()
+activate Buffer
+Buffer -> Orchestrator: experience_batch[]
+deactivate Buffer
+
+loop for each experience in batch
+    Orchestrator -> QLearning: replay_update(experience)
+end
+
+<- Orchestrator: update_complete
+deactivate Orchestrator
+
+@enduml

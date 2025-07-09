@@ -1,0 +1,93 @@
+@startuml System Overview
+!theme plain
+title Autonomous Tool Discovery System - High Level Architecture
+
+skinparam componentStyle rectangle
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #333333
+}
+
+package "User Interface Layer" {
+    [CLI Interface] as CLI
+    [REST API] as API
+    [Web Dashboard] as Web
+}
+
+package "Intent Recognition Layer" {
+    [NLP Processor] as NLP
+    [Context Manager] as Context
+    [Intent Classifier] as Classifier
+    
+    NLP --> Context : provides context
+    Context --> Classifier : enriched features
+}
+
+package "Tool Discovery Layer" {
+    [Registry Interface] as Registry
+    [Capability Matcher] as Matcher
+    [Graph Explorer] as Graph
+    
+    Registry --> Matcher : tool metadata
+    Matcher --> Graph : relationships
+}
+
+package "Tool Selection & Learning Layer" {
+    [Q-Learning Engine] as QLearning
+    [Epsilon Greedy Selector] as Selector
+    [Combination Scorer] as Scorer
+    
+    QLearning --> Selector : Q-values
+    Selector --> Scorer : candidates
+}
+
+package "Execution & Monitoring Layer" {
+    [MCP Connection Manager] as MCP
+    [Parallel Executor] as Executor
+    [Performance Monitor] as Monitor
+    
+    MCP --> Executor : connections
+    Executor --> Monitor : metrics
+}
+
+package "Learning & Adaptation Layer" {
+    [Pattern Miner] as Miner
+    [Feedback Processor] as Feedback
+    [Model Adapter] as Adapter
+    
+    Miner --> Feedback : patterns
+    Feedback --> Adapter : updates
+}
+
+' Layer connections
+CLI --> NLP : user query
+API --> NLP : user query
+Web --> NLP : user query
+
+Classifier --> Registry : intent vector
+Graph --> QLearning : tool candidates
+Scorer --> MCP : selected tools
+Monitor --> Miner : execution data
+Adapter --> QLearning : model updates
+
+' External systems
+database "Tool Registry\nDatabase" as DB
+database "Q-Learning\nStorage" as QDB
+cloud "MCP Servers" as MCPServers {
+    [Filesystem MCP]
+    [SQLite MCP]
+    [Search MCP]
+    [Custom MCPs]
+}
+
+Registry --> DB : queries
+QLearning --> QDB : read/write
+MCP --> MCPServers : JSON-RPC
+
+note bottom of MCPServers
+    External tool servers
+    communicating via
+    Model Context Protocol
+end note
+
+@enduml
