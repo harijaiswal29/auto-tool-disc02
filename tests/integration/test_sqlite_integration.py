@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.utils.logger import get_logger
 from src.core.tool_registry import ToolRegistry

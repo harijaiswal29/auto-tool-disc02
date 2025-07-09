@@ -57,6 +57,7 @@ dist/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
 .tox/
 
 # Documentation builds

@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path (go up 2 levels from tests/unit/)
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.tools.search_mcp import SearchMCPClient
 from src.tools.mock_search_mcp import MockSearchMCPServer

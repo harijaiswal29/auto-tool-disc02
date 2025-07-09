@@ -7,8 +7,8 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Add project root to path
-sys.path.append(str(Path(__file__).parent))
+# Add project root to path (go up 2 levels from tests/integration/)
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 # Import only what we need
 from src.utils.logger import get_logger

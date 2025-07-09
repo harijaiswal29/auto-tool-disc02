@@ -10,8 +10,8 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path (go up 2 levels from tests/integration/)
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.utils.logger import get_logger
 from src.tools.filesystem_mcp import FileSystemMCPClient

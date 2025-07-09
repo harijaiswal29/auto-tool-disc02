@@ -11,9 +11,9 @@ import sys
 from pathlib import Path
 import platform
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent))
-from utils.logger import get_logger
+# Add project root to path (go up 2 levels from tests/integration/)
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -140,7 +140,7 @@ async def test_mock_vs_real():
     logger.info("-" * 40)
     
     try:
-        from tools.mock_mcp_servers import FileSystemMCPServer
+        from src.tools.mock_mcp_servers import FileSystemMCPServer
         mock_server = FileSystemMCPServer("data/test_fs")
         
         # Test initialize
