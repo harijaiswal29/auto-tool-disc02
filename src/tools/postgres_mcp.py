@@ -138,6 +138,10 @@ class PostgresMCPClient:
                         "clientInfo": {
                             "name": "PostgresMCPClient",
                             "version": "0.1.0"
+                        },
+                        "capabilities": {
+                            "tools": True,
+                            "resources": True
                         }
                     },
                     "id": self._next_message_id()
@@ -155,7 +159,16 @@ class PostgresMCPClient:
                     await self._discover_tools()
                     return True
                 else:
-                    logger.error(f"[FAILED] Failed to initialize: {response}")
+                    error_detail = response.get("error", {}) if response else "No response received"
+                    logger.error(f"[FAILED] Failed to initialize PostgreSQL MCP server")
+                    logger.error(f"[ERROR] Server response: {response}")
+                    logger.error(f"[ERROR] Error details: {error_detail}")
+                    
+                    # Check stderr for server errors
+                    if self.process and self.process.stderr:
+                        stderr_output = self.process.stderr.read()
+                        if stderr_output:
+                            logger.error(f"[ERROR] Server stderr: {stderr_output}")
                     return False
                 
         except Exception as e:
@@ -230,7 +243,9 @@ class PostgresMCPClient:
     
     async def get_schema(self, table_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get database schema information.
+        Get database schema information using SQL queries.
+        Note: The official PostgreSQL MCP server only provides a 'query' tool,
+        so we implement schema retrieval using SQL queries.
         
         Args:
             table_name: Specific table to get schema for (optional)
@@ -238,16 +253,27 @@ class PostgresMCPClient:
         Returns:
             Schema information
         """
-        # Look for schema tool or use information_schema queries
         if table_name:
             # Get specific table schema
             query = """
-                SELECT column_name, data_type, is_nullable, column_default
+                SELECT column_name, data_type, is_nullable, column_default,
+                       character_maximum_length, numeric_precision, numeric_scale
                 FROM information_schema.columns 
-                WHERE table_name = %s
+                WHERE table_name = $1 AND table_schema = 'public'
                 ORDER BY ordinal_position
             """
-            return await self.execute_query(query, [table_name])
+            result = await self.execute_query(query, [table_name])
+            
+            # Format the result for consistency with mock server
+            if result.get("success") and result.get("result"):
+                rows = result["result"].get("rows", [])
+                return {
+                    "success": True,
+                    "table": table_name,
+                    "columns": rows,
+                    "execution_time": result.get("execution_time")
+                }
+            return result
         else:
             # Get all tables
             query = """
@@ -260,7 +286,9 @@ class PostgresMCPClient:
     
     async def list_tables(self) -> Dict[str, Any]:
         """
-        List all tables in the database.
+        List all tables in the database using SQL queries.
+        Note: The official PostgreSQL MCP server only provides a 'query' tool,
+        so we implement table listing using SQL queries.
         
         Returns:
             List of table names and types
@@ -274,7 +302,17 @@ class PostgresMCPClient:
             WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
             ORDER BY table_schema, table_name
         """
-        return await self.execute_query(query)
+        result = await self.execute_query(query)
+        
+        # Format the result for consistency with mock server
+        if result.get("success") and result.get("result"):
+            rows = result["result"].get("rows", [])
+            return {
+                "success": True,
+                "tables": rows,
+                "execution_time": result.get("execution_time")
+            }
+        return result
     
     async def get_table_info(self, table_name: str) -> Dict[str, Any]:
         """
@@ -300,9 +338,11 @@ class PostgresMCPClient:
             LEFT JOIN information_schema.constraint_column_usage ccu 
                 ON c.table_name = ccu.table_name 
                 AND c.column_name = ccu.column_name
+                AND c.table_schema = ccu.table_schema
             LEFT JOIN information_schema.table_constraints tc 
                 ON ccu.constraint_name = tc.constraint_name
-            WHERE c.table_name = %s
+                AND ccu.table_schema = tc.table_schema
+            WHERE c.table_name = $1 AND c.table_schema = 'public'
             ORDER BY c.ordinal_position
         """
         return await self.execute_query(query, [table_name])
