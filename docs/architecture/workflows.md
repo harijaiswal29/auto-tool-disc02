@@ -72,11 +72,17 @@ Similarity Scoring → Capability Filtering → Ranking
    - Extract execution metrics
    - Update context state
 
-9. **Learning Update**
-   - Calculate reward based on execution
-   - Update Q-table
-   - Mine patterns if successful
-   - Persist learning state
+9. **Metrics Collection**
+   - Record processing time metrics
+   - Track cache hit/miss
+   - Update classification statistics
+   - Monitor pipeline stage performance
+
+10. **Learning Update**
+    - Calculate reward based on execution
+    - Update Q-table
+    - Mine patterns if successful
+    - Persist learning state
 
 ### Learning System Workflow
 

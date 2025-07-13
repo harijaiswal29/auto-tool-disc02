@@ -192,6 +192,38 @@
 }
 ```
 
+### Intent Recognition Metric
+```json
+{
+  "metric_type": "intent_recognition",
+  "timestamp": "2024-01-15T10:00:00Z",
+  "dimensions": {
+    "agent_id": "intent_recognition_agent",
+    "pipeline_version": "1.0.0"
+  },
+  "values": {
+    "processing_time_ms": 45.2,
+    "confidence_score": 0.85,
+    "cache_hit": true,
+    "intent_type": "query.search",
+    "pipeline_stage_timings": {
+      "text_preprocessor": 2.1,
+      "tokenizer": 1.5,
+      "feature_extractor": 25.3,
+      "intent_classifier": 8.2,
+      "context_enricher": 4.1,
+      "confidence_scorer": 3.0,
+      "state_manager": 1.0
+    },
+    "features": {
+      "word_count": 5,
+      "has_question": true,
+      "multi_intent": false
+    }
+  }
+}
+```
+
 ## Request/Response Schemas
 
 ### Query Request

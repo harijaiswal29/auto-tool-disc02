@@ -4,6 +4,10 @@
 
 ### Response Time
 - Intent recognition: < 100ms (p95)
+  - Text preprocessing: < 5ms
+  - Feature extraction: < 50ms
+  - Classification: < 20ms
+  - Pipeline overhead: < 25ms
 - Tool discovery: < 200ms (p95)
 - Single tool execution: < 5s (p95)
 - End-to-end query: < 10s (p95)
@@ -100,6 +104,15 @@
 - Custom: StatsD
 - Resolution: 1-minute
 - Retention: 90 days
+
+### Intent Recognition Metrics
+- Processing time per query
+- Pipeline stage breakdown
+- Cache hit rates
+- Classification accuracy
+- Confidence score distribution
+- Error rates by type
+- Multi-intent query percentage
 
 ### Logging
 - Format: Structured JSON

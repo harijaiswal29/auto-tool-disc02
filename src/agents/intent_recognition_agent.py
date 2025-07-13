@@ -28,6 +28,7 @@ from src.pipeline.stages.state_manager import StateManagerStage
 from src.agents.intent_models import IntentResult, Intent, MultiIntentHandler
 from src.utils.logger import get_logger
 from src.services.context_persistence_service import ContextPersistenceService
+from src.monitoring.intent_recognition_metrics import get_metrics
 
 
 class IntentRecognitionAgent:
@@ -78,6 +79,10 @@ class IntentRecognitionAgent:
         # Initialize persistence service if enabled
         if self.enable_persistence:
             self._init_persistence_service()
+        
+        # Initialize metrics collector
+        self.metrics = get_metrics()
+        self.collect_metrics = config.get('collect_metrics', True)
         
         self.logger.info("Intent Recognition Agent initialized with pipeline architecture")
     
@@ -171,12 +176,31 @@ class IntentRecognitionAgent:
                         f"(confidence: {result.primary_intent.confidence:.2f}) "
                         f"in {processing_time_ms:.2f}ms")
         
+        # Record metrics
+        if self.collect_metrics:
+            try:
+                self.metrics.record_query_processing(result)
+                
+                # Record cache hit/miss if available
+                if hasattr(self.pipeline, 'cache_hit'):
+                    self.metrics.record_cache_access(self.pipeline.cache_hit)
+            except Exception as e:
+                self.logger.warning(f"Failed to record metrics: {e}")
+        
         return result
     
     async def _process_single_intent(self, query: str, context: Dict[str, Any]) -> IntentResult:
         """Process a single intent query through the pipeline."""
+        # Track stage timings for metrics
+        stage_timings = {}
+        stage_start = time.time()
+        
         # Process through pipeline
         pipeline_result = await self.pipeline.process(query, context)
+        
+        # Collect stage timings if available
+        if self.collect_metrics and hasattr(pipeline_result, 'stage_timings'):
+            stage_timings = pipeline_result.stage_timings
         
         # Extract results from pipeline
         normalized_query = pipeline_result.get_stage_result('TextPreprocessor', 'normalized_text', query)
@@ -574,7 +598,35 @@ class IntentRecognitionAgent:
         if not self.persistence_service:
             return False
         
+        # Record feedback in metrics
+        if self.collect_metrics and 'intent' in feedback and 'correct' in feedback:
+            self.metrics.record_feedback(feedback['intent'], feedback['correct'])
+        
         return await self.persistence_service.learn_from_feedback(session_id, feedback)
+    
+    def get_metrics_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of performance metrics.
+        
+        Returns:
+            Dictionary containing comprehensive metrics
+        """
+        if not self.collect_metrics:
+            return {"metrics_collection": "disabled"}
+        
+        return self.metrics.get_summary_metrics()
+    
+    def export_metrics(self, filepath: str):
+        """
+        Export metrics to a file.
+        
+        Args:
+            filepath: Path to export metrics to
+        """
+        if self.collect_metrics:
+            self.metrics.export_metrics(filepath)
+        else:
+            self.logger.warning("Metrics collection is disabled")
 
 
 # Example usage and testing

@@ -256,8 +256,64 @@ class MultiIntentHandler:
 
 - **Model**: all-MiniLM-L6-v2 (sentence-transformers)
 - **Similarity Threshold**: 0.7
-- **Max History**: 10 conversations
 - **Confidence Threshold**: 0.7
+- **Max History**: 10 conversations
+- **Cache Size**: 1000 embeddings
+- **Enable Monitoring**: true
+- **Enable State Tracking**: true
+- **Enable Persistence**: true
+
+### Complete Configuration
+
+```json
+{
+  "intent_recognition": {
+    "model": "all-MiniLM-L6-v2",
+    "similarity_threshold": 0.7,
+    "confidence_threshold": 0.7,
+    "cache_size": 1000,
+    "enable_state_tracking": true,
+    "enable_persistence": true,
+    "collect_metrics": true,
+    "text_preprocessor": {
+      "expand_contractions": true,
+      "remove_special_chars": true,
+      "normalize_whitespace": true
+    },
+    "tokenizer": {
+      "detect_questions": true,
+      "max_tokens": 500
+    },
+    "intent_classifier": {
+      "keyword_weight": 0.3,
+      "semantic_weight": 0.4,
+      "context_weight": 0.3
+    },
+    "context_enricher": {
+      "max_history": 10,
+      "session_timeout_minutes": 30
+    },
+    "confidence_scorer": {
+      "feature_weights": {
+        "semantic_similarity": 0.4,
+        "keyword_match": 0.3,
+        "context_relevance": 0.2,
+        "historical_accuracy": 0.1
+      }
+    },
+    "state_manager": {
+      "enable_transitions": true,
+      "timeout_seconds": 300,
+      "max_retries": 3
+    },
+    "multi_intent": {
+      "enabled": true,
+      "max_intents_per_query": 5,
+      "separators": [" and ", " then ", " also ", " plus ", ". ", "; "]
+    }
+  }
+}
+```
 
 ## Intent Categories
 
@@ -275,6 +331,124 @@ class MultiIntentHandler:
 - **configure**: Setup, configure, settings
 - **monitor**: Check, monitor, status, health
 
+## Performance Monitoring
+
+The Intent Recognition system includes comprehensive performance monitoring capabilities:
+
+### Metrics Collected
+
+```python
+class IntentRecognitionMetrics:
+    """
+    Tracks:
+    - Processing time metrics (avg, p50, p95, p99)
+    - Classification accuracy
+    - Cache hit rates
+    - Pipeline stage performance
+    - Error rates
+    - Usage patterns
+    """
+```
+
+### Key Metrics
+
+1. **Performance Metrics**
+   - Average processing time
+   - Percentile response times (p50, p95, p99)
+   - Pipeline stage timing breakdowns
+   - Cache hit/miss rates
+
+2. **Accuracy Metrics**
+   - Classification accuracy based on feedback
+   - Confidence score distribution
+   - False positive/negative rates
+   - Intent frequency distribution
+
+3. **Reliability Metrics**
+   - Error rates by type
+   - Uptime statistics
+   - Query volume tracking
+   - Multi-intent query percentage
+
+### Accessing Metrics
+
+```python
+# Get metrics summary
+agent = IntentRecognitionAgent()
+metrics = agent.get_metrics_summary()
+
+# Export metrics to file
+agent.export_metrics("metrics_report.json")
+
+# Access specific metrics
+print(f"Avg Processing Time: {metrics['performance']['avg_processing_time_ms']}ms")
+print(f"Cache Hit Rate: {metrics['cache']['hit_rate']}%")
+print(f"Classification Accuracy: {metrics['accuracy']['classification_accuracy']}%")
+```
+
+### Monitoring Integration
+
+```python
+# Enable metrics collection in config
+config = {
+    "intent_recognition": {
+        "collect_metrics": true,
+        "metrics_window_size": 1000,
+        "aggregation_interval": 60
+    }
+}
+```
+
+## Testing Strategy
+
+### Unit Tests
+
+Located in `tests/unit/test_intent_pipeline_stages.py`:
+
+1. **Pipeline Stage Tests**
+   - TextPreprocessorStage: Contraction expansion, normalization
+   - TokenizerModule: Tokenization, question detection
+   - FeatureExtractorStage: Embedding generation, caching
+   - IntentClassifierStage: Keyword and semantic classification
+   - ContextEnricherStage: Context integration
+   - ConfidenceScorerStage: Confidence calculation
+   - StateManagerStage: State transitions
+
+2. **Test Coverage**
+   - Individual stage functionality
+   - Error handling
+   - Edge cases
+   - Performance benchmarks
+
+### Integration Tests
+
+Located in `tests/integration/test_intent_recognition_integration.py`:
+
+1. **End-to-End Testing**
+   - Complete query processing
+   - Multi-intent handling
+   - State management
+   - Persistence integration
+
+2. **Performance Testing**
+   - Response time requirements (< 100ms p95)
+   - Concurrent query handling
+   - Long query processing
+   - Unicode and special character handling
+
+### Running Tests
+
+```bash
+# Run all Intent Recognition tests
+pytest tests/test_intent_recognition.py tests/unit/test_intent_pipeline_stages.py tests/integration/test_intent_recognition_integration.py -v
+
+# Run with coverage
+pytest tests/ --cov=src.agents.intent_recognition_agent --cov=src.pipeline.stages
+
+# Run performance benchmarks
+pytest tests/integration/test_intent_recognition_integration.py::TestIntentRecognitionIntegration::test_performance_benchmarks -v
+```
+
 ## Best Practices
 
 1. **Preprocessing**: Always normalize text before processing
@@ -282,3 +456,6 @@ class MultiIntentHandler:
 3. **Confidence**: Only proceed with high-confidence intents (>0.7)
 4. **Multi-Intent**: Handle compound queries gracefully
 5. **Fallback**: Have clear fallback strategies for unclear intents
+6. **Monitoring**: Track performance metrics in production
+7. **Testing**: Maintain high test coverage (>90%)
+8. **Caching**: Utilize embedding cache for performance

@@ -143,6 +143,28 @@ Retrieve system performance metrics.
     "learning_progress": {
       "q_table_size": 1250,
       "patterns_discovered": 42
+    },
+    "intent_recognition": {
+      "performance": {
+        "avg_processing_time_ms": 45.2,
+        "p95_processing_time_ms": 92.5,
+        "p99_processing_time_ms": 125.3,
+        "cache_hit_rate": 78.5
+      },
+      "accuracy": {
+        "classification_accuracy": 94.2,
+        "avg_confidence": 0.82,
+        "confidence_distribution": {
+          "high": 450,
+          "medium": 120,
+          "low": 30
+        }
+      },
+      "usage": {
+        "total_queries": 600,
+        "queries_per_hour": 25,
+        "multi_intent_rate": 12.5
+      }
     }
   },
   "period": {

@@ -61,6 +61,9 @@ Understands user goals using:
 - Semantic analysis (sentence-transformers)
 - Context tracking
 - Intent classification
+- Performance monitoring and metrics collection
+- Multi-intent handling
+- Conversation state management
 
 ### 2. Tool Discovery Layer
 Finds relevant tools via:
@@ -143,3 +146,7 @@ Improves over time using:
 - Resource usage monitoring
 - Error rate tracking
 - Learning progress visualization
+- Intent recognition metrics collection
+- Pipeline stage performance analysis
+- Cache hit rate monitoring
+- Classification accuracy tracking

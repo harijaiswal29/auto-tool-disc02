@@ -67,7 +67,47 @@
   
   "intent_recognition": {
     "model": "all-MiniLM-L6-v2",
-    "similarity_threshold": 0.7
+    "similarity_threshold": 0.7,
+    "confidence_threshold": 0.7,
+    "cache_size": 1000,
+    "enable_state_tracking": true,
+    "enable_persistence": true,
+    "text_preprocessor": {
+      "expand_contractions": true,
+      "remove_special_chars": true,
+      "normalize_whitespace": true
+    },
+    "tokenizer": {
+      "detect_questions": true,
+      "max_tokens": 500
+    },
+    "intent_classifier": {
+      "keyword_weight": 0.3,
+      "semantic_weight": 0.4,
+      "context_weight": 0.3
+    },
+    "context_enricher": {
+      "max_history": 10,
+      "session_timeout_minutes": 30
+    },
+    "confidence_scorer": {
+      "feature_weights": {
+        "semantic_similarity": 0.4,
+        "keyword_match": 0.3,
+        "context_relevance": 0.2,
+        "historical_accuracy": 0.1
+      }
+    },
+    "state_manager": {
+      "enable_transitions": true,
+      "timeout_seconds": 300,
+      "max_retries": 3
+    },
+    "multi_intent": {
+      "enabled": true,
+      "max_intents_per_query": 5,
+      "separators": [" and ", " then ", " also ", " plus ", ". ", "; "]
+    }
   },
   
   "evaluation": {

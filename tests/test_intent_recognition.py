@@ -1,11 +1,15 @@
 """
-Unit tests for the Intent Recognition Agent.
+Comprehensive unit tests for the Intent Recognition Agent.
+
+This module provides extensive testing for all components of the
+Intent Recognition system including models, preprocessing, and agent functionality.
 """
 
 import pytest
 import asyncio
 import sys
 import os
+from unittest.mock import Mock, patch
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -21,6 +25,44 @@ from src.agents.intent_recognition_agent_legacy import (
     IntentClassifier,
     IntentConfidenceScorer
 )
+
+
+class TestIntentModels:
+    """Test intent data models."""
+    
+    def test_intent_creation(self):
+        """Test Intent model creation."""
+        intent = Intent(
+            type="query.search",
+            confidence=0.85,
+            entities=["file", "python"],
+            keywords=["find", "search"],
+            parameters={"filter": "*.py"}
+        )
+        
+        assert intent.type == "query.search"
+        assert intent.confidence == 0.85
+        assert len(intent.entities) == 2
+        assert "find" in intent.keywords
+        assert intent.parameters["filter"] == "*.py"
+    
+    def test_intent_result_creation(self):
+        """Test IntentResult model creation."""
+        intent = Intent(type="query.search", confidence=0.9)
+        result = IntentResult(
+            query="Find Python files",
+            normalized_query="find python files",
+            primary_intent=intent,
+            all_intents=[intent],
+            features={"keywords": ["find", "python", "files"]},
+            processing_time_ms=25.5,
+            confidence_passed=True
+        )
+        
+        assert result.query == "Find Python files"
+        assert result.primary_intent.confidence == 0.9
+        assert result.processing_time_ms == 25.5
+        assert result.confidence_passed is True
 
 
 class TestTextPreprocessor:
@@ -164,7 +206,13 @@ class TestIntentRecognitionAgent:
     
     @pytest.fixture
     def agent(self):
-        return IntentRecognitionAgent()
+        config = {
+            'similarity_threshold': 0.7,
+            'confidence_threshold': 0.7,
+            'enable_state_tracking': True,
+            'enable_persistence': False
+        }
+        return IntentRecognitionAgent(config)
     
     @pytest.mark.asyncio
     async def test_process_simple_query(self, agent):
