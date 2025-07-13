@@ -74,5 +74,21 @@
     "metrics": ["accuracy", "response_time", "tool_efficiency"],
     "baseline_comparison": true,
     "experiment_repetitions": 5
+  },
+  
+  "orchestration": {
+    "max_tools_per_query": 3,
+    "tool_selection_strategy": "performance_weighted",
+    "parallel_execution": true,
+    "execution_timeout": 30
+  },
+  
+  "tool_discovery": {
+    "semantic_weight": 0.3,
+    "capability_weight": 0.3,
+    "performance_weight": 0.2,
+    "relationship_weight": 0.2,
+    "min_score_threshold": 0.3,
+    "cache_size": 1000
   }
 }

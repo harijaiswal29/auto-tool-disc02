@@ -9,6 +9,7 @@ import asyncio
 from typing import Dict, List, Optional, Any, Type
 from pathlib import Path
 import sys
+import json
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -34,18 +35,45 @@ class MCPIntegration:
     - Performance tracking
     """
     
-    def __init__(self, registry: ToolRegistry):
+    def __init__(self, config: Optional[Dict[str, Any]] = None, registry: Optional[ToolRegistry] = None):
         """
         Initialize MCP integration.
         
         Args:
-            registry: Tool registry for storing discovered tools
+            config: Configuration dictionary
+            registry: Tool registry for storing discovered tools (optional, will create if not provided)
         """
-        self.registry = registry
+        # Load configuration
+        if config is None:
+            config = self._load_default_config()
+        self.config = config
+        
+        # Initialize or use provided registry
+        if registry is None:
+            registry_path = config.get('database', {}).get('tool_registry', 'data/registry/tools.db')
+            self.registry = ToolRegistry(registry_path)
+        else:
+            self.registry = registry
+            
         self.servers: Dict[str, Any] = {}
         self.active_connections: Dict[str, Any] = {}
         
         logger.info("[INIT] MCP Integration initialized")
+    
+    def _load_default_config(self) -> Dict[str, Any]:
+        """Load default configuration from config file."""
+        config_path = Path(__file__).parent.parent.parent / 'config' / 'config.json'
+        
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                return json.load(f)
+        
+        # Fallback configuration
+        return {
+            'database': {
+                'tool_registry': 'data/registry/tools.db'
+            }
+        }
     
     async def add_sqlite_server(self, db_path: str, server_id: str = "sqlite_default", use_mock: bool = False) -> bool:
         """
@@ -459,6 +487,153 @@ class MCPIntegration:
             }
         
         return status
+    
+    async def find_tools_by_intent(self, intent_type: str) -> List[Dict[str, Any]]:
+        """
+        Find tools that match a specific intent type.
+        
+        Args:
+            intent_type: Type of intent (e.g., "query.search", "action.create")
+            
+        Returns:
+            List of tools that match the intent
+        """
+        # Intent to capability mapping
+        intent_capability_map = {
+            'query.search': ['search', 'find', 'query', 'list', 'discover'],
+            'query.retrieve': ['read', 'get', 'fetch', 'retrieve', 'load'],
+            'query.analyze': ['analyze', 'examine', 'inspect', 'evaluate'],
+            'action.create': ['create', 'write', 'generate', 'make', 'build'],
+            'action.modify': ['update', 'edit', 'modify', 'change', 'alter'],
+            'action.delete': ['delete', 'remove', 'clear', 'drop', 'erase'],
+            'system.configure': ['configure', 'setup', 'initialize', 'install'],
+            'system.monitor': ['monitor', 'track', 'watch', 'observe', 'log']
+        }
+        
+        # Get capabilities for the intent
+        required_capabilities = intent_capability_map.get(intent_type, [])
+        
+        if not required_capabilities:
+            logger.warning(f"[INTENT] Unknown intent type: {intent_type}")
+            return []
+        
+        # Find tools with matching capabilities
+        matching_tools = []
+        all_tools = self.registry.list_tools()
+        
+        for tool in all_tools:
+            tool_caps = tool.get('capabilities', {})
+            
+            # Parse capabilities if they're stored as JSON string
+            if isinstance(tool_caps, str):
+                try:
+                    tool_caps = json.loads(tool_caps)
+                except:
+                    tool_caps = {}
+            
+            # Check if tool has any of the required capabilities
+            if isinstance(tool_caps, dict):
+                operations = tool_caps.get('operations', [])
+                for op in operations:
+                    op_name = op.get('name', '') if isinstance(op, dict) else str(op)
+                    if any(cap in op_name.lower() for cap in required_capabilities):
+                        matching_tools.append(tool)
+                        break
+        
+        logger.info(f"[INTENT] Found {len(matching_tools)} tools for intent {intent_type}")
+        return matching_tools
+    
+    async def get_tools_by_capabilities(self, capabilities: List[str]) -> List[Dict[str, Any]]:
+        """
+        Get tools that have specific capabilities.
+        
+        Args:
+            capabilities: List of required capabilities
+            
+        Returns:
+            List of tools with the specified capabilities
+        """
+        matching_tools = []
+        all_tools = self.registry.list_tools()
+        
+        for tool in all_tools:
+            tool_caps = tool.get('capabilities', {})
+            
+            # Parse capabilities if they're stored as JSON string
+            if isinstance(tool_caps, str):
+                try:
+                    tool_caps = json.loads(tool_caps)
+                except:
+                    tool_caps = {}
+            
+            # Check if tool has all required capabilities
+            if isinstance(tool_caps, dict):
+                operations = tool_caps.get('operations', [])
+                tool_cap_names = []
+                
+                for op in operations:
+                    if isinstance(op, dict):
+                        tool_cap_names.append(op.get('name', '').lower())
+                    else:
+                        tool_cap_names.append(str(op).lower())
+                
+                # Check if all required capabilities are present
+                if all(any(req_cap in cap_name for cap_name in tool_cap_names) 
+                       for req_cap in capabilities):
+                    matching_tools.append(tool)
+        
+        logger.info(f"[CAPABILITY] Found {len(matching_tools)} tools with capabilities {capabilities}")
+        return matching_tools
+    
+    async def execute_tool_by_intent(self, intent_type: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute the best tool for a given intent.
+        
+        Args:
+            intent_type: Type of intent
+            arguments: Tool arguments
+            
+        Returns:
+            Execution results
+        """
+        # Find tools matching the intent
+        matching_tools = await self.find_tools_by_intent(intent_type)
+        
+        if not matching_tools:
+            logger.error(f"[INTENT] No tools found for intent {intent_type}")
+            return {
+                'error': f'No tools available for intent: {intent_type}',
+                'intent': intent_type
+            }
+        
+        # Select the best tool (highest performance score)
+        best_tool = max(matching_tools, key=lambda t: t.get('performance_score', 0.5))
+        
+        logger.info(f"[INTENT] Selected tool {best_tool['id']} for intent {intent_type}")
+        
+        # Execute the tool
+        return await self.execute_tool(best_tool['id'], arguments)
+    
+    async def initialize(self):
+        """Initialize the MCP Integration and registry."""
+        logger.info("[INIT] Initializing MCP Integration components...")
+        
+        # Initialize the tool registry
+        await self.registry.initialize()
+        
+        logger.info("[INIT] MCP Integration initialization complete")
+    
+    async def shutdown(self):
+        """Shutdown all components cleanly."""
+        logger.info("[SHUTDOWN] Shutting down MCP Integration...")
+        
+        # Shutdown all servers
+        await self.shutdown_all()
+        
+        # Close the registry
+        await self.registry.close()
+        
+        logger.info("[SHUTDOWN] MCP Integration shutdown complete")
 
 
 async def test_mcp_integration():

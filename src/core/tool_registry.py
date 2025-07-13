@@ -30,6 +30,16 @@ class ToolRegistry:
         self._init_database()
         logger.info(f"[INIT] Tool Registry initialized at {self.db_path}")
     
+    async def initialize(self):
+        """Async initialization method for compatibility."""
+        # Database is already initialized in __init__
+        pass
+    
+    async def close(self):
+        """Close database connection."""
+        # SQLite connections are closed after each operation
+        pass
+    
     def _init_database(self):
         """Initialize the database schema."""
         with sqlite3.connect(self.db_path) as conn:
@@ -164,6 +174,66 @@ class ToolRegistry:
                 tools.append(tool)
             
             return tools
+    
+    async def search_tools(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Search for tools by name or capability.
+        
+        Args:
+            query: Search query
+            
+        Returns:
+            List of matching tools
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Search in name and capabilities
+            cursor.execute("""
+                SELECT * FROM tools 
+                WHERE name LIKE ? OR capabilities LIKE ?
+                ORDER BY performance_score DESC
+            """, (f'%{query}%', f'%{query}%'))
+            
+            tools = []
+            for row in cursor.fetchall():
+                tool = dict(row)
+                if tool['capabilities']:
+                    try:
+                        tool['capabilities'] = json.loads(tool['capabilities'])
+                    except:
+                        pass
+                if tool['input_schema']:
+                    try:
+                        tool['input_schema'] = json.loads(tool['input_schema'])
+                    except:
+                        pass
+                tools.append(tool)
+            
+            return tools
+    
+    def get_all_tools(self) -> List[Dict[str, Any]]:
+        """Get all tools from the registry."""
+        return self.list_tools()
+    
+    async def get_tool_relationships(self) -> List[Dict[str, Any]]:
+        """
+        Get all tool relationships from the registry.
+        
+        Returns:
+            List of tool relationships
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT * FROM tool_relationships
+            """)
+            
+            relationships = [dict(row) for row in cursor.fetchall()]
+            return relationships
     
     def record_usage(self, tool_id: str, success: bool, execution_time: float, 
                     task_type: Optional[str] = None, error_message: Optional[str] = None):
