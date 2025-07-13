@@ -42,6 +42,10 @@ The Autonomous Tool Discovery and Integration System consists of 5 core layers w
 │  │    MCP      │ │   Parallel   │ │   Performance        │   │
 │  │ Connection  │ │  Executor    │ │    Monitor           │   │
 │  └─────────────┘ └──────────────┘ └───────────────────────┘   │
+│  ┌─────────────┐ ┌──────────────┐ ┌───────────────────────┐   │
+│  │   Retry     │ │   Circuit    │ │   Connection         │   │
+│  │   Logic     │ │   Breakers   │ │      Pool            │   │
+│  └─────────────┘ └──────────────┘ └───────────────────────┘   │
 └─────────────────────────────┬──────────────────────────────────┘
                               │
 ┌─────────────────────────────▼──────────────────────────────────┐
@@ -81,10 +85,13 @@ Optimizes tool choice using:
 
 ### 4. Execution & Monitoring Layer
 Manages:
-- MCP connections
+- MCP connections with connection pooling
 - Parallel tool execution (asyncio)
-- Performance monitoring
-- Error handling
+- Performance monitoring and metrics
+- Error handling with retry logic
+- Exponential backoff retry policies
+- Circuit breakers for fault tolerance
+- Connection health checking and reuse
 
 ### 5. Learning & Adaptation Layer
 Improves over time using:
@@ -150,3 +157,15 @@ Improves over time using:
 - Pipeline stage performance analysis
 - Cache hit rate monitoring
 - Classification accuracy tracking
+- Retry attempt tracking and analysis
+- Circuit breaker state monitoring
+- Connection pool health metrics
+
+### Retry and Resilience Integration
+- Exponential backoff with configurable policies
+- Circuit breaker pattern implementation
+- Connection pooling for resource efficiency
+- Comprehensive retry metrics collection
+- Failure pattern analysis and alerting
+- Per-service retry configuration
+- Detailed documentation: [Retry Architecture](./retry-architecture.md)

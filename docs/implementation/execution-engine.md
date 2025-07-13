@@ -121,49 +121,87 @@ class ExecutionMonitor:
 
 ## Failure Recovery Mechanisms
 
+The execution engine integrates with the comprehensive retry and resilience system. For detailed architecture, see [Retry Architecture](../architecture/retry-architecture.md).
+
+### Retry Implementation
+
 ```python
-class FailureRecovery:
+from src.utils.retry import (
+    retry_async, RetryManager, ExponentialBackoffRetry,
+    CircuitBreaker, RetryableError, NonRetryableError
+)
+
+class ExecutionEngine:
     def __init__(self):
-        self.retry_policies = {
-            'exponential_backoff': ExponentialBackoffRetry(),
-            'fixed_delay': FixedDelayRetry(),
-            'no_retry': NoRetry()
-        }
+        self.retry_manager = RetryManager()
+        self.connection_pool = ConnectionPool()
+        
+    @retry_async(
+        retry_policy=ExponentialBackoffRetry(max_attempts=5),
+        on_retry=lambda e, attempt: logger.warning(f"Retry {attempt}: {e}")
+    )
+    async def execute_tool(self, tool_id: str, params: dict):
+        async with self.connection_pool.acquire_connection(tool_id) as conn:
+            return await conn.client.call_tool(tool_id, params)
+```
+
+### Circuit Breaker Integration
+
+```python
+class ToolExecutor:
+    def __init__(self):
         self.circuit_breakers = {}
-        self.fallback_handlers = {}
+        
+    def get_circuit_breaker(self, tool_id: str) -> CircuitBreaker:
+        if tool_id not in self.circuit_breakers:
+            self.circuit_breakers[tool_id] = CircuitBreaker(
+                failure_threshold=5,
+                recovery_timeout=30.0,
+                half_open_test_requests=3
+            )
+        return self.circuit_breakers[tool_id]
     
-    async def execute_with_recovery(self, tool, context):
-        circuit_breaker = self.get_circuit_breaker(tool.id)
+    async def execute_with_circuit_breaker(self, tool_id: str, params: dict):
+        cb = self.get_circuit_breaker(tool_id)
         
-        if circuit_breaker.is_open():
-            # Use fallback if available
-            if tool.id in self.fallback_handlers:
-                return await self.fallback_handlers[tool.id](context)
-            else:
-                raise CircuitBreakerOpenError(f"Circuit breaker open for {tool.id}")
-        
-        retry_policy = self.get_retry_policy(tool)
-        attempt = 0
-        last_error = None
-        
-        while attempt < retry_policy.max_attempts:
-            try:
-                result = await self.execute_tool(tool, context)
-                circuit_breaker.record_success()
-                return result
-            except Exception as e:
-                circuit_breaker.record_failure()
-                last_error = e
-                
-                if not retry_policy.should_retry(e, attempt):
-                    break
-                
-                wait_time = retry_policy.get_wait_time(attempt)
-                await asyncio.sleep(wait_time)
-                attempt += 1
-        
-        # All retries failed
-        raise ExecutionFailedError(f"Failed after {attempt} attempts: {last_error}")
+        if cb.is_open():
+            raise CircuitBreakerOpenError(f"Circuit breaker open for {tool_id}")
+            
+        try:
+            result = await self.execute_tool(tool_id, params)
+            cb.record_success()
+            return result
+        except Exception as e:
+            cb.record_failure(e)
+            raise
+```
+
+### Retry Policies
+
+1. **Exponential Backoff** (Default)
+   - Base delay: 1s
+   - Max delay: 16s
+   - Jitter: ±20%
+   - Max attempts: 5
+
+2. **Fixed Delay**
+   - Constant delay between attempts
+   - Useful for rate-limited services
+
+3. **No Retry**
+   - Immediate failure
+   - For non-idempotent operations
+
+### Connection Pool Integration
+
+```python
+async def execute_with_pooling(self, tool_id: str, params: dict):
+    async with self.connection_pool.acquire_connection(
+        tool_id, 
+        server_type='mcp',
+        create_func=lambda: self.create_mcp_connection(tool_id)
+    ) as connection:
+        return await connection.client.execute(params)
 ```
 
 ## Execution Pipeline
@@ -279,6 +317,7 @@ class PerformanceOptimizer:
 
 ## Configuration
 
+### Execution Configuration
 - **Max Concurrent Tasks**: 5
 - **Thread Pool Size**: 10
 - **Resource Limits**:
@@ -286,8 +325,57 @@ class PerformanceOptimizer:
   - Memory: 4096 MB
   - Connections: 100
   - API Calls: 60/minute
-- **Retry Policy**: Exponential backoff (1s, 2s, 4s, 8s, 16s)
-- **Circuit Breaker**: 5 failures trigger, 30s recovery
+
+### Retry Configuration
+- **Default Policy**: Exponential backoff
+  - Base delay: 1.0s
+  - Max delay: 16.0s
+  - Max attempts: 5
+  - Jitter factor: 0.2 (±20%)
+  - Sequence: ~1s, ~2s, ~4s, ~8s, ~16s
+
+### Circuit Breaker Configuration
+- **Failure threshold**: 5 consecutive failures
+- **Recovery timeout**: 30 seconds
+- **Half-open test requests**: 3
+- **Error types**: All exceptions (configurable)
+
+### Connection Pool Configuration
+- **Max connections**: 10 per service type
+- **Connection timeout**: 5 seconds
+- **Idle timeout**: 300 seconds
+- **Health check interval**: 60 seconds
+
+### Additional Settings
 - **Sandbox Timeout**: 30 seconds
 - **Cache Size**: 1000 entries
-- **Connection Pool**: 20 connections
+- **Retry Metrics Window**: 1000 events
+
+### Example Service Configuration
+```json
+{
+  "execution": {
+    "retry_config": {
+      "filesystem_mcp": {
+        "retry_policy": {
+          "type": "fixed_delay",
+          "max_attempts": 3,
+          "delay": 0.5
+        }
+      },
+      "external_api": {
+        "retry_policy": {
+          "type": "exponential_backoff",
+          "max_attempts": 10,
+          "base_delay": 2.0,
+          "max_delay": 60.0
+        },
+        "circuit_breaker": {
+          "failure_threshold": 3,
+          "recovery_timeout": 60.0
+        }
+      }
+    }
+  }
+}
+```

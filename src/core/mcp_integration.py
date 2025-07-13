@@ -14,7 +14,12 @@ import json
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.utils.logger import get_logger
+from src.utils.retry import (
+    RetryManager, ExponentialBackoffRetry, CircuitBreaker,
+    retry_async, RetryableError, NonRetryableError
+)
 from src.core.tool_registry import ToolRegistry
+from src.core.connection_pool import ConnectionPool
 from src.tools.sqlite_mcp import SQLiteMCPClient
 from src.tools.search_mcp import SearchMCPClient
 from src.tools.custom_wrappers.weather_mcp import WeatherMCPClient
@@ -58,7 +63,34 @@ class MCPIntegration:
         self.servers: Dict[str, Any] = {}
         self.active_connections: Dict[str, Any] = {}
         
-        logger.info("[INIT] MCP Integration initialized")
+        # Initialize retry manager with configuration
+        retry_config = config.get('retry_policies', {})
+        circuit_breaker_config = config.get('circuit_breaker', {})
+        
+        self.retry_manager = RetryManager({
+            'retry_policy': retry_config.get('default', {
+                'type': 'exponential_backoff',
+                'max_attempts': 5,
+                'base_delay': 1.0,
+                'max_delay': 16.0,
+                'jitter_factor': 0.2
+            }),
+            'circuit_breaker': circuit_breaker_config.get('default', {
+                'failure_threshold': 5,
+                'recovery_timeout': 30.0,
+                'half_open_test_requests': 3
+            })
+        })
+        
+        # Store server-specific retry configurations
+        self.server_retry_configs = retry_config.get('mcp_servers', {})
+        self.server_circuit_configs = circuit_breaker_config.get('mcp_servers', {})
+        
+        # Initialize connection pool
+        pool_config = config.get('connection_pool', {})
+        self.connection_pool = ConnectionPool(pool_config)
+        
+        logger.info("[INIT] MCP Integration initialized with retry support and connection pooling")
     
     def _load_default_config(self) -> Dict[str, Any]:
         """Load default configuration from config file."""
@@ -360,7 +392,7 @@ class MCPIntegration:
     
     async def execute_tool(self, tool_id: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute a tool by its ID.
+        Execute a tool by its ID with retry logic and circuit breaker.
         
         Args:
             tool_id: Tool identifier (e.g., "sqlite.query")
@@ -399,32 +431,89 @@ class MCPIntegration:
         # Extract tool name (remove prefix)
         tool_name = tool_id.split('.', 1)[1] if '.' in tool_id else tool_id
         
-        # Execute and track performance
-        start_time = asyncio.get_event_loop().time()
-        try:
-            result = await client.call_tool(tool_name, arguments)
-            execution_time = asyncio.get_event_loop().time() - start_time
-            
-            # Record usage
-            success = result.get("success", False)
-            self.registry.record_usage(
-                tool_id, 
-                success, 
-                execution_time,
-                error_message=result.get("error") if not success else None
+        # Get retry policy and circuit breaker for this server
+        server_type_lower = server_type.lower()
+        retry_policy = self._get_retry_policy_for_server(server_type_lower)
+        circuit_breaker = self.retry_manager.get_circuit_breaker(server_id)
+        
+        # Define the async function to execute with retry
+        @retry_async(
+            retry_policy=retry_policy,
+            circuit_breaker=circuit_breaker,
+            on_retry=lambda e, attempt: logger.warning(
+                f"[RETRY] Tool {tool_id} execution retry {attempt + 1}, error: {e}"
             )
-            
-            return result
-            
+        )
+        async def execute_with_retry():
+            start_time = asyncio.get_event_loop().time()
+            try:
+                result = await client.call_tool(tool_name, arguments)
+                execution_time = asyncio.get_event_loop().time() - start_time
+                
+                # Check if the result indicates a retryable error
+                if not result.get("success", False):
+                    error_msg = result.get("error", "Unknown error")
+                    
+                    # Check if this is a non-retryable error
+                    if self._is_non_retryable_error(error_msg):
+                        raise NonRetryableError(error_msg)
+                    
+                    # Otherwise, raise a retryable error
+                    raise RetryableError(error_msg)
+                
+                # Record successful usage
+                self.registry.record_usage(
+                    tool_id, 
+                    True, 
+                    execution_time,
+                    error_message=None
+                )
+                
+                return result
+                
+            except Exception as e:
+                execution_time = asyncio.get_event_loop().time() - start_time
+                error_msg = str(e)
+                
+                # Record failure
+                self.registry.record_usage(tool_id, False, execution_time, error_message=error_msg)
+                
+                # Re-raise the exception for retry logic
+                raise
+        
+        # Execute with retry logic
+        try:
+            return await execute_with_retry()
         except Exception as e:
-            execution_time = asyncio.get_event_loop().time() - start_time
             error_msg = str(e)
-            logger.error(f"[ERROR] Tool execution failed: {error_msg}")
-            
-            # Record failure
-            self.registry.record_usage(tool_id, False, execution_time, error_message=error_msg)
-            
+            logger.error(f"[ERROR] Tool execution failed after retries: {error_msg}")
             return {"error": error_msg, "success": False}
+    
+    def _get_retry_policy_for_server(self, server_type: str):
+        """Get retry policy for a specific server type."""
+        # Check if there's a server-specific configuration
+        if server_type in self.server_retry_configs:
+            config = self.server_retry_configs[server_type]
+            return self.retry_manager.create_retry_policy(config)
+        
+        # Use default retry policy
+        return self.retry_manager.get_retry_policy(server_type)
+    
+    def _is_non_retryable_error(self, error_msg: str) -> bool:
+        """Check if an error is non-retryable based on configuration."""
+        non_retryable_errors = self.config.get('retry_policies', {}).get('no_retry_errors', [
+            'NonRetryableError',
+            'AuthenticationError',
+            'InvalidArgumentError'
+        ])
+        
+        # Check if error message contains any non-retryable error patterns
+        error_lower = error_msg.lower()
+        for pattern in non_retryable_errors:
+            if pattern.lower() in error_lower:
+                return True
+        
+        return False
     
     async def discover_all_tools(self) -> List[Dict[str, Any]]:
         """
@@ -476,17 +565,32 @@ class MCPIntegration:
         logger.info("[SHUTDOWN] All servers shut down")
     
     def get_server_status(self) -> Dict[str, Dict[str, Any]]:
-        """Get status of all servers."""
+        """Get status of all servers including circuit breaker state."""
         status = {}
         
         for server_id, server in self.servers.items():
+            # Get circuit breaker state if available
+            circuit_breaker = self.retry_manager.circuit_breakers.get(server_id)
+            cb_state = None
+            cb_stats = None
+            
+            if circuit_breaker:
+                cb_state = circuit_breaker.state.value
+                cb_stats = circuit_breaker.statistics
+            
             status[server_id] = {
                 'type': server['type'],
                 'status': server['status'],
-                'tools_count': len(self.registry.list_tools(server['type']))
+                'tools_count': len(self.registry.list_tools(server['type'])),
+                'circuit_breaker_state': cb_state,
+                'circuit_breaker_stats': cb_stats
             }
         
         return status
+    
+    def get_retry_statistics(self) -> Dict[str, Any]:
+        """Get retry and circuit breaker statistics for all servers."""
+        return self.retry_manager.get_statistics()
     
     async def find_tools_by_intent(self, intent_type: str) -> List[Dict[str, Any]]:
         """
@@ -621,11 +725,17 @@ class MCPIntegration:
         # Initialize the tool registry
         await self.registry.initialize()
         
+        # Start connection pool
+        await self.connection_pool.start()
+        
         logger.info("[INIT] MCP Integration initialization complete")
     
     async def shutdown(self):
         """Shutdown all components cleanly."""
         logger.info("[SHUTDOWN] Shutting down MCP Integration...")
+        
+        # Stop connection pool
+        await self.connection_pool.stop()
         
         # Shutdown all servers
         await self.shutdown_all()
@@ -634,6 +744,10 @@ class MCPIntegration:
         await self.registry.close()
         
         logger.info("[SHUTDOWN] MCP Integration shutdown complete")
+    
+    def get_pool_statistics(self) -> Dict[str, Any]:
+        """Get connection pool statistics."""
+        return self.connection_pool.get_statistics()
 
 
 async def test_mcp_integration():

@@ -16,6 +16,7 @@ from datetime import datetime
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.utils.logger import get_logger
+from src.utils.retry import retry_async, ExponentialBackoffRetry, RetryableError, NonRetryableError
 from src.core.tool_registry import ToolRegistry
 from src.tools.mock_sqlite_mcp import MockSQLiteMCPServer
 
@@ -32,13 +33,15 @@ class SQLiteMCPClient:
     - Database metadata retrieval
     """
     
-    def __init__(self, db_path: str, server_command: Optional[List[str]] = None):
+    def __init__(self, db_path: str, server_command: Optional[List[str]] = None, 
+                 retry_policy: Optional[Any] = None):
         """
         Initialize SQLite MCP client.
         
         Args:
             db_path: Path to the SQLite database file
             server_command: Command to start the MCP server (if not provided, uses default)
+            retry_policy: Retry policy for operations (defaults to ExponentialBackoffRetry)
         """
         self.db_path = Path(db_path).resolve()
         self.server_name = "sqlite"
@@ -48,6 +51,14 @@ class SQLiteMCPClient:
             "npx", "@modelcontextprotocol/server-sqlite", 
             str(self.db_path)
         ]
+        
+        # Set retry policy
+        self.retry_policy = retry_policy or ExponentialBackoffRetry(
+            max_attempts=3,
+            base_delay=0.5,
+            max_delay=8.0,
+            jitter_factor=0.1
+        )
         
         self.process: Optional[subprocess.Popen] = None
         self.capabilities: Dict[str, Any] = {}
@@ -65,7 +76,7 @@ class SQLiteMCPClient:
     
     async def connect(self, use_mock: bool = False) -> bool:
         """
-        Connect to the SQLite MCP server.
+        Connect to the SQLite MCP server with retry logic.
         
         Args:
             use_mock: If True, use mock server instead of real MCP server
@@ -73,6 +84,23 @@ class SQLiteMCPClient:
         Returns:
             True if connection successful, False otherwise
         """
+        @retry_async(
+            retry_policy=self.retry_policy,
+            on_retry=lambda e, attempt: logger.warning(
+                f"[RETRY] SQLite connection retry {attempt + 1}, error: {e}"
+            )
+        )
+        async def connect_with_retry():
+            return await self._connect_internal(use_mock)
+        
+        try:
+            return await connect_with_retry()
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to connect after retries: {e}")
+            return False
+    
+    async def _connect_internal(self, use_mock: bool = False) -> bool:
+        """Internal connect method that can be retried."""
         try:
             if use_mock:
                 logger.info(f"[CONNECTING] Using mock SQLite MCP server...")
@@ -250,7 +278,7 @@ class SQLiteMCPClient:
     
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Call a specific SQLite MCP tool.
+        Call a specific SQLite MCP tool with retry logic.
         
         Args:
             tool_name: Name of the tool to call
@@ -261,41 +289,84 @@ class SQLiteMCPClient:
         """
         logger.debug(f"[TOOL] Calling {tool_name} with args: {arguments}")
         
-        call_request = {
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": arguments
-            },
-            "id": self._next_message_id()
-        }
-        
-        start_time = datetime.now()
-        
-        if self.use_mock:
-            response = await self.mock_server.handle_request(call_request)
-        else:
-            await self._send_message(call_request)
-            response = await self._receive_message()
-        
-        execution_time = (datetime.now() - start_time).total_seconds()
-        
-        if response and "result" in response:
-            logger.info(f"[SUCCESS] Tool {tool_name} executed in {execution_time:.2f}s")
-            return {
-                "success": True,
-                "result": response["result"],
-                "execution_time": execution_time
+        @retry_async(
+            retry_policy=self.retry_policy,
+            on_retry=lambda e, attempt: logger.warning(
+                f"[RETRY] SQLite tool {tool_name} retry {attempt + 1}, error: {e}"
+            )
+        )
+        async def execute_with_retry():
+            call_request = {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {
+                    "name": tool_name,
+                    "arguments": arguments
+                },
+                "id": self._next_message_id()
             }
-        else:
-            error_msg = response.get("error", {}).get("message", "Unknown error") if response else "No response"
-            logger.error(f"[ERROR] Tool execution failed: {error_msg}")
+            
+            start_time = datetime.now()
+            
+            try:
+                if self.use_mock:
+                    response = await self.mock_server.handle_request(call_request)
+                else:
+                    await self._send_message(call_request)
+                    response = await self._receive_message()
+                
+                execution_time = (datetime.now() - start_time).total_seconds()
+                
+                if response and "result" in response:
+                    logger.info(f"[SUCCESS] Tool {tool_name} executed in {execution_time:.2f}s")
+                    return {
+                        "success": True,
+                        "result": response["result"],
+                        "execution_time": execution_time
+                    }
+                else:
+                    error_msg = response.get("error", {}).get("message", "Unknown error") if response else "No response"
+                    
+                    # Check if this is a non-retryable error
+                    if self._is_non_retryable_error(error_msg):
+                        raise NonRetryableError(error_msg)
+                    
+                    # Otherwise, raise a retryable error
+                    raise RetryableError(f"Tool execution failed: {error_msg}")
+                    
+            except (asyncio.TimeoutError, ConnectionError, OSError) as e:
+                # These are typically transient errors that should be retried
+                raise RetryableError(f"Connection error: {str(e)}")
+            except Exception as e:
+                # Check if it's a known non-retryable error
+                if "authentication" in str(e).lower() or "permission" in str(e).lower():
+                    raise NonRetryableError(str(e))
+                raise
+        
+        try:
+            return await execute_with_retry()
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"[ERROR] Tool execution failed after retries: {error_msg}")
             return {
                 "success": False,
                 "error": error_msg,
-                "execution_time": execution_time
+                "execution_time": 0
             }
+    
+    def _is_non_retryable_error(self, error_msg: str) -> bool:
+        """Check if an error is non-retryable."""
+        non_retryable_patterns = [
+            'syntax error',
+            'no such table',
+            'no such column',
+            'permission denied',
+            'authentication failed',
+            'invalid argument'
+        ]
+        
+        error_lower = error_msg.lower()
+        return any(pattern in error_lower for pattern in non_retryable_patterns)
     
     async def _send_message(self, message: Dict[str, Any]) -> None:
         """Send a JSON-RPC message to the MCP server."""

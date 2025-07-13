@@ -94,6 +94,16 @@ The system consists of 5 core layers:
   - Real-time metrics collection (processing time, accuracy, cache hits)
   - Pipeline stage performance tracking
   - Exportable metrics reports
+  - Retry metrics monitoring (`src/monitoring/retry_metrics.py`)
+
+- **Retry and Resilience System**:
+  - Exponential backoff retry policies with jitter
+  - Circuit breaker pattern implementation
+  - Connection pooling with health checks
+  - Configurable retry policies per service
+  - Comprehensive retry metrics collection
+  - Failure pattern analysis and alerting
+  - See [Retry Architecture](docs/architecture/retry-architecture.md)
 
 ### ⏳ Not Yet Implemented
 - **Learning System** (In Progress):
@@ -148,8 +158,15 @@ python src/main.py
 python test_integration_demo.py
 python -m pytest tests/test_integration.py -v
 
+# Test Retry Logic
+python demo_retry_logic.py
+pytest tests/test_retry_logic.py -v
+
 # Monitor Performance
 python -c "from src.agents.intent_recognition_agent import IntentRecognitionAgent; agent = IntentRecognitionAgent(); print(agent.get_metrics_summary())"
+
+# Monitor Retry Metrics
+python -c "from src.monitoring.retry_metrics import RetryMetricsCollector; from src.core.tool_registry import ToolRegistry; collector = RetryMetricsCollector(ToolRegistry()); print(collector.get_retry_statistics())"
 ```
 
 ## Project Structure

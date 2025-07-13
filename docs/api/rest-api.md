@@ -123,12 +123,13 @@ Submit feedback for learning system improvement.
 ### System Metrics
 
 #### GET /api/v1/metrics
-Retrieve system performance metrics.
+Retrieve system performance metrics including retry statistics.
 
 **Query Parameters:**
 - `start_time`: ISO 8601 timestamp
 - `end_time`: ISO 8601 timestamp
-- `metric_type`: Type of metrics (performance, learning, usage)
+- `metric_type`: Type of metrics (performance, learning, usage, retry)
+- `tool_id` (optional): Filter metrics by specific tool
 
 **Response:**
 ```json
@@ -165,12 +166,106 @@ Retrieve system performance metrics.
         "queries_per_hour": 25,
         "multi_intent_rate": 12.5
       }
+    },
+    "retry_metrics": {
+      "summary": {
+        "total_retry_attempts": 156,
+        "successful_retries": 142,
+        "failed_retries": 14,
+        "overall_success_rate": 0.91,
+        "avg_retry_delay_ms": 2450,
+        "p95_retry_delay_ms": 8200
+      },
+      "circuit_breakers": {
+        "total_opens": 3,
+        "total_closes": 3,
+        "currently_open": [],
+        "events_last_24h": 6
+      },
+      "failure_patterns": {
+        "connection_timeout": 45,
+        "service_unavailable": 23,
+        "rate_limit_exceeded": 12
+      },
+      "by_tool": {
+        "external_api": {
+          "retry_attempts": 89,
+          "success_rate": 0.88,
+          "circuit_breaker_opens": 2
+        }
+      }
     }
   },
   "period": {
     "start": "2024-01-15T00:00:00Z",
     "end": "2024-01-15T23:59:59Z"
   }
+}
+```
+
+### Retry Metrics
+
+#### GET /api/v1/metrics/retry
+Get detailed retry metrics and circuit breaker status.
+
+**Query Parameters:**
+- `tool_id` (optional): Filter by specific tool
+- `time_window`: Time window in hours (default: 24)
+
+**Response:**
+```json
+{
+  "retry_statistics": {
+    "total_attempts": 156,
+    "success_rate": 0.91,
+    "avg_delay_ms": 2450,
+    "median_delay_ms": 1800,
+    "p95_delay_ms": 8200
+  },
+  "circuit_breaker_status": {
+    "filesystem_mcp": {
+      "state": "closed",
+      "failure_count": 0,
+      "last_failure": null
+    },
+    "external_api": {
+      "state": "open",
+      "failure_count": 5,
+      "last_failure": "2024-01-15T10:15:00Z",
+      "recovery_at": "2024-01-15T10:15:30Z"
+    }
+  },
+  "failure_patterns": {
+    "top_errors": [
+      {"type": "connection_timeout", "count": 45},
+      {"type": "service_unavailable", "count": 23}
+    ]
+  }
+}
+```
+
+#### GET /api/v1/metrics/retry/alerts
+Get retry-related alerts and recommendations.
+
+**Response:**
+```json
+{
+  "alerts": [
+    {
+      "severity": "high",
+      "type": "low_retry_success_rate",
+      "tool_id": "external_api",
+      "message": "Retry success rate is 45% for external_api",
+      "recommendation": "Consider increasing retry delays or implementing fallback"
+    },
+    {
+      "severity": "warning",
+      "type": "circuit_breaker_open",
+      "tool_id": "payment_service",
+      "message": "Circuit breaker has been open for 10 minutes",
+      "recommendation": "Check service health and consider manual intervention"
+    }
+  ]
 }
 ```
 

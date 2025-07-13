@@ -45,7 +45,7 @@ class ToolRegistry:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Tools table
+            # Tools table with enhanced failure tracking
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tools (
                     id TEXT PRIMARY KEY,
@@ -58,6 +58,12 @@ class ToolRegistry:
                     performance_score REAL DEFAULT 0.5,
                     usage_count INTEGER DEFAULT 0,
                     success_count INTEGER DEFAULT 0,
+                    failure_count INTEGER DEFAULT 0,
+                    consecutive_failures INTEGER DEFAULT 0,
+                    last_failure_time TIMESTAMP,
+                    circuit_breaker_state TEXT DEFAULT 'closed',
+                    circuit_breaker_opened_at TIMESTAMP,
+                    avg_response_time_ms REAL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -89,13 +95,34 @@ class ToolRegistry:
                     success BOOLEAN,
                     execution_time REAL,
                     error_message TEXT,
+                    retry_count INTEGER DEFAULT 0,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (tool_id) REFERENCES tools(id)
                 )
             """)
             
+            # Retry metrics table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS retry_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tool_id TEXT NOT NULL,
+                    attempt_number INTEGER NOT NULL,
+                    delay_ms REAL,
+                    error_type TEXT,
+                    error_message TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (tool_id) REFERENCES tools(id)
+                )
+            """)
+            
+            # Add indexes for performance
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tools_performance ON tools(performance_score DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tools_circuit_state ON tools(circuit_breaker_state)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_usage_history_tool ON usage_history(tool_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_retry_metrics_tool ON retry_metrics(tool_id)")
+            
             conn.commit()
-            logger.info("[DB] Database schema initialized")
+            logger.info("[DB] Database schema initialized with retry support")
     
     def register_tool(self, tool_info: Dict[str, Any]) -> bool:
         """
@@ -236,40 +263,67 @@ class ToolRegistry:
             return relationships
     
     def record_usage(self, tool_id: str, success: bool, execution_time: float, 
-                    task_type: Optional[str] = None, error_message: Optional[str] = None):
-        """Record tool usage for learning."""
+                    task_type: Optional[str] = None, error_message: Optional[str] = None,
+                    retry_count: int = 0):
+        """Record tool usage for learning with enhanced failure tracking."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
+                # Convert execution time to milliseconds
+                execution_time_ms = execution_time * 1000
+                
                 # Record in history
                 cursor.execute("""
                     INSERT INTO usage_history 
-                    (tool_id, task_type, success, execution_time, error_message)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (tool_id, task_type, success, execution_time, error_message))
+                    (tool_id, task_type, success, execution_time, error_message, retry_count)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (tool_id, task_type, success, execution_time, error_message, retry_count))
                 
-                # Update tool statistics
-                if success:
-                    cursor.execute("""
-                        UPDATE tools 
-                        SET usage_count = usage_count + 1,
-                            success_count = success_count + 1,
-                            performance_score = CAST(success_count + 1 AS REAL) / (usage_count + 1),
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (tool_id,))
-                else:
-                    cursor.execute("""
-                        UPDATE tools 
-                        SET usage_count = usage_count + 1,
-                            performance_score = CAST(success_count AS REAL) / (usage_count + 1),
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (tool_id,))
+                # Get current tool state
+                cursor.execute("""
+                    SELECT consecutive_failures, avg_response_time_ms, usage_count
+                    FROM tools WHERE id = ?
+                """, (tool_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    consecutive_failures, avg_time, usage_count = row
+                    
+                    # Calculate new average response time
+                    if avg_time is None:
+                        new_avg_time = execution_time_ms
+                    else:
+                        new_avg_time = (avg_time * usage_count + execution_time_ms) / (usage_count + 1)
+                    
+                    # Update tool statistics
+                    if success:
+                        cursor.execute("""
+                            UPDATE tools 
+                            SET usage_count = usage_count + 1,
+                                success_count = success_count + 1,
+                                failure_count = failure_count + 0,
+                                consecutive_failures = 0,
+                                performance_score = CAST(success_count + 1 AS REAL) / (usage_count + 1),
+                                avg_response_time_ms = ?,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (new_avg_time, tool_id))
+                    else:
+                        cursor.execute("""
+                            UPDATE tools 
+                            SET usage_count = usage_count + 1,
+                                failure_count = failure_count + 1,
+                                consecutive_failures = consecutive_failures + 1,
+                                last_failure_time = CURRENT_TIMESTAMP,
+                                performance_score = CAST(success_count AS REAL) / (usage_count + 1),
+                                avg_response_time_ms = ?,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (new_avg_time, tool_id))
                 
                 conn.commit()
-                logger.info(f"[USAGE] Tool: {tool_id}, Success: {success}, Time: {execution_time:.2f}s")
+                logger.info(f"[USAGE] Tool: {tool_id}, Success: {success}, Time: {execution_time:.2f}s, Retries: {retry_count}")
                 
         except Exception as e:
             logger.error(f"[ERROR] Failed to record usage: {e}")
@@ -334,6 +388,157 @@ class ToolRegistry:
                 related.append(tool)
             
             return related
+    
+    def update_circuit_breaker_state(self, tool_id: str, state: str) -> bool:
+        """Update circuit breaker state for a tool."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if state == 'open':
+                    cursor.execute("""
+                        UPDATE tools 
+                        SET circuit_breaker_state = ?,
+                            circuit_breaker_opened_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (state, tool_id))
+                else:
+                    cursor.execute("""
+                        UPDATE tools 
+                        SET circuit_breaker_state = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (state, tool_id))
+                
+                conn.commit()
+                logger.info(f"[CIRCUIT_BREAKER] Tool {tool_id} state changed to: {state}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to update circuit breaker state: {e}")
+            return False
+    
+    def record_retry_metric(self, tool_id: str, attempt_number: int, delay_ms: float,
+                          error_type: Optional[str] = None, error_message: Optional[str] = None):
+        """Record retry attempt metrics."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    INSERT INTO retry_metrics 
+                    (tool_id, attempt_number, delay_ms, error_type, error_message)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (tool_id, attempt_number, delay_ms, error_type, error_message))
+                
+                conn.commit()
+                logger.debug(f"[RETRY_METRIC] Tool: {tool_id}, Attempt: {attempt_number}, Delay: {delay_ms}ms")
+                
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to record retry metric: {e}")
+    
+    def get_failure_metrics(self, tool_id: str) -> Dict[str, Any]:
+        """Get failure and retry metrics for a tool."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Get tool failure stats
+            cursor.execute("""
+                SELECT failure_count, consecutive_failures, last_failure_time,
+                       circuit_breaker_state, circuit_breaker_opened_at
+                FROM tools WHERE id = ?
+            """, (tool_id,))
+            
+            tool_row = cursor.fetchone()
+            if not tool_row:
+                return {}
+            
+            # Get retry statistics
+            cursor.execute("""
+                SELECT COUNT(*) as total_retries,
+                       AVG(delay_ms) as avg_delay,
+                       MAX(attempt_number) as max_attempts
+                FROM retry_metrics 
+                WHERE tool_id = ? 
+                AND timestamp > datetime('now', '-24 hours')
+            """, (tool_id,))
+            
+            retry_row = cursor.fetchone()
+            
+            # Get error distribution
+            cursor.execute("""
+                SELECT error_type, COUNT(*) as count
+                FROM retry_metrics
+                WHERE tool_id = ?
+                AND timestamp > datetime('now', '-24 hours')
+                GROUP BY error_type
+            """, (tool_id,))
+            
+            error_dist = {row['error_type']: row['count'] for row in cursor.fetchall()}
+            
+            return {
+                'failure_count': tool_row['failure_count'],
+                'consecutive_failures': tool_row['consecutive_failures'],
+                'last_failure_time': tool_row['last_failure_time'],
+                'circuit_breaker_state': tool_row['circuit_breaker_state'],
+                'circuit_breaker_opened_at': tool_row['circuit_breaker_opened_at'],
+                'retry_stats': {
+                    'total_retries_24h': retry_row['total_retries'] or 0,
+                    'avg_delay_ms': retry_row['avg_delay'] or 0,
+                    'max_attempts': retry_row['max_attempts'] or 0
+                },
+                'error_distribution': error_dist
+            }
+    
+    def get_health_report(self) -> Dict[str, Any]:
+        """Get overall system health report including failure rates."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Get tools with circuit breaker open
+            cursor.execute("""
+                SELECT id, name, server_type, consecutive_failures, last_failure_time
+                FROM tools 
+                WHERE circuit_breaker_state = 'open'
+            """)
+            
+            open_circuit_breakers = [dict(row) for row in cursor.fetchall()]
+            
+            # Get tools with high failure rates
+            cursor.execute("""
+                SELECT id, name, server_type, 
+                       CAST(failure_count AS REAL) / usage_count as failure_rate,
+                       failure_count, usage_count
+                FROM tools 
+                WHERE usage_count > 10 
+                AND CAST(failure_count AS REAL) / usage_count > 0.3
+                ORDER BY failure_rate DESC
+            """)
+            
+            high_failure_tools = [dict(row) for row in cursor.fetchall()]
+            
+            # Get overall statistics
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_tools,
+                    SUM(usage_count) as total_uses,
+                    SUM(success_count) as total_successes,
+                    SUM(failure_count) as total_failures,
+                    AVG(performance_score) as avg_performance
+                FROM tools
+            """)
+            
+            overall_stats = dict(cursor.fetchone())
+            
+            return {
+                'overall_stats': overall_stats,
+                'open_circuit_breakers': open_circuit_breakers,
+                'high_failure_tools': high_failure_tools,
+                'health_status': 'healthy' if len(open_circuit_breakers) == 0 else 'degraded'
+            }
 
 # Test the registry
 def test_registry():

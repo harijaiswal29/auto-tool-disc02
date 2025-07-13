@@ -130,5 +130,87 @@
     "relationship_weight": 0.2,
     "min_score_threshold": 0.3,
     "cache_size": 1000
+  },
+  
+  "retry_policies": {
+    "default": {
+      "type": "exponential_backoff",
+      "max_attempts": 5,
+      "base_delay": 1.0,
+      "max_delay": 16.0,
+      "jitter_factor": 0.2
+    },
+    "mcp_servers": {
+      "filesystem": {
+        "type": "exponential_backoff",
+        "max_attempts": 3,
+        "base_delay": 0.5,
+        "max_delay": 8.0,
+        "jitter_factor": 0.1
+      },
+      "brave_search": {
+        "type": "exponential_backoff",
+        "max_attempts": 5,
+        "base_delay": 2.0,
+        "max_delay": 30.0,
+        "jitter_factor": 0.3
+      },
+      "postgres": {
+        "type": "exponential_backoff",
+        "max_attempts": 3,
+        "base_delay": 1.0,
+        "max_delay": 10.0,
+        "jitter_factor": 0.2
+      },
+      "github": {
+        "type": "exponential_backoff",
+        "max_attempts": 5,
+        "base_delay": 2.0,
+        "max_delay": 60.0,
+        "jitter_factor": 0.3
+      }
+    },
+    "no_retry_errors": [
+      "NonRetryableError",
+      "AuthenticationError",
+      "InvalidArgumentError"
+    ]
+  },
+  
+  "circuit_breaker": {
+    "default": {
+      "failure_threshold": 5,
+      "recovery_timeout": 30.0,
+      "half_open_test_requests": 3
+    },
+    "mcp_servers": {
+      "filesystem": {
+        "failure_threshold": 3,
+        "recovery_timeout": 10.0,
+        "half_open_test_requests": 2
+      },
+      "brave_search": {
+        "failure_threshold": 5,
+        "recovery_timeout": 60.0,
+        "half_open_test_requests": 3
+      },
+      "postgres": {
+        "failure_threshold": 3,
+        "recovery_timeout": 20.0,
+        "half_open_test_requests": 2
+      },
+      "github": {
+        "failure_threshold": 5,
+        "recovery_timeout": 120.0,
+        "half_open_test_requests": 3
+      }
+    }
+  },
+  
+  "connection_pool": {
+    "max_connections": 10,
+    "connection_timeout": 5.0,
+    "idle_timeout": 300.0,
+    "health_check_interval": 60.0
   }
 }

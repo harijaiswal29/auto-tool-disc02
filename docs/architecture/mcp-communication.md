@@ -101,21 +101,31 @@ class MCPConnectionPool:
 
 ## Error Handling Strategy
 
+The system implements a comprehensive retry and resilience strategy for MCP communication. For detailed architecture and implementation, see [Retry Architecture](./retry-architecture.md).
+
 ### 1. Retry Logic
-- Exponential backoff: 1s, 2s, 4s, 8s, 16s
-- Max retries: 5
-- Jitter: ±20% to prevent thundering herd
+- **Policy**: Exponential backoff with jitter
+- **Default sequence**: ~1s, ~2s, ~4s, ~8s, ~16s (with ±20% jitter)
+- **Max retries**: 5 (configurable per service)
+- **Jitter**: ±20% to prevent thundering herd
 
 ### 2. Circuit Breaker
-- Failure threshold: 5 consecutive failures
-- Recovery timeout: 30 seconds
-- Half-open test period: 10 seconds
+- **Failure threshold**: 5 consecutive failures
+- **Recovery timeout**: 30 seconds  
+- **Half-open test period**: 3 test requests
+- **States**: CLOSED → OPEN → HALF_OPEN → CLOSED
 
 ### 3. Timeout Management
-- Connection timeout: 5 seconds
-- Read timeout: 30 seconds
-- Write timeout: 10 seconds
-- Keep-alive interval: 60 seconds
+- **Connection timeout**: 5 seconds
+- **Read timeout**: 30 seconds
+- **Write timeout**: 10 seconds
+- **Keep-alive interval**: 60 seconds
+
+### 4. Connection Pooling
+- **Max connections**: 10 per service type
+- **Idle timeout**: 300 seconds
+- **Health check interval**: 60 seconds
+- **Connection reuse**: Automatic with health checking
 
 ## Message Queue Architecture
 

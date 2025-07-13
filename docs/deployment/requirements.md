@@ -68,8 +68,27 @@
 ### Circuit Breakers
 - Failure threshold: 5 consecutive failures
 - Recovery timeout: 30 seconds
-- Half-open test period: 10 seconds
+- Half-open test period: 3 test requests
 - Monitored endpoints: All external services
+- State tracking: Per-service circuit breakers
+
+### Retry Configuration
+- **Default Policy**: Exponential backoff
+  - Base delay: 1.0 seconds
+  - Max delay: 16.0 seconds
+  - Jitter: ±20%
+  - Max attempts: 5
+- **Configurable per service**: Yes
+- **Non-retryable errors**: 4xx client errors
+- **Retryable errors**: Network timeouts, 5xx errors, rate limits
+
+### Resilience Requirements
+- Connection pooling with health checks
+- Graceful degradation on failures
+- Fallback mechanisms for critical services
+- Retry metrics collection and monitoring
+- Alert thresholds for retry failures
+- Circuit breaker state persistence
 
 ## Security Architecture
 
