@@ -88,6 +88,8 @@ The system consists of 5 core layers:
   - Intent Recognition integration tests (`tests/integration/test_intent_recognition_integration.py`)
   - State machine tests (`tests/unit/test_conversation_state_machine.py`)
   - Performance benchmarking tests
+  - Test organization: unit tests, integration tests, e2e tests
+  - Target coverage: >80% overall, >90% for core components
 
 - **Monitoring & Metrics**:
   - Performance monitoring system (`src/monitoring/intent_recognition_metrics.py`)
@@ -140,6 +142,15 @@ mypy src/
 # Testing
 pytest tests/ -v
 pytest --cov=src tests/ --cov-report=html
+pytest --cov=src --cov-fail-under=80  # Enforce coverage threshold
+
+# Run tests by category
+pytest tests/unit/ -v          # Unit tests only
+pytest tests/integration/ -v   # Integration tests only
+pytest tests/e2e/ -v          # End-to-end tests only
+
+# Run tests matching a pattern
+pytest -k "test_retry" -v
 
 # Test Intent Recognition
 pytest tests/unit/test_intent_pipeline_stages.py -v
@@ -214,17 +225,40 @@ auto-tool-disc/
 │       └── logger.py
 ├── tests/
 │   ├── unit/               # Unit tests
+│   │   ├── test_mcp_integration.py
+│   │   ├── test_connection_pool.py
+│   │   ├── test_orchestrator_agent.py
+│   │   ├── test_tool_discovery_agent.py
 │   │   ├── test_intent_pipeline_stages.py
 │   │   ├── test_conversation_state_machine.py
-│   │   └── test_state_machine_base.py
+│   │   ├── test_search_mcp.py
+│   │   ├── test_state_machine_base.py
+│   │   └── test_retry.py
 │   ├── integration/        # Integration tests
+│   │   ├── test_filesystem_mcp.py
+│   │   ├── test_github_mcp.py
 │   │   ├── test_intent_recognition_integration.py
+│   │   ├── test_postgres_mcp.py
+│   │   ├── test_sqlite_mcp.py
 │   │   ├── test_state_machine_integration.py
-│   │   └── test_*_mcp.py (various MCP tests)
+│   │   └── test_weather_mcp.py
 │   ├── e2e/               # End-to-end tests
+│   │   └── test_filesystem_e2e.py
+│   ├── demos/             # Demonstration scripts
+│   │   ├── demo_pipeline_refactor.py
+│   │   ├── demo_retry_logic.py
+│   │   ├── test_integration_demo.py
+│   │   ├── demo_github_mcp.py
+│   │   └── demo_github_real.py
+│   ├── utilities/         # Test utilities
+│   │   └── check_encoding.py
+│   ├── data/              # Test data and fixtures
+│   ├── conftest.py        # Pytest configuration
+│   ├── test_context_persistence.py
 │   ├── test_integration.py
 │   ├── test_intent_recognition.py
-│   └── test_context_persistence.py
+│   ├── test_pipeline_architecture.py
+│   └── test_retry_logic.py
 ├── data/                   # Runtime data
 │   ├── logs/              # Application logs
 │   ├── metrics/           # Performance metrics
@@ -254,7 +288,7 @@ auto-tool-disc/
 - **Pattern Mining**: Results must be persisted for analysis
 - **Configuration**: Q-learning parameters (α=0.1, γ=0.9, ε=0.2) in config.json
 - **Pipeline Architecture**: All stages must implement PipelineStage interface
-- **Testing**: Maintain >90% test coverage, test each pipeline stage individually
+- **Testing**: Follow test organization in tests/README.md, maintain >80% overall coverage (>90% for core components)
 - **Monitoring**: All agents must integrate with metrics collection system
 - **State Management**: Use conversation state machine for user interactions
 - **Performance**: Intent recognition must complete within 100ms (p95)
@@ -296,6 +330,10 @@ For detailed information on specific topics, refer to these documentation files:
 - @docs/deployment/requirements.md - Non-functional requirements and SLOs
 - @docs/deployment/infrastructure.md - Container specs and CI/CD pipelines
 - @docs/deployment/security.md - Security architecture and best practices
+
+### Testing Documentation
+- @tests/README.md - Comprehensive test suite documentation, organization, and commands
+- @docs/testing/test-summary.md - Test coverage summary, metrics, and remaining work
 
 ## Development Timeline
 
