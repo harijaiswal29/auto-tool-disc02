@@ -1,0 +1,196 @@
+{
+  "test_queries": [
+    {
+      "query_id": "q001",
+      "query": "Find all Python files modified in the last week",
+      "expected_intent": "query.search",
+      "expected_tools": ["filesystem_mcp"],
+      "complexity": "medium",
+      "entities": ["Python files", "last week"],
+      "keywords": ["find", "modified"],
+      "test_category": "file_search"
+    },
+    {
+      "query_id": "q002",
+      "query": "Get current weather for New York City",
+      "expected_intent": "query.retrieve",
+      "expected_tools": ["weather_mcp"],
+      "complexity": "simple",
+      "entities": ["weather", "New York City"],
+      "keywords": ["get", "current"],
+      "test_category": "api_call"
+    },
+    {
+      "query_id": "q003",
+      "query": "Search for documentation about authentication and create a summary",
+      "expected_intent": ["query.search", "action.create"],
+      "expected_tools": ["search_mcp", "filesystem_mcp"],
+      "complexity": "complex",
+      "entities": ["documentation", "authentication", "summary"],
+      "keywords": ["search", "create"],
+      "test_category": "multi_intent"
+    },
+    {
+      "query_id": "q004",
+      "query": "List all active users from the database",
+      "expected_intent": "query.retrieve",
+      "expected_tools": ["sqlite_mcp", "postgres_mcp"],
+      "complexity": "simple",
+      "entities": ["users", "database"],
+      "keywords": ["list", "active"],
+      "test_category": "database_query"
+    },
+    {
+      "query_id": "q005",
+      "query": "Update configuration file with new API endpoint",
+      "expected_intent": "action.modify",
+      "expected_tools": ["filesystem_mcp"],
+      "complexity": "medium",
+      "entities": ["configuration file", "API endpoint"],
+      "keywords": ["update", "new"],
+      "test_category": "file_modification"
+    },
+    {
+      "query_id": "q006",
+      "query": "Delete temporary files older than 30 days",
+      "expected_intent": "action.delete",
+      "expected_tools": ["filesystem_mcp"],
+      "complexity": "medium",
+      "entities": ["temporary files", "30 days"],
+      "keywords": ["delete", "older"],
+      "test_category": "file_deletion"
+    },
+    {
+      "query_id": "q007",
+      "query": "Check database connection status and system health",
+      "expected_intent": "system.monitor",
+      "expected_tools": ["sqlite_mcp", "postgres_mcp"],
+      "complexity": "medium",
+      "entities": ["database connection", "system health"],
+      "keywords": ["check", "status"],
+      "test_category": "system_monitoring"
+    },
+    {
+      "query_id": "q008",
+      "query": "Find all GitHub issues labeled as bug and analyze their priority",
+      "expected_intent": ["query.search", "query.analyze"],
+      "expected_tools": ["github_mcp"],
+      "complexity": "complex",
+      "entities": ["GitHub issues", "bug", "priority"],
+      "keywords": ["find", "analyze"],
+      "test_category": "github_analysis"
+    },
+    {
+      "query_id": "q009",
+      "query": "Create a new database table for user preferences",
+      "expected_intent": "action.create",
+      "expected_tools": ["sqlite_mcp", "postgres_mcp"],
+      "complexity": "medium",
+      "entities": ["database table", "user preferences"],
+      "keywords": ["create", "new"],
+      "test_category": "database_creation"
+    },
+    {
+      "query_id": "q010",
+      "query": "Analyze log files for error patterns and export results to CSV",
+      "expected_intent": ["query.analyze", "action.create"],
+      "expected_tools": ["filesystem_mcp"],
+      "complexity": "complex",
+      "entities": ["log files", "error patterns", "CSV"],
+      "keywords": ["analyze", "export"],
+      "test_category": "log_analysis"
+    }
+  ],
+  "edge_cases": [
+    {
+      "query_id": "edge001",
+      "query": "",
+      "description": "Empty query",
+      "expected_behavior": "Handle gracefully, possibly ask for clarification"
+    },
+    {
+      "query_id": "edge002",
+      "query": "Do something with the thing",
+      "description": "Vague query with unclear intent",
+      "expected_behavior": "Low confidence score, request clarification"
+    },
+    {
+      "query_id": "edge003",
+      "query": "Find all files and delete them and create new ones and update the database and check the weather",
+      "description": "Overly complex multi-intent query",
+      "expected_behavior": "Parse multiple intents, possibly suggest breaking into steps"
+    },
+    {
+      "query_id": "edge004",
+      "query": "SELECT * FROM users; DROP TABLE users;",
+      "description": "SQL injection attempt",
+      "expected_behavior": "Sanitize input, prevent malicious execution"
+    },
+    {
+      "query_id": "edge005",
+      "query": "A" * 10000,
+      "description": "Extremely long query",
+      "expected_behavior": "Handle within performance limits, possibly truncate"
+    }
+  ],
+  "performance_test_queries": [
+    {
+      "category": "simple",
+      "queries": [
+        "Find files",
+        "Get data",
+        "List items",
+        "Show results",
+        "Check status"
+      ]
+    },
+    {
+      "category": "medium",
+      "queries": [
+        "Find all Python files in the src directory",
+        "Get user data from the main database",
+        "List recent changes made yesterday",
+        "Show configuration for production environment",
+        "Check system health and performance metrics"
+      ]
+    },
+    {
+      "category": "complex",
+      "queries": [
+        "Find all Python files modified in the last week that contain TODO comments and are larger than 1000 lines",
+        "Get user activity data from multiple databases and aggregate by region for the quarterly report",
+        "List all GitHub pull requests that are waiting for review and have been open for more than 3 days",
+        "Show detailed performance metrics for all microservices including response times and error rates",
+        "Check database replication status across all regions and alert if lag exceeds 5 seconds"
+      ]
+    }
+  ],
+  "validation_queries": {
+    "intent_recognition": [
+      {
+        "query": "Search for Python tutorials",
+        "expected": { "intent": "query.search", "min_confidence": 0.8 }
+      },
+      {
+        "query": "Create backup of database",
+        "expected": { "intent": "action.create", "min_confidence": 0.7 }
+      },
+      {
+        "query": "Remove outdated cache files",
+        "expected": { "intent": "action.delete", "min_confidence": 0.8 }
+      }
+    ],
+    "tool_selection": [
+      {
+        "query": "Read configuration from config.json",
+        "expected_tools": ["filesystem_mcp"],
+        "should_not_include": ["database_tools"]
+      },
+      {
+        "query": "Query user table for active accounts",
+        "expected_tools": ["sqlite_mcp", "postgres_mcp"],
+        "should_not_include": ["filesystem_mcp"]
+      }
+    ]
+  }
+}

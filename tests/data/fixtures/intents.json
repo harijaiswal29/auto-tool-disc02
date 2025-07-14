@@ -1,0 +1,154 @@
+{
+  "intents": [
+    {
+      "intent_id": "intent_001",
+      "type": "query.search",
+      "description": "Search for files or information",
+      "keywords": ["find", "search", "look for", "locate", "discover"],
+      "entities": ["files", "documents", "information", "data"],
+      "examples": [
+        "Find all Python files in the project",
+        "Search for documentation about APIs",
+        "Look for configuration files",
+        "Locate test files in the directory"
+      ],
+      "confidence_threshold": 0.7,
+      "typical_tools": ["filesystem_mcp", "search_mcp", "github_mcp"]
+    },
+    {
+      "intent_id": "intent_002",
+      "type": "query.retrieve",
+      "description": "Get or fetch specific data",
+      "keywords": ["get", "fetch", "retrieve", "show", "display", "list"],
+      "entities": ["records", "data", "information", "content"],
+      "examples": [
+        "Get all user records from database",
+        "Show me the configuration settings",
+        "List all repositories",
+        "Fetch weather data for Seattle"
+      ],
+      "confidence_threshold": 0.7,
+      "typical_tools": ["sqlite_mcp", "postgres_mcp", "github_mcp", "weather_mcp"]
+    },
+    {
+      "intent_id": "intent_003",
+      "type": "query.analyze",
+      "description": "Analyze or examine data",
+      "keywords": ["analyze", "examine", "investigate", "inspect", "review"],
+      "entities": ["patterns", "trends", "statistics", "metrics"],
+      "examples": [
+        "Analyze the log files for errors",
+        "Examine database performance metrics",
+        "Investigate code quality issues",
+        "Review recent changes"
+      ],
+      "confidence_threshold": 0.75,
+      "typical_tools": ["filesystem_mcp", "sqlite_mcp", "github_mcp"]
+    },
+    {
+      "intent_id": "intent_004",
+      "type": "action.create",
+      "description": "Create new resources or data",
+      "keywords": ["create", "make", "generate", "build", "add", "new"],
+      "entities": ["file", "record", "document", "entry", "resource"],
+      "examples": [
+        "Create a new configuration file",
+        "Generate a report from the data",
+        "Make a new database entry",
+        "Build a summary document"
+      ],
+      "confidence_threshold": 0.8,
+      "typical_tools": ["filesystem_mcp", "sqlite_mcp", "postgres_mcp", "github_mcp"]
+    },
+    {
+      "intent_id": "intent_005",
+      "type": "action.modify",
+      "description": "Update or change existing data",
+      "keywords": ["update", "modify", "change", "edit", "alter", "revise"],
+      "entities": ["file", "record", "configuration", "settings", "data"],
+      "examples": [
+        "Update the configuration file",
+        "Modify user permissions",
+        "Change database records",
+        "Edit the documentation"
+      ],
+      "confidence_threshold": 0.8,
+      "typical_tools": ["filesystem_mcp", "sqlite_mcp", "postgres_mcp"]
+    },
+    {
+      "intent_id": "intent_006",
+      "type": "action.delete",
+      "description": "Remove or delete resources",
+      "keywords": ["delete", "remove", "drop", "clear", "purge", "clean"],
+      "entities": ["file", "record", "data", "entry", "resource"],
+      "examples": [
+        "Delete old log files",
+        "Remove temporary files",
+        "Drop unused database tables",
+        "Clear cache data"
+      ],
+      "confidence_threshold": 0.85,
+      "typical_tools": ["filesystem_mcp", "sqlite_mcp", "postgres_mcp"]
+    },
+    {
+      "intent_id": "intent_007",
+      "type": "system.configure",
+      "description": "Setup or configure system settings",
+      "keywords": ["setup", "configure", "settings", "preferences", "options"],
+      "entities": ["system", "application", "service", "environment"],
+      "examples": [
+        "Setup database connection",
+        "Configure application settings",
+        "Set environment variables",
+        "Initialize new service"
+      ],
+      "confidence_threshold": 0.75,
+      "typical_tools": ["filesystem_mcp", "sqlite_mcp", "postgres_mcp"]
+    },
+    {
+      "intent_id": "intent_008",
+      "type": "system.monitor",
+      "description": "Check status or monitor system",
+      "keywords": ["check", "monitor", "status", "health", "verify", "test"],
+      "entities": ["system", "service", "performance", "availability"],
+      "examples": [
+        "Check database connection status",
+        "Monitor system performance",
+        "Verify service health",
+        "Test API endpoints"
+      ],
+      "confidence_threshold": 0.7,
+      "typical_tools": ["sqlite_mcp", "postgres_mcp", "search_mcp", "weather_mcp"]
+    }
+  ],
+  "intent_patterns": [
+    {
+      "pattern": "compound_search_analyze",
+      "description": "User wants to search and then analyze results",
+      "intent_sequence": ["query.search", "query.analyze"],
+      "example": "Find all error logs and analyze the patterns",
+      "frequency": 0.15
+    },
+    {
+      "pattern": "retrieve_modify_save",
+      "description": "Get data, modify it, and save changes",
+      "intent_sequence": ["query.retrieve", "action.modify", "action.create"],
+      "example": "Get user settings, update preferences, and save the configuration",
+      "frequency": 0.12
+    },
+    {
+      "pattern": "monitor_alert",
+      "description": "Check status and potentially create alerts",
+      "intent_sequence": ["system.monitor", "action.create"],
+      "example": "Check system health and create alert if issues found",
+      "frequency": 0.08
+    }
+  ],
+  "confidence_mappings": {
+    "very_high": { "min": 0.9, "max": 1.0, "description": "Almost certain about intent" },
+    "high": { "min": 0.7, "max": 0.9, "description": "Confident about intent" },
+    "medium": { "min": 0.5, "max": 0.7, "description": "Moderately confident" },
+    "low": { "min": 0.3, "max": 0.5, "description": "Uncertain about intent" },
+    "very_low": { "min": 0.0, "max": 0.3, "description": "Very uncertain" }
+  }
+}

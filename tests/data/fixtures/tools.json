@@ -1,0 +1,313 @@
+{
+  "tools": [
+    {
+      "tool_id": "filesystem_mcp",
+      "name": "Filesystem MCP",
+      "type": "mcp",
+      "endpoint": "stdio://mcp-server-filesystem",
+      "version": "1.0.0",
+      "capabilities": {
+        "operations": [
+          {
+            "name": "read_file",
+            "category": "file_io",
+            "parameters": {
+              "path": { "type": "string", "required": true },
+              "encoding": { "type": "string", "default": "utf-8" }
+            },
+            "returns": { "type": "string" }
+          },
+          {
+            "name": "write_file",
+            "category": "file_io",
+            "parameters": {
+              "path": { "type": "string", "required": true },
+              "content": { "type": "string", "required": true }
+            },
+            "returns": { "type": "boolean" }
+          },
+          {
+            "name": "list_directory",
+            "category": "file_io",
+            "parameters": {
+              "path": { "type": "string", "required": true },
+              "recursive": { "type": "boolean", "default": false }
+            },
+            "returns": { "type": "array", "items": { "type": "string" } }
+          }
+        ],
+        "constraints": {
+          "max_file_size_mb": 100,
+          "allowed_extensions": [".txt", ".json", ".xml", ".csv", ".py", ".js"],
+          "restricted_paths": ["/etc", "/sys", "/proc"]
+        },
+        "semantic_tags": ["filesystem", "io", "storage", "files", "directories"]
+      },
+      "metadata": {
+        "author": "MCP Team",
+        "description": "Provides filesystem operations for reading, writing, and listing files",
+        "documentation_url": "https://mcp.io/tools/filesystem"
+      }
+    },
+    {
+      "tool_id": "sqlite_mcp",
+      "name": "SQLite MCP",
+      "type": "mcp",
+      "endpoint": "stdio://mcp-server-sqlite",
+      "version": "1.0.0",
+      "capabilities": {
+        "operations": [
+          {
+            "name": "query",
+            "category": "database",
+            "parameters": {
+              "sql": { "type": "string", "required": true },
+              "params": { "type": "array", "default": [] }
+            },
+            "returns": { "type": "array", "items": { "type": "object" } }
+          },
+          {
+            "name": "execute",
+            "category": "database",
+            "parameters": {
+              "sql": { "type": "string", "required": true },
+              "params": { "type": "array", "default": [] }
+            },
+            "returns": { "type": "object", "properties": { "affected_rows": { "type": "integer" } } }
+          }
+        ],
+        "constraints": {
+          "max_results": 10000,
+          "timeout_seconds": 30,
+          "read_only": false
+        },
+        "semantic_tags": ["database", "sql", "sqlite", "query", "storage"]
+      },
+      "metadata": {
+        "author": "MCP Team",
+        "description": "SQLite database operations via MCP",
+        "supported_versions": ["3.x"]
+      }
+    },
+    {
+      "tool_id": "search_mcp",
+      "name": "Web Search MCP",
+      "type": "mcp",
+      "endpoint": "stdio://mcp-server-brave-search",
+      "version": "1.0.0",
+      "capabilities": {
+        "operations": [
+          {
+            "name": "web_search",
+            "category": "search",
+            "parameters": {
+              "query": { "type": "string", "required": true },
+              "count": { "type": "integer", "default": 10, "minimum": 1, "maximum": 50 }
+            },
+            "returns": {
+              "type": "object",
+              "properties": {
+                "results": { "type": "array" },
+                "total": { "type": "integer" }
+              }
+            }
+          },
+          {
+            "name": "image_search",
+            "category": "search",
+            "parameters": {
+              "query": { "type": "string", "required": true },
+              "safe_search": { "type": "boolean", "default": true }
+            },
+            "returns": { "type": "array" }
+          }
+        ],
+        "constraints": {
+          "rate_limit_per_minute": 100,
+          "requires_api_key": true
+        },
+        "semantic_tags": ["search", "web", "internet", "query", "information"]
+      },
+      "metadata": {
+        "author": "MCP Team",
+        "description": "Web search capabilities using Brave Search API",
+        "api_documentation": "https://brave.com/search/api/"
+      }
+    },
+    {
+      "tool_id": "github_mcp",
+      "name": "GitHub MCP",
+      "type": "mcp",
+      "endpoint": "stdio://mcp-server-github",
+      "version": "1.0.0",
+      "capabilities": {
+        "operations": [
+          {
+            "name": "list_repositories",
+            "category": "repository",
+            "parameters": {
+              "user": { "type": "string", "required": false },
+              "org": { "type": "string", "required": false }
+            },
+            "returns": { "type": "array" }
+          },
+          {
+            "name": "get_issues",
+            "category": "issue_tracking",
+            "parameters": {
+              "repo": { "type": "string", "required": true },
+              "state": { "type": "string", "enum": ["open", "closed", "all"], "default": "open" }
+            },
+            "returns": { "type": "array" }
+          },
+          {
+            "name": "create_pull_request",
+            "category": "collaboration",
+            "parameters": {
+              "repo": { "type": "string", "required": true },
+              "title": { "type": "string", "required": true },
+              "body": { "type": "string", "required": true },
+              "base": { "type": "string", "required": true },
+              "head": { "type": "string", "required": true }
+            },
+            "returns": { "type": "object" }
+          }
+        ],
+        "constraints": {
+          "requires_auth": true,
+          "rate_limit_per_hour": 5000
+        },
+        "semantic_tags": ["github", "git", "repository", "collaboration", "version_control"]
+      },
+      "metadata": {
+        "author": "MCP Team",
+        "description": "GitHub API operations via MCP",
+        "oauth_scopes": ["repo", "read:user"]
+      }
+    },
+    {
+      "tool_id": "weather_mcp",
+      "name": "Weather MCP",
+      "type": "mcp",
+      "endpoint": "http://localhost:8001",
+      "version": "1.0.0",
+      "capabilities": {
+        "operations": [
+          {
+            "name": "get_current_weather",
+            "category": "weather",
+            "parameters": {
+              "location": { "type": "string", "required": true },
+              "units": { "type": "string", "enum": ["metric", "imperial"], "default": "metric" }
+            },
+            "returns": {
+              "type": "object",
+              "properties": {
+                "temperature": { "type": "number" },
+                "conditions": { "type": "string" },
+                "humidity": { "type": "number" }
+              }
+            }
+          },
+          {
+            "name": "get_forecast",
+            "category": "weather",
+            "parameters": {
+              "location": { "type": "string", "required": true },
+              "days": { "type": "integer", "minimum": 1, "maximum": 7, "default": 3 }
+            },
+            "returns": { "type": "array" }
+          }
+        ],
+        "constraints": {
+          "rate_limit_per_day": 1000,
+          "requires_api_key": true
+        },
+        "semantic_tags": ["weather", "forecast", "temperature", "conditions", "climate"]
+      },
+      "metadata": {
+        "author": "Weather Team",
+        "description": "Weather data and forecasts via OpenWeatherMap API",
+        "api_version": "2.5"
+      }
+    },
+    {
+      "tool_id": "postgres_mcp",
+      "name": "PostgreSQL MCP",
+      "type": "mcp",
+      "endpoint": "stdio://mcp-server-postgres",
+      "version": "1.0.0",
+      "capabilities": {
+        "operations": [
+          {
+            "name": "query",
+            "category": "database",
+            "parameters": {
+              "sql": { "type": "string", "required": true },
+              "params": { "type": "array", "default": [] }
+            },
+            "returns": { "type": "array" }
+          },
+          {
+            "name": "execute",
+            "category": "database",
+            "parameters": {
+              "sql": { "type": "string", "required": true },
+              "params": { "type": "array", "default": [] }
+            },
+            "returns": { "type": "object" }
+          },
+          {
+            "name": "list_tables",
+            "category": "database",
+            "parameters": {
+              "schema": { "type": "string", "default": "public" }
+            },
+            "returns": { "type": "array" }
+          }
+        ],
+        "constraints": {
+          "max_connections": 100,
+          "timeout_seconds": 60,
+          "ssl_required": true
+        },
+        "semantic_tags": ["database", "postgresql", "sql", "relational", "query"]
+      },
+      "metadata": {
+        "author": "MCP Team",
+        "description": "PostgreSQL database operations via MCP",
+        "min_version": "12.0"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "tool1_id": "filesystem_mcp",
+      "tool2_id": "sqlite_mcp",
+      "relationship_type": "complements",
+      "strength": 0.8,
+      "description": "Filesystem can read/write SQLite database files"
+    },
+    {
+      "tool1_id": "github_mcp",
+      "tool2_id": "filesystem_mcp",
+      "relationship_type": "enhances",
+      "strength": 0.9,
+      "description": "GitHub operations often require local file manipulation"
+    },
+    {
+      "tool1_id": "search_mcp",
+      "tool2_id": "weather_mcp",
+      "relationship_type": "complements",
+      "strength": 0.6,
+      "description": "Search can find weather-related information"
+    },
+    {
+      "tool1_id": "sqlite_mcp",
+      "tool2_id": "postgres_mcp",
+      "relationship_type": "conflicts",
+      "strength": 0.7,
+      "description": "Both are database tools, typically use one or the other"
+    }
+  ]
+}

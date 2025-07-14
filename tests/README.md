@@ -15,7 +15,9 @@ tests/
 │   ├── test_conversation_state_machine.py
 │   ├── test_search_mcp.py
 │   ├── test_state_machine_base.py
-│   └── test_retry.py
+│   ├── test_retry.py
+│   ├── test_intent_recognition_metrics.py  # NEW: Intent recognition metrics
+│   └── test_retry_metrics.py               # NEW: Retry metrics monitoring
 ├── integration/              # Integration tests
 │   ├── test_filesystem_mcp.py
 │   ├── test_github_mcp.py
@@ -24,7 +26,12 @@ tests/
 │   ├── test_search_mcp_integration.py
 │   ├── test_sqlite_mcp.py
 │   ├── test_state_machine_integration.py
-│   └── test_weather_mcp.py
+│   ├── test_weather_mcp.py
+│   ├── test_pipeline_workflow.py           # NEW: Full pipeline workflow
+│   └── test_retry_integration.py           # NEW: Retry scenarios with MCP
+├── performance/             # Performance tests (NEW)
+│   ├── test_intent_recognition_performance.py
+│   └── test_tool_discovery_performance.py
 ├── e2e/                     # End-to-end tests
 │   └── test_filesystem_e2e.py
 ├── demos/                   # Demonstration scripts
@@ -37,6 +44,13 @@ tests/
 ├── utilities/              # Test utilities and helpers
 │   └── check_encoding.py
 ├── data/                   # Test data and fixtures
+│   ├── fixtures/           # Reusable test data (NEW)
+│   │   ├── tools.json     # Sample tool definitions
+│   │   ├── intents.json   # Sample intent data
+│   │   └── queries.json   # Sample user queries
+│   ├── expected/          # Expected output files
+│   ├── logs/             # Test execution logs
+│   └── temp/             # Temporary test files
 ├── conftest.py            # Pytest configuration
 ├── test_context_persistence.py
 ├── test_intent_recognition.py
@@ -61,6 +75,8 @@ tests/
 - `test_orchestrator_agent.py` - Query orchestration logic
 - `test_tool_discovery_agent.py` - Tool discovery algorithms
 - `test_retry.py` - Retry logic and circuit breakers
+- `test_intent_recognition_metrics.py` - Intent recognition performance monitoring
+- `test_retry_metrics.py` - Retry attempt and circuit breaker metrics
 
 ### Integration Tests (`tests/integration/`)
 - **Purpose**: Test multiple components working together
@@ -74,6 +90,8 @@ tests/
 - MCP tool integrations (SQLite, PostgreSQL, GitHub, etc.)
 - Intent recognition pipeline integration
 - State machine workflow integration
+- `test_pipeline_workflow.py` - Complete end-to-end pipeline testing
+- `test_retry_integration.py` - Retry mechanisms with real MCP connections
 
 ### End-to-End Tests (`tests/e2e/`)
 - **Purpose**: Test complete user workflows
@@ -82,6 +100,18 @@ tests/
   - Test full system behavior
   - Longer execution time acceptable
   - Verify business requirements
+
+### Performance Tests (`tests/performance/`)
+- **Purpose**: Benchmark and validate system performance
+- **Characteristics**:
+  - Measure processing times and throughput
+  - Test scalability under load
+  - Monitor resource usage
+  - Identify performance bottlenecks
+
+**Key Performance Tests:**
+- `test_intent_recognition_performance.py` - Intent recognition speed and scalability
+- `test_tool_discovery_performance.py` - Tool discovery and pipeline performance
 
 ### Demo Scripts (`tests/demos/`)
 - **Purpose**: Demonstrate system capabilities
@@ -118,6 +148,9 @@ pytest tests/integration/ -v
 
 # End-to-end tests only
 pytest tests/e2e/ -v
+
+# Performance tests only
+pytest tests/performance/ -v
 
 # Using markers
 pytest -m unit
@@ -368,6 +401,33 @@ export COVERAGE_THRESHOLD=80  # Minimum coverage percentage
    - Use deterministic test data
    - Mock time-dependent functions
 
+## Test Data Organization
+
+### Fixtures (`tests/data/fixtures/`)
+The test suite includes comprehensive test data fixtures:
+
+- **tools.json**: Complete tool definitions with capabilities, operations, and relationships
+- **intents.json**: Intent taxonomy with keywords, entities, and confidence mappings
+- **queries.json**: Sample queries for testing various scenarios including:
+  - Test queries with expected outcomes
+  - Edge cases for robustness testing
+  - Performance benchmarking queries
+  - Validation queries for accuracy testing
+
+### Using Test Fixtures
+```python
+# Example: Loading test data in your tests
+import json
+
+def load_test_tools():
+    with open('tests/data/fixtures/tools.json', 'r') as f:
+        return json.load(f)
+
+def load_test_queries():
+    with open('tests/data/fixtures/queries.json', 'r') as f:
+        return json.load(f)
+```
+
 ## Notes
 
 - Integration tests may require external dependencies (npm packages, database servers)
@@ -375,3 +435,4 @@ export COVERAGE_THRESHOLD=80  # Minimum coverage percentage
 - Use `verify_setup.py` to check prerequisites
 - Run `pytest --markers` to see available test markers
 - See `docs/testing/test-summary.md` for comprehensive testing documentation
+- New monitoring and performance tests have been added - see directory structure above

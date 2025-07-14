@@ -58,6 +58,8 @@ dist/
 .coverage
 htmlcov/
 coverage.xml
+coverage.json
+coverage_report.txt
 .tox/
 
 # Documentation builds
