@@ -1,23 +1,56 @@
-# Filesystem MCP End-to-End Tests
+# End-to-End Test Suite
 
-This directory contains end-to-end tests for the Filesystem MCP integration in the Autonomous Tool Discovery system.
+This directory contains comprehensive end-to-end tests for the Autonomous Tool Discovery system, covering all major workflows and tool integrations.
 
 ## Test Structure
 
-### 1. Simple E2E Tests (`test_filesystem_simple_e2e.py`)
-These tests work with the current implementation and test:
-- Basic file operations (read, write, exists)
-- Directory operations (create, list)
-- Tool registry integration
-- Error handling scenarios
-- Performance tracking
+The E2E test suite is organized into the following categories:
 
-### 2. Comprehensive E2E Tests (`test_filesystem_e2e.py`)
-These tests demonstrate full workflow integration (requires complete agent implementation):
-- User query → Intent recognition → Tool discovery → Execution
-- Multi-tool workflows
-- Learning system integration
-- Complex error scenarios
+### Core Workflows (`core_workflows/`)
+Tests for fundamental system workflows:
+
+1. **test_query_to_execution_e2e.py**
+   - Complete pipeline from natural language query to execution
+   - Intent recognition → Tool discovery → Selection → Execution
+   - Performance metrics validation
+   - Error handling workflows
+
+2. **test_multi_intent_e2e.py**
+   - Multi-intent query processing
+   - Sequential and parallel intent execution
+   - Dependency resolution between intents
+   - Complex real-world scenarios
+
+3. **test_context_persistence_e2e.py**
+   - Session continuity across queries
+   - User preference learning
+   - Context-aware tool selection
+   - Conversation state tracking
+
+### Tool Integrations (`tool_integrations/`)
+Tests for specific MCP tool integrations:
+
+1. **test_sqlite_e2e.py**
+   - Database query workflows
+   - Data modification operations
+   - Schema exploration
+   - Complex queries with joins and aggregations
+
+2. **test_search_e2e.py**
+   - Web search functionality
+   - Research and fact-checking workflows
+   - Multi-source search
+   - Search with filters and constraints
+
+3. **test_filesystem_e2e.py** (existing)
+   - File operations (read, write, exists)
+   - Directory operations
+   - Path navigation
+   - File search and filtering
+
+### Existing Tests
+1. **test_filesystem_simple_e2e.py** - Basic filesystem operations
+2. **test_filesystem_standalone.py** - Standalone filesystem tests
 
 ## Running the Tests
 
@@ -34,81 +67,106 @@ These tests demonstrate full workflow integration (requires complete agent imple
 
 ### Running Tests
 
-#### Option 1: Use the test runner script
+#### Run All E2E Tests
 ```bash
-# Run simple tests (works with current implementation)
-python tests/e2e/run_e2e_tests.py --type simple
+# Run all E2E tests with pytest
+pytest tests/e2e/ -v
 
-# Run comprehensive tests (requires full agent implementation)
-python tests/e2e/run_e2e_tests.py --type comprehensive
-
-# Run all available tests
-python tests/e2e/run_e2e_tests.py --type all
-
-# Run with verbose output
-python tests/e2e/run_e2e_tests.py --type simple --verbose
+# Run with coverage report
+pytest tests/e2e/ --cov=src --cov-report=html
 ```
 
-#### Option 2: Run test files directly
+#### Run by Category
 ```bash
-# Run simple E2E tests
+# Core workflow tests
+pytest tests/e2e/core_workflows/ -v
+
+# Tool integration tests
+pytest tests/e2e/tool_integrations/ -v
+
+# Specific workflow
+pytest tests/e2e/core_workflows/test_query_to_execution_e2e.py -v
+```
+
+#### Run Specific Test Methods
+```bash
+# Run a specific test
+pytest tests/e2e/core_workflows/test_multi_intent_e2e.py::TestMultiIntentE2E::test_parallel_multi_intent -v
+
+# Run tests matching a pattern
+pytest tests/e2e/ -k "workflow" -v
+```
+
+#### Run Legacy Tests
+```bash
+# Filesystem tests
 python tests/e2e/test_filesystem_simple_e2e.py
 
-# Run comprehensive E2E tests (if agents are implemented)
-python tests/e2e/test_filesystem_e2e.py
+# Use the test runner script
+python tests/e2e/run_e2e_tests.py --type simple
 ```
 
 ## Test Coverage
 
-### Simple E2E Tests
-1. **File Operations Flow**
-   - Write file
-   - Check existence
-   - Read file
-   - List directory
+### Core System Components Tested
 
-2. **Directory Operations Flow**
-   - Create nested directories
-   - Create files in directories
-   - Navigate directory structure
+1. **Intent Recognition Pipeline**
+   - Natural language understanding
+   - Intent classification accuracy
+   - Multi-intent detection
+   - Context awareness
+   - Performance metrics (<100ms p95)
 
-3. **Registry Integration**
-   - Tool registration
-   - Tool discovery by capability
+2. **Tool Discovery & Selection**
+   - Semantic search for tools
+   - Capability matching
+   - Context-based tool ranking
+   - Tool relationship graph navigation
+   - Q-learning optimization
 
-4. **Error Scenarios**
-   - Non-existent file handling
-   - Path traversal prevention
-   - Invalid operations
+3. **Execution & Orchestration**
+   - Sequential execution workflows
+   - Parallel execution optimization
+   - Error handling and recovery
+   - Retry logic with exponential backoff
+   - Circuit breaker protection
 
-5. **Performance Tracking**
-   - Batch operations timing
-   - Performance assertions
+4. **Context & Learning**
+   - Session persistence
+   - User preference learning
+   - Pattern mining from successful executions
+   - Performance improvement over time
+   - Feedback integration
 
-### Comprehensive E2E Tests
-1. **Simple File Operations**
-   - Natural language query processing
-   - File creation and reading
+5. **MCP Tool Integrations**
+   - Filesystem operations
+   - Database queries (SQLite)
+   - Web search functionality
+   - Multi-tool orchestration
+   - Tool-specific error handling
 
-2. **Directory Operations**
-   - Complex directory structures
-   - Multi-level navigation
+### Test Scenarios by Category
 
-3. **Complex Workflows**
-   - Multi-step operations
-   - Data processing pipelines
+#### Query Processing (core_workflows/)
+- Simple single-intent queries
+- Complex multi-intent queries
+- Ambiguous query handling
+- Context-dependent queries
+- Error recovery scenarios
 
-4. **Error Handling**
-   - Graceful error recovery
-   - Security enforcement
+#### Data Operations (tool_integrations/)
+- CRUD operations on databases
+- File system navigation
+- Search and information retrieval
+- Complex data transformations
+- Schema exploration
 
-5. **Learning Integration**
-   - Pattern recognition
-   - Performance optimization
-
-6. **Performance Metrics**
-   - Operation timing
-   - Resource usage tracking
+#### System Capabilities
+- Performance under load
+- Concurrent session handling
+- Learning convergence
+- Metric collection accuracy
+- Resilience to failures
 
 ## Expected Output
 
@@ -154,25 +212,86 @@ Step 4: Listing directory...
    - Comprehensive tests require full agent implementation
    - Use simple tests for current functionality
 
+## Planned E2E Tests (To Be Implemented)
+
+### Complex Workflows (`complex_workflows/`)
+1. **test_multi_tool_orchestration_e2e.py**
+   - GitHub + Filesystem workflows
+   - Database + Search combinations
+   - Multi-step data pipelines
+
+2. **test_data_pipeline_e2e.py**
+   - Extract data from files
+   - Transform and analyze
+   - Store results in database
+   - Generate reports
+
+### Resilience Tests (`resilience/`)
+1. **test_retry_scenarios_e2e.py**
+   - Network timeout recovery
+   - Service unavailability handling
+   - Rate limit management
+
+2. **test_circuit_breaker_e2e.py**
+   - Circuit breaker activation
+   - Graceful degradation
+   - Recovery monitoring
+
+### Performance Tests (`performance/`)
+1. **test_load_scenarios_e2e.py**
+   - Concurrent user simulations
+   - Resource usage monitoring
+   - Scalability testing
+
+2. **test_optimization_e2e.py**
+   - Learning convergence rates
+   - Cache effectiveness
+   - Query optimization
+
+### Additional Tool Integrations
+1. **test_postgres_e2e.py** - PostgreSQL operations
+2. **test_github_e2e.py** - Repository operations
+3. **test_weather_e2e.py** - External API integration
+
 ## Adding New Tests
 
 To add new E2E tests:
 
-1. Add test methods to existing test classes
-2. Follow the naming convention: `test_<feature>_<aspect>`
-3. Use descriptive logging for test steps
-4. Include assertions for all expected outcomes
-5. Clean up any created resources
+1. Choose appropriate category directory
+2. Follow the existing test structure
+3. Use descriptive test names: `test_<feature>_<aspect>`
+4. Include comprehensive logging
+5. Test both success and failure paths
+6. Add performance assertions
+7. Clean up test artifacts
 
-Example:
+Example structure:
 ```python
-async def test_new_feature(self):
-    """Test description."""
-    logger.info("\n=== Test: New Feature ===")
+class TestNewFeatureE2E:
+    """E2E tests for new feature."""
     
-    # Test implementation
-    result = await self.filesystem_client.some_operation()
-    assert result["success"], "Operation failed"
+    @pytest.fixture
+    async def setup_system(self):
+        """Set up test environment."""
+        # Initialize components
+        # Return test context
+        # Handle cleanup
+        pass
     
-    logger.info("✅ New feature test passed!")
+    @pytest.mark.asyncio
+    async def test_feature_workflow(self, setup_system):
+        """Test complete feature workflow."""
+        logger.info("\n=== E2E Test: Feature Workflow ===")
+        
+        # Arrange
+        orchestrator = setup_system["orchestrator"]
+        
+        # Act
+        result = await orchestrator.process_user_query("...")
+        
+        # Assert
+        assert result.success
+        assert result.intent is not None
+        
+        logger.info("✅ Feature workflow test passed!")
 ```

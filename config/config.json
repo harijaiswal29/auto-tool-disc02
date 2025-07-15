@@ -65,6 +65,19 @@
     }
   },
   
+  "q_learning": {
+    "learning_rate": 0.1,
+    "discount_factor": 0.9,
+    "exploration_rate": 0.2,
+    "exploration_decay": 0.995,
+    "min_exploration_rate": 0.01,
+    "max_tools": 3,
+    "buffer_capacity": 10000,
+    "batch_size": 32,
+    "update_frequency": 4,
+    "enable_learning": true
+  },
+  
   "intent_recognition": {
     "model": "all-MiniLM-L6-v2",
     "similarity_threshold": 0.7,

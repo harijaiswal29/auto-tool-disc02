@@ -86,6 +86,8 @@ Similarity Scoring → Capability Filtering → Ranking
 
 ### Learning System Workflow
 
+**Note**: The Q-learning engine is implemented in `src/learning/q_learning_engine.py`. Pattern mining is not yet implemented.
+
 1. **Experience Collection**
    - Capture execution context
    - Record tool selections

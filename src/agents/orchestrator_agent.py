@@ -22,6 +22,8 @@ from src.core.tool_registry import ToolRegistry
 from src.utils.logger import get_logger
 from src.state_machine.conversation_state_machine import ConversationStateMachine, ConversationStates
 from src.state_machine.handlers import register_handlers
+from src.learning.q_learning_engine import QLearningEngine
+import numpy as np
 
 
 @dataclass
@@ -98,6 +100,21 @@ class OrchestratorAgent:
             'system.configure': ['configure', 'setup', 'initialize'],
             'system.monitor': ['monitor', 'track', 'watch', 'observe']
         }
+        
+        # Initialize Q-Learning Engine
+        q_learning_enabled = config.get('q_learning', {}).get('enable_learning', False)
+        if q_learning_enabled:
+            self.logger.info("Initializing Q-Learning Engine...")
+            self.q_learning_engine = QLearningEngine(config)
+            # Try to load existing model
+            asyncio.create_task(self._load_q_learning_model())
+        else:
+            self.q_learning_engine = None
+            self.logger.info("Q-Learning disabled in configuration")
+        
+        # Track execution history for learning
+        self.execution_history = []
+        self.current_state = None
         
         self.logger.info("Orchestrator Agent initialized successfully")
     
@@ -211,7 +228,11 @@ class OrchestratorAgent:
             ]
             await self.state_machine.complete_execution(results_for_state, execution_success)
             
-            # Step 5: Generate summary
+            # Step 5: Update Q-learning if enabled
+            if self.q_learning_engine and execution_results:
+                await self._update_q_learning(execution_results, intent_result)
+            
+            # Step 6: Generate summary
             summary = self._generate_summary(intent_result, execution_results)
             
             # Calculate total time
@@ -355,6 +376,17 @@ class OrchestratorAgent:
         if not discovered_tools:
             return []
         
+        # Check if Q-learning is enabled
+        if self.q_learning_engine and self.config.get('q_learning', {}).get('enable_learning', False):
+            # Use Q-learning for tool selection
+            return await self._select_tools_with_q_learning(discovered_tools, intent_result)
+        else:
+            # Use traditional selection strategy
+            return await self._select_tools_traditional(discovered_tools, intent_result)
+    
+    async def _select_tools_traditional(self, discovered_tools: List[Dict[str, Any]], 
+                                       intent_result: IntentResult) -> List[Dict[str, Any]]:
+        """Traditional tool selection without Q-learning."""
         # Get max tools to select
         max_tools = self.config.get('orchestration', {}).get('max_tools_per_query', 3)
         
@@ -384,6 +416,52 @@ class OrchestratorAgent:
         selected = [t for t in selected if t.get('relevance_score', 0) > 0.3]
         
         return selected
+    
+    async def _select_tools_with_q_learning(self, discovered_tools: List[Dict[str, Any]], 
+                                          intent_result: IntentResult) -> List[Dict[str, Any]]:
+        """Select tools using Q-learning engine."""
+        # Encode current state
+        context = {
+            'domain': self.config.get('project', {}).get('domain', 'general'),
+            'query_count': len(self.execution_history),
+            'success_rate': self._calculate_success_rate(),
+            'metrics': {
+                'avg_response_time': self._calculate_avg_response_time(),
+                'tools_invoked': len(discovered_tools)
+            }
+        }
+        
+        # Get recent tool history
+        recent_tools = [h['tools'] for h in self.execution_history[-5:]]
+        tool_history = [tool for tools in recent_tools for tool in tools][:20]
+        
+        # Encode state
+        state = self.q_learning_engine.state_encoder.encode_state(
+            intent_result, context, tool_history
+        )
+        self.current_state = state
+        
+        # Get available tool IDs
+        available_tool_ids = [tool['id'] for tool in discovered_tools]
+        
+        # Define constraints (tool relationships)
+        constraints = await self._get_tool_constraints(available_tool_ids)
+        
+        # Select action (tool combination) using Q-learning
+        selected_tool_ids = await self.q_learning_engine.select_action(
+            state, available_tool_ids, constraints
+        )
+        
+        # Map selected IDs back to tool objects
+        selected_tools = []
+        for tool_id in selected_tool_ids:
+            tool = next((t for t in discovered_tools if t['id'] == tool_id), None)
+            if tool:
+                selected_tools.append(tool)
+        
+        self.logger.info(f"Q-learning selected tools: {[t['name'] for t in selected_tools]}")
+        
+        return selected_tools
     
     async def execute_tools(self, selected_tools: List[Dict[str, Any]], 
                            query: str, context: Dict[str, Any]) -> List[ToolExecutionResult]:
@@ -610,6 +688,149 @@ class OrchestratorAgent:
         await self.mcp_integration.initialize()
         
         self.logger.info("Orchestrator initialization complete")
+    
+    async def _load_q_learning_model(self):
+        """Load saved Q-learning model if available."""
+        if self.q_learning_engine:
+            try:
+                await self.q_learning_engine.db_manager.initialize()
+                await self.q_learning_engine.load_model()
+                self.logger.info("Q-learning model loaded successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to load Q-learning model: {e}")
+    
+    def _calculate_success_rate(self) -> float:
+        """Calculate success rate from execution history."""
+        if not self.execution_history:
+            return 0.5  # Default
+        
+        successes = sum(1 for h in self.execution_history if h.get('success', False))
+        return successes / len(self.execution_history)
+    
+    def _calculate_avg_response_time(self) -> float:
+        """Calculate average response time from execution history."""
+        if not self.execution_history:
+            return 1000.0  # Default 1s
+        
+        times = [h.get('execution_time_ms', 1000) for h in self.execution_history]
+        return sum(times) / len(times)
+    
+    async def _get_tool_constraints(self, tool_ids: List[str]) -> Dict[str, Any]:
+        """Get tool relationship constraints from registry."""
+        constraints = {
+            'conflicts': {},
+            'requires': {},
+            'max_tools': self.config.get('orchestration', {}).get('max_tools_per_query', 3)
+        }
+        
+        # Get relationships from tool registry
+        for tool_id in tool_ids:
+            relationships = await self.tool_registry.get_tool_relationships(tool_id)
+            
+            for rel in relationships:
+                if rel['type'] == 'conflicts':
+                    if tool_id not in constraints['conflicts']:
+                        constraints['conflicts'][tool_id] = []
+                    constraints['conflicts'][tool_id].append(rel['tool2_id'])
+                
+                elif rel['type'] == 'requires':
+                    if tool_id not in constraints['requires']:
+                        constraints['requires'][tool_id] = []
+                    constraints['requires'][tool_id].append(rel['tool2_id'])
+        
+        return constraints
+    
+    async def _update_q_learning(self, execution_results: List[ToolExecutionResult], 
+                                intent_result: IntentResult):
+        """Update Q-learning based on execution results."""
+        if not self.q_learning_engine or not self.current_state:
+            return
+        
+        # Calculate reward based on execution results
+        reward = self._calculate_reward(execution_results)
+        
+        # Get tools that were executed
+        executed_tools = tuple(r.tool_id for r in execution_results)
+        
+        # Prepare next state (after execution)
+        next_context = {
+            'domain': self.config.get('project', {}).get('domain', 'general'),
+            'query_count': len(self.execution_history) + 1,
+            'success_rate': self._calculate_success_rate(),
+            'metrics': {
+                'avg_response_time': self._calculate_avg_response_time(),
+                'tools_invoked': len(execution_results)
+            }
+        }
+        
+        # Update tool history
+        recent_tools = [h['tools'] for h in self.execution_history[-4:]]
+        tool_history = [tool for tools in recent_tools for tool in tools]
+        tool_history.extend([r.tool_id for r in execution_results])
+        tool_history = tool_history[:20]
+        
+        # Encode next state
+        next_state = self.q_learning_engine.state_encoder.encode_state(
+            intent_result, next_context, tool_history
+        )
+        
+        # Get available tools for next state (empty for now as episode ends)
+        next_available_tools = []
+        
+        # Update Q-table
+        await self.q_learning_engine.learn_from_experience(
+            self.current_state,
+            executed_tools,
+            reward,
+            next_state,
+            next_available_tools,
+            {},  # constraints
+            done=True  # Episode complete
+        )
+        
+        # Decay exploration rate
+        self.q_learning_engine.decay_exploration()
+        
+        # Update execution history
+        self.execution_history.append({
+            'tools': [r.tool_id for r in execution_results],
+            'success': any(r.success for r in execution_results),
+            'execution_time_ms': sum(r.execution_time_ms for r in execution_results),
+            'intent': intent_result.primary_intent.type,
+            'reward': reward
+        })
+        
+        # Keep history size manageable
+        if len(self.execution_history) > 100:
+            self.execution_history = self.execution_history[-100:]
+        
+        # Periodically save model
+        if len(self.execution_history) % 10 == 0:
+            await self.q_learning_engine.save_model()
+            self.logger.info("Q-learning model saved")
+    
+    def _calculate_reward(self, execution_results: List[ToolExecutionResult]) -> float:
+        """Calculate reward based on execution results."""
+        if not execution_results:
+            return -0.5  # Penalty for no results
+        
+        # Base reward on success
+        success_count = sum(1 for r in execution_results if r.success)
+        if success_count == 0:
+            base_reward = -0.5
+        else:
+            base_reward = 1.0 * (success_count / len(execution_results))
+        
+        # Time penalty
+        total_time = sum(r.execution_time_ms for r in execution_results)
+        time_penalty = -0.1 * np.log(max(total_time / 1000, 1))  # Convert to seconds
+        
+        # Efficiency bonus (fewer tools is better)
+        efficiency_bonus = 0.1 * (1 - len(execution_results) / 5)  # Normalize to 5 tools max
+        
+        total_reward = base_reward + time_penalty + efficiency_bonus
+        
+        return np.clip(total_reward, -1.0, 1.0)
     
     async def shutdown(self):
         """Cleanup and shutdown all components."""

@@ -16,8 +16,11 @@ tests/
 │   ├── test_search_mcp.py
 │   ├── test_state_machine_base.py
 │   ├── test_retry.py
-│   ├── test_intent_recognition_metrics.py  # NEW: Intent recognition metrics
-│   └── test_retry_metrics.py               # NEW: Retry metrics monitoring
+│   ├── test_retry_extended.py              # Extended retry tests (connection pool, registry)
+│   ├── test_intent_recognition.py          # Intent recognition unit tests
+│   ├── test_intent_recognition_metrics.py  # Intent recognition metrics
+│   ├── test_retry_metrics.py               # Retry metrics monitoring
+│   └── test_q_learning_engine.py           # Q-Learning engine tests
 ├── integration/              # Integration tests
 │   ├── test_filesystem_mcp.py
 │   ├── test_github_mcp.py
@@ -27,9 +30,12 @@ tests/
 │   ├── test_sqlite_mcp.py
 │   ├── test_state_machine_integration.py
 │   ├── test_weather_mcp.py
-│   ├── test_pipeline_workflow.py           # NEW: Full pipeline workflow
-│   └── test_retry_integration.py           # NEW: Retry scenarios with MCP
-├── performance/             # Performance tests (NEW)
+│   ├── test_pipeline_workflow.py           # Full pipeline workflow
+│   ├── test_retry_integration.py           # Retry scenarios with MCP
+│   ├── test_context_persistence.py         # Context persistence integration
+│   ├── test_integration.py                 # End-to-end integration tests
+│   └── test_pipeline_architecture.py       # Pipeline architecture tests
+├── performance/             # Performance tests
 │   ├── test_intent_recognition_performance.py
 │   └── test_tool_discovery_performance.py
 ├── e2e/                     # End-to-end tests
@@ -42,9 +48,11 @@ tests/
 │   ├── demo_github_real.py
 │   └── README.md
 ├── utilities/              # Test utilities and helpers
-│   └── check_encoding.py
+│   ├── check_encoding.py
+│   ├── verify_setup.py     # Verify test environment setup
+│   └── verify_setup_windows.py  # Windows-specific setup verification
 ├── data/                   # Test data and fixtures
-│   ├── fixtures/           # Reusable test data (NEW)
+│   ├── fixtures/           # Reusable test data
 │   │   ├── tools.json     # Sample tool definitions
 │   │   ├── intents.json   # Sample intent data
 │   │   └── queries.json   # Sample user queries
@@ -52,11 +60,6 @@ tests/
 │   ├── logs/             # Test execution logs
 │   └── temp/             # Temporary test files
 ├── conftest.py            # Pytest configuration
-├── test_context_persistence.py
-├── test_intent_recognition.py
-├── test_integration.py
-├── test_pipeline_architecture.py
-└── test_retry_logic.py
 ```
 
 ## Test Categories
@@ -74,9 +77,12 @@ tests/
 - `test_connection_pool.py` - Connection pooling and management
 - `test_orchestrator_agent.py` - Query orchestration logic
 - `test_tool_discovery_agent.py` - Tool discovery algorithms
-- `test_retry.py` - Retry logic and circuit breakers
+- `test_retry.py` - Core retry logic and circuit breakers
+- `test_retry_extended.py` - Extended retry tests including connection pool and tool registry
+- `test_intent_recognition.py` - Intent recognition unit tests
 - `test_intent_recognition_metrics.py` - Intent recognition performance monitoring
 - `test_retry_metrics.py` - Retry attempt and circuit breaker metrics
+- `test_q_learning_engine.py` - Q-Learning engine with state representation, action space, and experience replay
 
 ### Integration Tests (`tests/integration/`)
 - **Purpose**: Test multiple components working together
@@ -92,6 +98,9 @@ tests/
 - State machine workflow integration
 - `test_pipeline_workflow.py` - Complete end-to-end pipeline testing
 - `test_retry_integration.py` - Retry mechanisms with real MCP connections
+- `test_context_persistence.py` - Context and conversation persistence
+- `test_integration.py` - Full system integration tests
+- `test_pipeline_architecture.py` - Pipeline architecture and stage interactions
 
 ### End-to-End Tests (`tests/e2e/`)
 - **Purpose**: Test complete user workflows
@@ -172,6 +181,9 @@ pytest tests/unit/test_mcp_integration.py::TestMCPIntegration::test_initializati
 
 # Run tests matching a pattern
 pytest -k "test_retry" -v
+
+# Run Q-Learning tests
+pytest tests/unit/test_q_learning_engine.py -v
 ```
 
 ### Coverage Reports

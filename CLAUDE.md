@@ -107,12 +107,20 @@ The system consists of 5 core layers:
   - Failure pattern analysis and alerting
   - See [Retry Architecture](docs/architecture/retry-architecture.md)
 
+#### Learning System (Phase 4 - In Progress)
+- **Q-Learning Engine** (`src/learning/q_learning_engine.py`):
+  - ✅ Core Q-learning implementation with experience replay
+  - ✅ State representation from intent vectors, context, and history
+  - ✅ Action space management with constraint validation
+  - ✅ Epsilon-greedy exploration with decay
+  - ✅ Integration with orchestrator for automatic learning
+  - ✅ Model persistence to database
+
 ### ⏳ Not Yet Implemented
-- **Learning System** (In Progress):
-  - Q-Learning Engine with experience replay
+- **Learning System** (Remaining Components):
   - Pattern Miner for tool combinations
-  - Reward Calculator for reinforcement learning
-  - Model persistence and adaptation
+  - Advanced reward calculation strategies
+  - Deep Q-learning neural network implementation
   
 - **Evaluation Framework**:
   - Automated baseline comparisons
@@ -173,6 +181,11 @@ python -m pytest tests/test_integration.py -v
 python demo_retry_logic.py
 pytest tests/test_retry_logic.py -v
 
+# Test Q-Learning
+pytest tests/unit/test_q_learning_engine.py -v
+python src/learning/test_q_learning.py  # Run Q-learning demo
+python demos/demo_q_learning_orchestration.py  # Demo with orchestrator
+
 # Monitor Performance
 python -c "from src.agents.intent_recognition_agent import IntentRecognitionAgent; agent = IntentRecognitionAgent(); print(agent.get_metrics_summary())"
 
@@ -197,6 +210,9 @@ auto-tool-disc/
 │   │   └── tool_registry.py
 │   ├── evaluation/         # Evaluation framework
 │   ├── learning/           # Q-learning algorithms
+│   │   ├── __init__.py
+│   │   ├── q_learning_engine.py  # Core Q-learning implementation
+│   │   └── test_q_learning.py    # Q-learning test script
 │   ├── monitoring/         # Performance monitoring
 │   │   └── intent_recognition_metrics.py
 │   ├── pipeline/           # Modular pipeline architecture
@@ -317,6 +333,7 @@ For detailed information on specific topics, refer to these documentation files:
 
 ### Implementation Details
 - @docs/implementation/learning-system.md - Q-learning, rewards, pattern mining
+- @docs/implementation/q_learning_implementation.md - Q-learning engine implementation details
 - @docs/implementation/intent-recognition.md - NLP pipeline and classification
 - @docs/implementation/tool-discovery.md - Discovery algorithms and caching
 - @docs/implementation/execution-engine.md - Task management and monitoring
