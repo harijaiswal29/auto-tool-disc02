@@ -30,10 +30,13 @@ class StateRepresentation:
     
     def __init__(self):
         self.state_dimensions = {
-            'intent_vector': 384,  # Sentence transformer output
-            'context_features': 10,  # Domain, user history, etc.
-            'tool_history': 20,     # Recent tool usage
-            'performance_metrics': 5  # Success rate, response time, etc.
+            'intent_vector': 384,      # Sentence transformer output
+            'context_features': 10,    # Domain, user history, etc.
+            'tool_history': 20,        # Recent tool usage
+            'performance_metrics': 5,   # Success rate, response time, etc.
+            'failure_rates': 10,       # Per-tool failure rates
+            'failure_types': 5,        # Network, permission, timeout, rate_limit, other
+            'retry_patterns': 5        # Retry statistics and patterns
         }
         self.total_dimensions = sum(self.state_dimensions.values())
     
@@ -73,6 +76,18 @@ class StateRepresentation:
         # Performance metrics
         metrics_features = self._encode_metrics(context.get('metrics', {}))
         state_components.append(metrics_features)
+        
+        # Failure rates
+        failure_features = self._encode_failure_rates(context.get('failure_rates', {}))
+        state_components.append(failure_features)
+        
+        # Failure types
+        failure_type_features = self._encode_failure_types(context.get('failure_types', {}))
+        state_components.append(failure_type_features)
+        
+        # Retry patterns
+        retry_features = self._encode_retry_patterns(context.get('retry_patterns', {}))
+        state_components.append(retry_features)
         
         # Combine all components
         state_vector = np.concatenate(state_components)
@@ -142,6 +157,61 @@ class StateRepresentation:
         features[2] = metrics.get('error_rate', 0.1)
         features[3] = min(metrics.get('tools_invoked', 1) / 5.0, 1.0)
         features[4] = metrics.get('cache_hit_rate', 0.0)
+        
+        return features
+    
+    def _encode_failure_rates(self, failure_rates: Dict[str, float]) -> np.ndarray:
+        """Encode per-tool failure rates."""
+        features = np.zeros(self.state_dimensions['failure_rates'])
+        
+        # Common tools get dedicated features
+        common_tools = ['filesystem_mcp', 'sqlite_mcp', 'search_mcp', 
+                       'postgres_mcp', 'github_mcp', 'weather_mcp']
+        
+        for i, tool in enumerate(common_tools[:6]):
+            if tool in failure_rates:
+                features[i] = failure_rates[tool]
+        
+        # Aggregate statistics
+        if failure_rates:
+            all_rates = list(failure_rates.values())
+            features[6] = np.mean(all_rates)  # Average failure rate
+            features[7] = np.max(all_rates)   # Max failure rate
+            features[8] = np.std(all_rates)   # Failure rate variance
+            features[9] = len([r for r in all_rates if r > 0.5])  # High failure count
+        
+        return features
+    
+    def _encode_failure_types(self, failure_types: Dict[str, int]) -> np.ndarray:
+        """Encode failure type distribution."""
+        features = np.zeros(self.state_dimensions['failure_types'])
+        
+        # Map failure types to indices
+        type_mapping = {
+            'network_timeout': 0,
+            'permission_error': 1,
+            'rate_limit': 2,
+            'connection_error': 3,
+            'other': 4
+        }
+        
+        total_failures = sum(failure_types.values()) if failure_types else 1
+        
+        for failure_type, index in type_mapping.items():
+            count = failure_types.get(failure_type, 0)
+            features[index] = count / total_failures  # Normalized frequency
+        
+        return features
+    
+    def _encode_retry_patterns(self, retry_patterns: Dict[str, Any]) -> np.ndarray:
+        """Encode retry statistics and patterns."""
+        features = np.zeros(self.state_dimensions['retry_patterns'])
+        
+        features[0] = retry_patterns.get('avg_retry_count', 0) / 5.0  # Normalized
+        features[1] = retry_patterns.get('retry_success_rate', 0.5)
+        features[2] = min(retry_patterns.get('avg_retry_delay_ms', 1000) / 10000, 1.0)
+        features[3] = retry_patterns.get('circuit_breaker_triggers', 0) / 10.0
+        features[4] = min(retry_patterns.get('max_consecutive_failures', 0) / 5.0, 1.0)
         
         return features
     

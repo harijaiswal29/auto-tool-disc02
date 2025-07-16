@@ -225,5 +225,41 @@
     "connection_timeout": 5.0,
     "idle_timeout": 300.0,
     "health_check_interval": 60.0
+  },
+  
+  "reward_calculation": {
+    "base_weights": {
+      "success": 1.0,
+      "failure": -0.5,
+      "partial_success": 0.3
+    },
+    "failure_penalties": {
+      "network_timeout": -0.2,
+      "permission_error": -0.8,
+      "rate_limit": -0.3,
+      "connection_error": -0.25,
+      "retryable": -0.1,
+      "non_retryable": -0.7,
+      "unknown": -0.5
+    },
+    "resource_penalties": {
+      "memory_weight": 0.05,
+      "cpu_weight": 0.05,
+      "api_calls_weight": 0.1,
+      "time_weight": 0.1
+    },
+    "synergy_bonuses": {
+      "known_good_combo": 0.2,
+      "discovered_combo": 0.3,
+      "complementary_tools": 0.15
+    },
+    "context_multipliers": {
+      "exploration": 1.2,
+      "production": 0.8,
+      "high_confidence": 1.0,
+      "low_confidence": 1.1,
+      "user_initiated": 1.0,
+      "system_initiated": 0.9
+    }
   }
 }

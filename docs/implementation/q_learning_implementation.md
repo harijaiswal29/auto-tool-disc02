@@ -18,18 +18,24 @@ The Q-Learning Engine is a core component of Phase 4 that enables the system to 
 
 ### State Representation
 
-The state vector consists of 419 dimensions:
+The state vector consists of 439 dimensions:
 - **Intent Vector** (384 dims): Sentence transformer embeddings from intent recognition
 - **Context Features** (10 dims): Domain, session info, user history
 - **Tool History** (20 dims): Recent tool usage patterns
 - **Performance Metrics** (5 dims): Success rates, response times, cache hits
+- **Failure Rates** (10 dims): Per-tool failure rate tracking
+- **Failure Types** (5 dims): Network, permission, timeout, rate_limit, other
+- **Retry Patterns** (5 dims): Retry statistics and patterns
 
 ```python
 state_dimensions = {
     'intent_vector': 384,      # Sentence transformer output
     'context_features': 10,    # Domain, user history, etc.
     'tool_history': 20,        # Recent tool usage
-    'performance_metrics': 5   # Success rate, response time, etc.
+    'performance_metrics': 5,  # Success rate, response time, etc.
+    'failure_rates': 10,       # Per-tool failure rates
+    'failure_types': 5,        # Network, permission, timeout, rate_limit, other
+    'retry_patterns': 5        # Retry statistics and patterns
 }
 ```
 
@@ -58,15 +64,30 @@ Q(s,a) = Q(s,a) + α * (r + γ * max(Q(s',a')) - Q(s,a))
 
 ### Reward Function
 
-The reward calculation considers multiple factors:
+The enhanced reward calculation considers multiple sophisticated factors:
 
 ```python
-reward = base_reward + time_penalty + efficiency_bonus
+# Enhanced reward calculation with failure differentiation
+reward = (base_reward + failure_adjustment + partial_success_bonus + 
+          synergy_bonus + user_satisfaction) * context_multiplier * 
+          uncertainty_factor - resource_penalty
 
+# Components:
 # Base reward: +1.0 for success, -0.5 for failure
-# Time penalty: -0.1 * log(execution_time)
-# Efficiency bonus: +0.1 * (1 - tools_used/max_tools)
+# Failure adjustment: Type-specific penalties (e.g., -0.2 for timeout, -0.8 for permission)
+# Partial success bonus: Based on completion percentage (0-1.0)
+# Resource penalty: CPU, memory, API calls, execution time (logarithmic)
+# Tool synergy bonus: +0.2 for known combos, +0.3 for discovered combos
+# User satisfaction: Based on explicit ratings and implicit signals
+# Context multiplier: 1.2x for exploration, 0.8x for production
 ```
+
+The reward calculator (`src/learning/reward_calculator.py`) implements:
+- **Failure Type Differentiation**: Network timeout (-0.2), permission error (-0.8), rate limit (-0.3)
+- **Partial Success Handling**: Rewards based on completion percentage with quality bonuses
+- **Resource Efficiency Tracking**: Using psutil for CPU/memory monitoring
+- **Tool Synergy Recognition**: Bonuses for complementary tool combinations
+- **User Satisfaction Signals**: Explicit ratings (1-5) and implicit feedback
 
 ## Integration with Orchestrator
 
@@ -135,7 +156,7 @@ result = await orchestrator.process_user_query("Find Python files")
 
 ## Database Schema
 
-The Q-learning system uses several tables for persistence:
+The Q-learning system uses several tables for persistence, including enhanced tables for failure tracking:
 
 ```sql
 -- Model snapshots
@@ -164,7 +185,79 @@ CREATE TABLE q_values (
     update_count INTEGER DEFAULT 0,
     last_updated TIMESTAMP
 );
+
+-- Failure history tracking
+CREATE TABLE failure_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    failure_type TEXT NOT NULL,
+    error_message TEXT,
+    retry_count INTEGER DEFAULT 0,
+    recovery_successful BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Resource metrics tracking
+CREATE TABLE resource_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    memory_mb REAL,
+    cpu_percent REAL,
+    api_calls INTEGER,
+    execution_time_ms REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User feedback tracking
+CREATE TABLE user_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    feedback_type TEXT NOT NULL,
+    rating INTEGER,
+    query_reformulated BOOLEAN DEFAULT FALSE,
+    result_used BOOLEAN,
+    follow_up_time_seconds REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tool synergies tracking
+CREATE TABLE tool_synergies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tool_combination TEXT NOT NULL UNIQUE,
+    success_rate REAL,
+    occurrences INTEGER,
+    synergy_score REAL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
+
+## Enhanced Integration Features
+
+### Partial Success Tracking
+The Q-learning engine now tracks partial success scenarios:
+- **Completion Percentage**: Tracks how much of a task was completed (0-100%)
+- **Result Quality**: Quality score (0-1) for partial results
+- **Learning Impact**: Partial successes receive proportional rewards
+
+### Resource Efficiency Monitoring
+Using psutil integration:
+- **CPU Usage**: Tracked per tool execution
+- **Memory Usage**: Peak memory consumption recorded
+- **API Calls**: Count of external API calls made
+- **Execution Time**: Millisecond precision timing
+
+### User Satisfaction Integration
+The system captures:
+- **Explicit Feedback**: 1-5 star ratings from users
+- **Implicit Signals**: Query reformulation, follow-up timing, result usage
+- **Feedback Impact**: Directly influences reward calculation
+
+### Tool Synergy Recognition
+- **Complementary Tools**: Identified through success patterns
+- **Synergy Scoring**: Quantifies how well tools work together
+- **Dynamic Discovery**: New synergies discovered through exploration
 
 ## Monitoring and Metrics
 

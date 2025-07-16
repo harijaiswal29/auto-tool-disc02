@@ -23,18 +23,29 @@ from src.utils.logger import get_logger
 from src.state_machine.conversation_state_machine import ConversationStateMachine, ConversationStates
 from src.state_machine.handlers import register_handlers
 from src.learning.q_learning_engine import QLearningEngine
+from src.learning.reward_calculator import RewardCalculator, ExecutionMetrics
+from src.database.database import DatabaseManager
 import numpy as np
+import psutil
+import resource
 
 
 @dataclass
 class ToolExecutionResult:
-    """Result from executing a tool."""
+    """Result from executing a tool with enhanced metrics."""
     tool_id: str
     tool_name: str
     success: bool
     result: Any
     error: Optional[str] = None
     execution_time_ms: float = 0.0
+    # Enhanced fields for partial success and resource tracking
+    partial_success: bool = False
+    completion_percentage: float = 0.0
+    error_type: Optional[str] = None
+    retry_count: int = 0
+    resource_usage: Optional[Dict[str, float]] = None
+    result_quality: float = 1.0  # Quality score 0-1
 
 
 @dataclass
@@ -112,8 +123,22 @@ class OrchestratorAgent:
             self.q_learning_engine = None
             self.logger.info("Q-Learning disabled in configuration")
         
+        # Initialize enhanced reward calculator
+        self.reward_calculator = RewardCalculator(config)
+        
+        # Initialize database manager for failure tracking
+        self.db_manager = DatabaseManager()
+        asyncio.create_task(self.db_manager.initialize())
+        
         # Track execution history for learning
         self.execution_history = []
+        
+        # Track failure metrics for enhanced state representation
+        self.failure_metrics = {
+            'failure_rates': {},
+            'failure_types': {},
+            'retry_patterns': {}
+        }
         self.current_state = None
         
         self.logger.info("Orchestrator Agent initialized successfully")
@@ -147,9 +172,14 @@ class OrchestratorAgent:
             OrchestrationResult with complete execution details
         """
         start_time = time.time()
+        execution_id = str(uuid.uuid4())
+        self.current_session_id = execution_id
         
         if context is None:
             context = {}
+        
+        # Store current query in context
+        self.context['current_query'] = query
         
         self.logger.info(f"Processing user query: {query}")
         
@@ -162,6 +192,9 @@ class OrchestratorAgent:
             intent_result = await self.intent_agent.process_query(query, context)
             self.logger.info(f"Intent recognized: {intent_result.primary_intent.type} "
                            f"(confidence: {intent_result.primary_intent.confidence:.2f})")
+            
+            # Store intent confidence in context for reward calculation
+            self.context['last_intent_confidence'] = intent_result.primary_intent.confidence
             
             # Update state machine with intent
             intent_dict = {
@@ -435,6 +468,13 @@ class OrchestratorAgent:
         recent_tools = [h['tools'] for h in self.execution_history[-5:]]
         tool_history = [tool for tools in recent_tools for tool in tools][:20]
         
+        # Add failure metrics to context
+        context.update({
+            'failure_rates': self.failure_metrics['failure_rates'],
+            'failure_types': self.failure_metrics['failure_types'],
+            'retry_patterns': self.failure_metrics['retry_patterns']
+        })
+        
         # Encode state
         state = self.q_learning_engine.state_encoder.encode_state(
             intent_result, context, tool_history
@@ -527,7 +567,7 @@ class OrchestratorAgent:
     
     async def _execute_single_tool(self, tool: Dict[str, Any], 
                                    query: str, context: Dict[str, Any]) -> ToolExecutionResult:
-        """Execute a single tool and return the result."""
+        """Execute a single tool and return enhanced result metrics."""
         start_time = time.time()
         
         tool_id = tool['id']
@@ -535,34 +575,104 @@ class OrchestratorAgent:
         
         self.logger.info(f"Executing tool: {tool_name}")
         
+        # Track resource usage at start
+        process = psutil.Process()
+        start_memory = process.memory_info().rss / 1024 / 1024  # MB
+        start_cpu_percent = process.cpu_percent(interval=0.1)
+        
+        retry_count = 0
+        error_type = None
+        partial_success = False
+        completion_percentage = 0.0
+        result_quality = 1.0
+        
         try:
             # Prepare tool input based on tool type
             tool_input = self._prepare_tool_input(tool, query, context)
             
-            # Execute via MCP Integration
+            # Execute via MCP Integration (includes retry logic)
             result = await self.mcp_integration.execute_tool(tool_id, tool_input)
             
+            # Get retry count from MCP integration if available
+            if hasattr(self.mcp_integration, 'get_last_retry_count'):
+                retry_count = self.mcp_integration.get_last_retry_count(tool_id)
+            
             execution_time_ms = (time.time() - start_time) * 1000
+            
+            # Calculate resource usage
+            end_memory = process.memory_info().rss / 1024 / 1024
+            end_cpu_percent = process.cpu_percent(interval=0.1)
+            
+            resource_usage = {
+                'memory_mb': end_memory - start_memory,
+                'cpu_percent': (start_cpu_percent + end_cpu_percent) / 2,
+                'execution_time_ms': execution_time_ms
+            }
+            
+            # Evaluate result quality
+            result_quality = self._evaluate_result_quality(result, tool_type=tool.get('type'))
             
             return ToolExecutionResult(
                 tool_id=tool_id,
                 tool_name=tool_name,
                 success=True,
                 result=result,
-                execution_time_ms=execution_time_ms
+                execution_time_ms=execution_time_ms,
+                partial_success=False,
+                completion_percentage=1.0,
+                retry_count=retry_count,
+                resource_usage=resource_usage,
+                result_quality=result_quality
             )
             
         except Exception as e:
             self.logger.error(f"Error executing tool {tool_name}: {e}")
             execution_time_ms = (time.time() - start_time) * 1000
             
+            # Classify error type
+            error_type = self._classify_error(e)
+            
+            # Check for partial success
+            partial_result = self._check_partial_success(e, tool_id)
+            if partial_result:
+                partial_success = True
+                completion_percentage = partial_result.get('completion', 0.0)
+                result = partial_result.get('data')
+            
+            # Calculate resource usage even for failures
+            end_memory = process.memory_info().rss / 1024 / 1024
+            end_cpu_percent = process.cpu_percent(interval=0.1)
+            
+            resource_usage = {
+                'memory_mb': max(0, end_memory - start_memory),
+                'cpu_percent': (start_cpu_percent + end_cpu_percent) / 2,
+                'execution_time_ms': execution_time_ms
+            }
+            
+            # Record failure in database
+            if self.current_session_id:
+                await self.db_manager.record_failure(
+                    execution_id=self.current_session_id,
+                    tool_id=tool_id,
+                    failure_type=error_type,
+                    error_message=str(e),
+                    retry_count=retry_count,
+                    recovery_successful=partial_success
+                )
+            
             return ToolExecutionResult(
                 tool_id=tool_id,
                 tool_name=tool_name,
                 success=False,
-                result=None,
+                result=result if partial_success else None,
                 error=str(e),
-                execution_time_ms=execution_time_ms
+                execution_time_ms=execution_time_ms,
+                partial_success=partial_success,
+                completion_percentage=completion_percentage,
+                error_type=error_type,
+                retry_count=retry_count,
+                resource_usage=resource_usage,
+                result_quality=0.0
             )
     
     def _prepare_tool_input(self, tool: Dict[str, Any], query: str, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -598,6 +708,95 @@ class OrchestratorAgent:
             return "INSERT INTO tools (name) VALUES ('new_tool')"
         else:
             return "SELECT * FROM tools LIMIT 10"
+    
+    def _classify_error(self, error: Exception) -> str:
+        """Classify error type for learning purposes."""
+        error_str = str(error).lower()
+        error_type_name = type(error).__name__
+        
+        # Network-related errors
+        if any(keyword in error_str for keyword in ['timeout', 'timed out', 'connection timeout']):
+            return 'network_timeout'
+        elif any(keyword in error_str for keyword in ['connection', 'network', 'unreachable']):
+            return 'connection_error'
+        
+        # Permission errors
+        elif any(keyword in error_str for keyword in ['permission', 'access denied', 'unauthorized']):
+            return 'permission_error'
+        
+        # Rate limiting
+        elif any(keyword in error_str for keyword in ['rate limit', 'too many requests', 'throttled']):
+            return 'rate_limit'
+        
+        # Known retryable errors
+        elif error_type_name in ['RetryableError', 'TemporaryError']:
+            return 'retryable'
+        
+        # Non-retryable errors
+        elif error_type_name in ['NonRetryableError', 'InvalidArgumentError']:
+            return 'non_retryable'
+        
+        else:
+            return 'other'
+    
+    def _check_partial_success(self, error: Exception, tool_id: str) -> Optional[Dict[str, Any]]:
+        """Check if there was a partial success despite the error."""
+        # This would be more sophisticated in practice, checking for partial results
+        # in the error object or from the tool's state
+        
+        # Example: Some tools might return partial results in the exception
+        if hasattr(error, 'partial_result'):
+            return {
+                'data': error.partial_result,
+                'completion': getattr(error, 'completion_percentage', 0.5)
+            }
+        
+        # Check if error message indicates partial completion
+        error_str = str(error).lower()
+        if 'partial' in error_str or 'incomplete' in error_str:
+            return {
+                'data': None,
+                'completion': 0.3  # Default partial completion
+            }
+        
+        return None
+    
+    def _evaluate_result_quality(self, result: Any, tool_type: str = None) -> float:
+        """Evaluate the quality of a tool's result (0-1 score)."""
+        if result is None:
+            return 0.0
+        
+        # Basic heuristics for result quality
+        quality_score = 0.5  # Base score
+        
+        # Adjust based on result type
+        if isinstance(result, dict):
+            # Check if dict has meaningful content
+            if len(result) > 0:
+                quality_score += 0.2
+            if 'error' not in result and 'warning' not in result:
+                quality_score += 0.1
+        
+        elif isinstance(result, list):
+            # Lists with content are good
+            if len(result) > 0:
+                quality_score += 0.3
+            else:
+                quality_score -= 0.2
+        
+        elif isinstance(result, str):
+            # Non-empty strings
+            if len(result.strip()) > 10:
+                quality_score += 0.2
+        
+        # Tool-specific adjustments
+        if tool_type:
+            if 'search' in tool_type and isinstance(result, list) and len(result) > 5:
+                quality_score += 0.1  # Good search results
+            elif 'database' in tool_type and isinstance(result, dict) and 'rows' in result:
+                quality_score += 0.1  # Proper database response
+        
+        return min(quality_score, 1.0)
     
     def _generate_summary(self, intent_result: IntentResult, 
                          execution_results: List[ToolExecutionResult]) -> str:
@@ -747,7 +946,7 @@ class OrchestratorAgent:
             return
         
         # Calculate reward based on execution results
-        reward = self._calculate_reward(execution_results)
+        reward = await self._calculate_reward(execution_results)
         
         # Get tools that were executed
         executed_tools = tuple(r.tool_id for r in execution_results)
@@ -768,6 +967,13 @@ class OrchestratorAgent:
         tool_history = [tool for tools in recent_tools for tool in tools]
         tool_history.extend([r.tool_id for r in execution_results])
         tool_history = tool_history[:20]
+        
+        # Add failure metrics to next context
+        next_context.update({
+            'failure_rates': self.failure_metrics['failure_rates'],
+            'failure_types': self.failure_metrics['failure_types'],
+            'retry_patterns': self.failure_metrics['retry_patterns']
+        })
         
         # Encode next state
         next_state = self.q_learning_engine.state_encoder.encode_state(
@@ -793,11 +999,20 @@ class OrchestratorAgent:
         
         # Update execution history
         self.execution_history.append({
+            'execution_id': self.current_session_id,
+            'query': self.context.get('current_query', ''),
             'tools': [r.tool_id for r in execution_results],
             'success': any(r.success for r in execution_results),
             'execution_time_ms': sum(r.execution_time_ms for r in execution_results),
             'intent': intent_result.primary_intent.type,
-            'reward': reward
+            'reward': reward,
+            'timestamp': datetime.now(),
+            'execution_results': execution_results,  # Store full results for feedback updates
+            'context': {
+                'mode': 'exploration' if self.q_learning_engine.exploration_rate > 0.15 else 'production',
+                'intent_confidence': intent_result.primary_intent.confidence,
+                'user_initiated': True
+            }
         })
         
         # Keep history size manageable
@@ -809,28 +1024,243 @@ class OrchestratorAgent:
             await self.q_learning_engine.save_model()
             self.logger.info("Q-learning model saved")
     
-    def _calculate_reward(self, execution_results: List[ToolExecutionResult]) -> float:
-        """Calculate reward based on execution results."""
+    async def _calculate_reward(self, execution_results: List[ToolExecutionResult]) -> float:
+        """Calculate reward using enhanced reward calculator."""
         if not execution_results:
             return -0.5  # Penalty for no results
         
-        # Base reward on success
-        success_count = sum(1 for r in execution_results if r.success)
-        if success_count == 0:
-            base_reward = -0.5
-        else:
-            base_reward = 1.0 * (success_count / len(execution_results))
+        # Convert ToolExecutionResult to ExecutionMetrics for reward calculator
+        execution_metrics = []
+        for result in execution_results:
+            metric = ExecutionMetrics(
+                tool_id=result.tool_id,
+                success=result.success,
+                partial_success=result.partial_success,
+                completion_percentage=result.completion_percentage,
+                execution_time_ms=result.execution_time_ms,
+                error_type=result.error_type,
+                retry_count=result.retry_count,
+                resource_usage=result.resource_usage,
+                result_quality=result.result_quality
+            )
+            execution_metrics.append(metric)
         
-        # Time penalty
-        total_time = sum(r.execution_time_ms for r in execution_results)
-        time_penalty = -0.1 * np.log(max(total_time / 1000, 1))  # Convert to seconds
+        # Get context for reward calculation
+        reward_context = {
+            'mode': 'exploration' if self.q_learning_engine.exploration_rate > 0.15 else 'production',
+            'intent_confidence': self.context.get('last_intent_confidence', 0.7),
+            'user_initiated': True,  # Assuming user-initiated for now
+            'session_duration': (datetime.now() - self.context.get('session_start', datetime.now())).seconds
+        }
         
-        # Efficiency bonus (fewer tools is better)
-        efficiency_bonus = 0.1 * (1 - len(execution_results) / 5)  # Normalize to 5 tools max
+        # Calculate reward with breakdown
+        total_reward, breakdown = self.reward_calculator.calculate_reward(
+            execution_metrics, 
+            reward_context,
+            user_feedback=None  # Will be added when user feedback is available
+        )
         
-        total_reward = base_reward + time_penalty + efficiency_bonus
+        # Log reward breakdown for analysis
+        self.logger.debug(f"Reward breakdown: {breakdown}")
         
-        return np.clip(total_reward, -1.0, 1.0)
+        # Update failure metrics for state representation
+        await self._update_failure_metrics(execution_results)
+        
+        return total_reward
+    
+    async def _update_failure_metrics(self, execution_results: List[ToolExecutionResult]):
+        """Update failure metrics for enhanced state representation."""
+        # Update failure rates per tool
+        for result in execution_results:
+            tool_id = result.tool_id
+            if tool_id not in self.failure_metrics['failure_rates']:
+                self.failure_metrics['failure_rates'][tool_id] = 0.0
+            
+            # Update with exponential moving average
+            alpha = 0.1  # Learning rate for failure tracking
+            if result.success:
+                self.failure_metrics['failure_rates'][tool_id] *= (1 - alpha)
+            else:
+                self.failure_metrics['failure_rates'][tool_id] = (
+                    self.failure_metrics['failure_rates'][tool_id] * (1 - alpha) + alpha
+                )
+        
+        # Update failure type distribution
+        for result in execution_results:
+            if not result.success and result.error_type:
+                error_type = result.error_type
+                self.failure_metrics['failure_types'][error_type] = (
+                    self.failure_metrics['failure_types'].get(error_type, 0) + 1
+                )
+        
+        # Update retry patterns
+        avg_retry_count = sum(r.retry_count for r in execution_results) / len(execution_results)
+        retry_success_rate = sum(1 for r in execution_results if r.retry_count > 0 and r.success) / max(
+            sum(1 for r in execution_results if r.retry_count > 0), 1
+        )
+        
+        self.failure_metrics['retry_patterns'] = {
+            'avg_retry_count': avg_retry_count,
+            'retry_success_rate': retry_success_rate,
+            'avg_retry_delay_ms': 1000,  # Would be calculated from actual retry delays
+            'circuit_breaker_triggers': 0,  # Would be tracked from circuit breaker events
+            'max_consecutive_failures': max(
+                self.failure_metrics['retry_patterns'].get('max_consecutive_failures', 0),
+                self._count_consecutive_failures()
+            )
+        }
+        
+        # Get failure rates from database for comprehensive view
+        try:
+            db_failure_rates = await self.db_manager.get_tool_failure_rates(time_window_hours=24)
+            # Merge with in-memory rates
+            for tool_id, rates in db_failure_rates.items():
+                if tool_id in self.failure_metrics['failure_rates']:
+                    # Weighted average with database rates
+                    self.failure_metrics['failure_rates'][tool_id] = (
+                        self.failure_metrics['failure_rates'][tool_id] * 0.3 + 
+                        rates['failure_rate'] * 0.7
+                    )
+        except Exception as e:
+            self.logger.warning(f"Failed to get failure rates from database: {e}")
+    
+    def _count_consecutive_failures(self) -> int:
+        """Count consecutive failures in execution history."""
+        if not self.execution_history:
+            return 0
+        
+        consecutive = 0
+        for history in reversed(self.execution_history):
+            if history.get('success', False):
+                break
+            consecutive += 1
+        
+        return consecutive
+    
+    async def record_user_feedback(self, execution_id: str, feedback_type: str,
+                                  rating: int = None, follow_up_query: str = None):
+        """Record user feedback for learning and reward adjustment."""
+        # Calculate derived feedback signals
+        query_reformulated = False
+        follow_up_time_seconds = None
+        result_used = None
+        
+        # Check if this is a reformulation of previous query
+        if follow_up_query and self.execution_history:
+            last_query = self.execution_history[-1].get('query', '')
+            # Simple similarity check - in practice would use semantic similarity
+            if self._is_query_reformulation(last_query, follow_up_query):
+                query_reformulated = True
+            
+            # Calculate time between queries
+            last_timestamp = self.execution_history[-1].get('timestamp')
+            if last_timestamp:
+                follow_up_time_seconds = (datetime.now() - last_timestamp).total_seconds()
+        
+        # Infer result usage from feedback type
+        if feedback_type == 'positive':
+            result_used = True
+        elif feedback_type == 'negative':
+            result_used = False
+        
+        # Store in database
+        await self.db_manager.record_user_feedback(
+            execution_id=execution_id,
+            feedback_type=feedback_type,
+            rating=rating,
+            query_reformulated=query_reformulated,
+            follow_up_query=follow_up_query,
+            follow_up_time_seconds=follow_up_time_seconds,
+            result_used=result_used
+        )
+        
+        # Update Q-learning with delayed reward if available
+        if self.q_learning_engine and execution_id in [h.get('execution_id') for h in self.execution_history]:
+            # Find the execution in history
+            for i, history in enumerate(self.execution_history):
+                if history.get('execution_id') == execution_id:
+                    # Create feedback dict for reward recalculation
+                    user_feedback = {
+                        'rating': rating,
+                        'query_reformulated': query_reformulated,
+                        'follow_up_query': follow_up_query,
+                        'follow_up_time_seconds': follow_up_time_seconds,
+                        'result_used': result_used
+                    }
+                    
+                    # Recalculate reward with user feedback
+                    execution_results = history.get('execution_results', [])
+                    if execution_results:
+                        # Convert back to ExecutionMetrics
+                        execution_metrics = []
+                        for result in execution_results:
+                            metric = ExecutionMetrics(
+                                tool_id=result.tool_id,
+                                success=result.success,
+                                partial_success=result.partial_success,
+                                completion_percentage=result.completion_percentage,
+                                execution_time_ms=result.execution_time_ms,
+                                error_type=result.error_type,
+                                retry_count=result.retry_count,
+                                resource_usage=result.resource_usage,
+                                result_quality=result.result_quality
+                            )
+                            execution_metrics.append(metric)
+                        
+                        # Get context
+                        reward_context = history.get('context', {})
+                        
+                        # Recalculate reward with user feedback
+                        new_reward, breakdown = self.reward_calculator.calculate_reward(
+                            execution_metrics,
+                            reward_context,
+                            user_feedback=user_feedback
+                        )
+                        
+                        # Update Q-value with new reward
+                        # This would require storing state-action pairs in history
+                        self.logger.info(f"Updated reward with user feedback: {history.get('reward')} -> {new_reward}")
+                        
+                        # Update history
+                        self.execution_history[i]['reward'] = new_reward
+                        self.execution_history[i]['user_feedback'] = user_feedback
+                    
+                    break
+    
+    def _is_query_reformulation(self, query1: str, query2: str) -> bool:
+        """Check if query2 is a reformulation of query1."""
+        # Simple heuristic - check for significant overlap in words
+        words1 = set(query1.lower().split())
+        words2 = set(query2.lower().split())
+        
+        # Remove common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for'}
+        words1 -= stop_words
+        words2 -= stop_words
+        
+        if not words1 or not words2:
+            return False
+        
+        # Calculate Jaccard similarity
+        intersection = len(words1 & words2)
+        union = len(words1 | words2)
+        similarity = intersection / union if union > 0 else 0
+        
+        # If high similarity but not identical, likely a reformulation
+        return 0.3 < similarity < 0.9
+    
+    async def get_execution_feedback_summary(self, time_window_hours: int = 24) -> Dict[str, Any]:
+        """Get summary of user feedback for recent executions."""
+        # This would query the database for feedback statistics
+        # For now, return a placeholder
+        return {
+            'total_feedback': 0,
+            'positive_feedback': 0,
+            'negative_feedback': 0,
+            'average_rating': 0.0,
+            'reformulation_rate': 0.0,
+            'result_usage_rate': 0.0
+        }
     
     async def shutdown(self):
         """Cleanup and shutdown all components."""

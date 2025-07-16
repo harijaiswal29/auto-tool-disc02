@@ -235,12 +235,91 @@ ALTER TABLE tools ADD COLUMN version TEXT NOT NULL DEFAULT '1.0.0';
 INSERT INTO schema_migrations (version, name) VALUES (1, 'add_tool_versioning');
 ```
 
+## Enhanced Learning System Tables
+
+### Failure History Table
+```sql
+CREATE TABLE failure_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    failure_type TEXT NOT NULL,
+    error_message TEXT,
+    retry_count INTEGER DEFAULT 0,
+    recovery_successful BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (execution_id) REFERENCES execution_history(id),
+    FOREIGN KEY (tool_id) REFERENCES tools(id)
+);
+
+CREATE INDEX idx_failure_history_execution ON failure_history(execution_id);
+CREATE INDEX idx_failure_history_tool ON failure_history(tool_id);
+CREATE INDEX idx_failure_history_type ON failure_history(failure_type);
+```
+
+### Resource Metrics Table
+```sql
+CREATE TABLE resource_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    memory_mb REAL,
+    cpu_percent REAL,
+    api_calls INTEGER,
+    execution_time_ms REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (execution_id) REFERENCES execution_history(id),
+    FOREIGN KEY (tool_id) REFERENCES tools(id)
+);
+
+CREATE INDEX idx_resource_metrics_execution ON resource_metrics(execution_id);
+CREATE INDEX idx_resource_metrics_tool_time ON resource_metrics(tool_id, created_at DESC);
+```
+
+### User Feedback Table
+```sql
+CREATE TABLE user_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    feedback_type TEXT NOT NULL CHECK (feedback_type IN ('positive', 'negative', 'neutral')),
+    rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+    query_reformulated BOOLEAN DEFAULT FALSE,
+    result_used BOOLEAN,
+    follow_up_time_seconds REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+);
+
+CREATE INDEX idx_user_feedback_execution ON user_feedback(execution_id);
+CREATE INDEX idx_user_feedback_type ON user_feedback(feedback_type);
+CREATE INDEX idx_user_feedback_rating ON user_feedback(rating);
+```
+
+### Tool Synergies Table
+```sql
+CREATE TABLE tool_synergies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tool_combination TEXT NOT NULL UNIQUE,
+    success_rate REAL CHECK (success_rate BETWEEN 0 AND 1),
+    occurrences INTEGER DEFAULT 0,
+    synergy_score REAL CHECK (synergy_score BETWEEN -1 AND 1),
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_tool_synergies_score ON tool_synergies(synergy_score DESC);
+CREATE INDEX idx_tool_synergies_success ON tool_synergies(success_rate DESC);
+```
+
 ## Data Retention Policies
 
 1. **Execution History**: Keep for 90 days
 2. **Performance Metrics**: Aggregate after 30 days
 3. **Q-Learning States**: Persist indefinitely
 4. **Patterns**: Archive low-usage patterns after 60 days
+5. **Failure History**: Keep for 180 days for pattern analysis
+6. **Resource Metrics**: Aggregate after 30 days, keep summaries for 1 year
+7. **User Feedback**: Persist indefinitely for continuous learning
+8. **Tool Synergies**: Update continuously, archive unused combinations after 90 days
 
 ## Backup and Recovery
 

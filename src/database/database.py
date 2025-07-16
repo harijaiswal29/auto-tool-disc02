@@ -113,6 +113,80 @@ class DatabaseManager:
                 )
             """)
             
+            # Create failure history table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS failure_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    execution_id TEXT NOT NULL,
+                    tool_id TEXT NOT NULL,
+                    failure_type TEXT NOT NULL,
+                    error_message TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    recovery_successful BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+                )
+            """)
+            
+            # Create resource metrics table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS resource_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    execution_id TEXT NOT NULL,
+                    tool_id TEXT NOT NULL,
+                    cpu_percent REAL,
+                    memory_mb REAL,
+                    api_calls INTEGER,
+                    execution_time_ms REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+                )
+            """)
+            
+            # Create user feedback table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    execution_id TEXT NOT NULL,
+                    feedback_type TEXT NOT NULL,
+                    rating INTEGER,
+                    query_reformulated BOOLEAN DEFAULT FALSE,
+                    follow_up_query TEXT,
+                    follow_up_time_seconds REAL,
+                    result_used BOOLEAN,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+                )
+            """)
+            
+            # Create tool synergies table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS tool_synergies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tool_combination TEXT NOT NULL UNIQUE,
+                    success_rate REAL,
+                    occurrence_count INTEGER DEFAULT 1,
+                    synergy_score REAL,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create indexes for efficient queries
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_failure_history_tool 
+                ON failure_history(tool_id, failure_type)
+            """)
+            
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_resource_metrics_tool 
+                ON resource_metrics(tool_id, created_at)
+            """)
+            
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_feedback_execution 
+                ON user_feedback(execution_id)
+            """)
+            
             await db.commit()
             
         self._initialized = True
@@ -126,3 +200,125 @@ class DatabaseManager:
         """Close any open connections."""
         # Currently using context managers, so nothing to close
         pass
+    
+    async def record_failure(self, execution_id: str, tool_id: str, 
+                           failure_type: str, error_message: str = None,
+                           retry_count: int = 0, recovery_successful: bool = False):
+        """Record a failure in the failure history."""
+        async with self.get_connection() as conn:
+            await conn.execute(
+                """INSERT INTO failure_history 
+                   (execution_id, tool_id, failure_type, error_message, 
+                    retry_count, recovery_successful)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (execution_id, tool_id, failure_type, error_message,
+                 retry_count, recovery_successful)
+            )
+            await conn.commit()
+    
+    async def record_resource_metrics(self, execution_id: str, tool_id: str,
+                                    cpu_percent: float = None, memory_mb: float = None,
+                                    api_calls: int = None, execution_time_ms: float = None):
+        """Record resource usage metrics."""
+        async with self.get_connection() as conn:
+            await conn.execute(
+                """INSERT INTO resource_metrics 
+                   (execution_id, tool_id, cpu_percent, memory_mb, 
+                    api_calls, execution_time_ms)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (execution_id, tool_id, cpu_percent, memory_mb,
+                 api_calls, execution_time_ms)
+            )
+            await conn.commit()
+    
+    async def record_user_feedback(self, execution_id: str, feedback_type: str,
+                                 rating: int = None, query_reformulated: bool = False,
+                                 follow_up_query: str = None, 
+                                 follow_up_time_seconds: float = None,
+                                 result_used: bool = None):
+        """Record user feedback for an execution."""
+        async with self.get_connection() as conn:
+            await conn.execute(
+                """INSERT INTO user_feedback 
+                   (execution_id, feedback_type, rating, query_reformulated,
+                    follow_up_query, follow_up_time_seconds, result_used)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (execution_id, feedback_type, rating, query_reformulated,
+                 follow_up_query, follow_up_time_seconds, result_used)
+            )
+            await conn.commit()
+    
+    async def update_tool_synergy(self, tool_combination: str, success_rate: float,
+                                occurrence_count: int, synergy_score: float):
+        """Update or insert tool synergy data."""
+        async with self.get_connection() as conn:
+            # Try to update existing record
+            cursor = await conn.execute(
+                """UPDATE tool_synergies 
+                   SET success_rate = ?, occurrence_count = ?, 
+                       synergy_score = ?, last_updated = datetime('now')
+                   WHERE tool_combination = ?""",
+                (success_rate, occurrence_count, synergy_score, tool_combination)
+            )
+            
+            # If no rows updated, insert new record
+            if cursor.rowcount == 0:
+                await conn.execute(
+                    """INSERT INTO tool_synergies 
+                       (tool_combination, success_rate, occurrence_count, synergy_score)
+                       VALUES (?, ?, ?, ?)""",
+                    (tool_combination, success_rate, occurrence_count, synergy_score)
+                )
+            
+            await conn.commit()
+    
+    async def get_tool_failure_rates(self, time_window_hours: int = 24) -> dict:
+        """Get failure rates for each tool within time window."""
+        async with self.get_connection() as conn:
+            query = """
+                SELECT 
+                    tool_id,
+                    COUNT(*) as total_attempts,
+                    SUM(CASE WHEN recovery_successful = 0 THEN 1 ELSE 0 END) as failures,
+                    AVG(retry_count) as avg_retry_count
+                FROM failure_history
+                WHERE created_at > datetime('now', '-{} hours')
+                GROUP BY tool_id
+            """.format(time_window_hours)
+            
+            async with conn.execute(query) as cursor:
+                rows = await cursor.fetchall()
+                
+                failure_rates = {}
+                for row in rows:
+                    tool_id, total, failures, avg_retry = row
+                    failure_rates[tool_id] = {
+                        'failure_rate': failures / total if total > 0 else 0,
+                        'avg_retry_count': avg_retry or 0,
+                        'total_attempts': total
+                    }
+                
+                return failure_rates
+    
+    async def get_failure_type_distribution(self, tool_id: str = None) -> dict:
+        """Get distribution of failure types."""
+        async with self.get_connection() as conn:
+            if tool_id:
+                query = """
+                    SELECT failure_type, COUNT(*) as count
+                    FROM failure_history
+                    WHERE tool_id = ?
+                    GROUP BY failure_type
+                """
+                params = (tool_id,)
+            else:
+                query = """
+                    SELECT failure_type, COUNT(*) as count
+                    FROM failure_history
+                    GROUP BY failure_type
+                """
+                params = ()
+            
+            async with conn.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                return {row[0]: row[1] for row in rows}

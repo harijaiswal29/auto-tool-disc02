@@ -4,15 +4,19 @@
 
 **✅ Implemented Components:**
 - Q-Learning Engine (`src/learning/q_learning_engine.py`)
-- State Representation with 419-dimensional vectors
+- Enhanced State Representation with 439-dimensional vectors (includes failure tracking)
 - Action Space with constraint validation
 - Experience Replay Buffer
 - Model persistence to database
 - Integration with Orchestrator Agent
+- Enhanced Reward Calculator (`src/learning/reward_calculator.py`)
+- Failure Learning System
+- Resource Efficiency Tracking
+- User Satisfaction Signals
+- Tool Synergy Recognition
 
 **⏳ Not Yet Implemented:**
 - Pattern Miner (PatternMiner class)
-- Advanced Reward Calculator
 - Deep Q-Learning with neural networks
 
 ## Overview
@@ -31,10 +35,13 @@ The learning system uses Q-learning with pattern mining to continuously improve 
 class StateRepresentation:
     def __init__(self):
         self.state_dimensions = {
-            'intent_vector': 384,  # Sentence transformer output
-            'context_features': 10,  # Domain, user history, etc.
-            'tool_history': 20,    # Recent tool usage
-            'performance_metrics': 5  # Success rate, response time, etc.
+            'intent_vector': 384,      # Sentence transformer output
+            'context_features': 10,    # Domain, user history, etc.
+            'tool_history': 20,        # Recent tool usage
+            'performance_metrics': 5,   # Success rate, response time, etc.
+            'failure_rates': 10,       # Per-tool failure rates
+            'failure_types': 5,        # Network, permission, timeout, rate_limit, other
+            'retry_patterns': 5        # Retry statistics and patterns
         }
     
     def encode_state(self, intent, context, history):
@@ -43,7 +50,10 @@ class StateRepresentation:
             intent.embedding,
             self.encode_context(context),
             self.encode_history(history),
-            self.encode_metrics(context.metrics)
+            self.encode_metrics(context.metrics),
+            self.encode_failure_rates(context.failure_rates),
+            self.encode_failure_types(context.failure_types),
+            self.encode_retry_patterns(context.retry_patterns)
         ])
         return state_vector
 ```
@@ -100,44 +110,72 @@ class QTable:
         self.update_count[(state_key, action_key)] += 1
 ```
 
-## Reward Calculation
+## Enhanced Reward Calculation
+
+The enhanced reward calculator (`src/learning/reward_calculator.py`) provides sophisticated reward calculation with multiple factors:
 
 ### Reward Function Components
 
-**Note**: The RewardCalculator class shown below is not yet implemented. Currently, reward calculation is handled directly in the Orchestrator Agent's `_calculate_reward` method.
-
 ```python
-class RewardCalculator:  # NOT YET IMPLEMENTED
-    def __init__(self):
-        self.weights = {
-            'task_completion': 0.5,
-            'execution_time': 0.2,
-            'resource_usage': 0.1,
-            'user_feedback': 0.2
-        }
-    
-    def calculate_reward(self, execution_result):
-        components = {
-            'task_completion': self.task_completion_reward(execution_result),
-            'execution_time': self.time_penalty(execution_result.duration),
-            'resource_usage': self.resource_penalty(execution_result.resources),
-            'user_feedback': self.feedback_reward(execution_result.feedback)
-        }
+class RewardCalculator:
+    def calculate_reward(self, execution_results, context, user_feedback=None):
+        # Calculate individual components
+        base_reward = self._calculate_base_reward(execution_results)
+        failure_adjustment = self._failure_type_adjustment(execution_results)
+        partial_success_bonus = self._partial_success_bonus(execution_results)
+        resource_penalty = self._resource_efficiency_penalty(execution_results)
+        synergy_bonus = self._tool_synergy_bonus(execution_results)
+        user_satisfaction = self._user_satisfaction_adjustment(user_feedback)
         
-        # Weighted sum
-        total_reward = sum(
-            self.weights[key] * value 
-            for key, value in components.items()
-        )
+        # Apply context sensitivity
+        context_multiplier = self._get_context_multiplier(context)
         
-        return total_reward, components
+        # Apply uncertainty factor
+        uncertainty_factor = self._uncertainty_adjustment(execution_results, context)
+        
+        # Combine all components
+        total_reward = (base_reward + failure_adjustment + partial_success_bonus + 
+                       synergy_bonus + user_satisfaction) * context_multiplier * 
+                       uncertainty_factor - resource_penalty
+        
+        return np.clip(total_reward, -1.0, 2.0), breakdown
 ```
 
-### Reward Formulas
-1. **Task Completion**: +1.0 for success, -0.5 for failure
-2. **Time Penalty**: -0.1 * log(execution_time_seconds)
-3. **Resource Usage**: -0.05 * (cpu_usage + memory_usage)
-4. **User Feedback**: +1.0 for positive, -1.0 for negative
+### Key Features
+
+1. **Failure Type Differentiation**
+   - Network timeouts: -0.2
+   - Permission errors: -0.8 (severe)
+   - Rate limits: -0.3
+   - Retryable errors: -0.1 (light penalty)
+   - Non-retryable errors: -0.7
+
+2. **Partial Success Handling**
+   - Rewards partial completion based on percentage
+   - Quality-based bonuses for high-quality partial results
+
+3. **Resource Efficiency**
+   - Memory usage penalties
+   - CPU usage penalties
+   - API call tracking
+   - Execution time penalties (logarithmic)
+
+4. **Tool Synergy Recognition**
+   - Known good combinations: +0.2
+   - Discovered combinations: +0.3
+   - Redundant tool penalties: -0.1
+
+5. **Context Sensitivity**
+   - Exploration mode: 1.2x multiplier
+   - Production mode: 0.8x multiplier
+   - Confidence-based adjustments
+   - User vs system initiated adjustments
+
+6. **User Satisfaction Signals**
+   - Explicit ratings (1-5 scale)
+   - Query reformulation detection
+   - Follow-up timing analysis
+   - Result usage tracking
 
 ## Experience Replay Buffer
 
@@ -309,6 +347,186 @@ def update_learning(execution_result):
 3. **Convergence Rate**: Track Q-value stability
 4. **Generalization**: Test on unseen queries
 
+## Database Schema for Failure Tracking
+
+The learning system persists failure metrics and patterns in the database:
+
+### Failure History Table
+```sql
+CREATE TABLE IF NOT EXISTS failure_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    failure_type TEXT NOT NULL,
+    error_message TEXT,
+    retry_count INTEGER DEFAULT 0,
+    recovery_successful BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+)
+```
+
+### Resource Metrics Table
+```sql
+CREATE TABLE IF NOT EXISTS resource_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    memory_mb REAL,
+    cpu_percent REAL,
+    api_calls INTEGER,
+    execution_time_ms REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+)
+```
+
+### User Feedback Table
+```sql
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL,
+    feedback_type TEXT NOT NULL,
+    rating INTEGER,
+    query_reformulated BOOLEAN DEFAULT FALSE,
+    result_used BOOLEAN,
+    follow_up_time_seconds REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+)
+```
+
+### Tool Synergies Table
+```sql
+CREATE TABLE IF NOT EXISTS tool_synergies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tool_combination TEXT NOT NULL UNIQUE,
+    success_rate REAL,
+    occurrences INTEGER,
+    synergy_score REAL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+## Integration with Orchestrator Agent
+
+The orchestrator agent has been enhanced to integrate with the failure learning system:
+
+### Enhanced Tool Execution Result
+```python
+@dataclass
+class ToolExecutionResult:
+    """Result from executing a tool with enhanced metrics."""
+    tool_id: str
+    tool_name: str
+    success: bool
+    result: Any
+    error: Optional[str] = None
+    execution_time_ms: float = 0.0
+    # Enhanced fields for partial success and resource tracking
+    partial_success: bool = False
+    completion_percentage: float = 0.0
+    error_type: Optional[str] = None
+    retry_count: int = 0
+    resource_usage: Optional[Dict[str, float]] = None
+    result_quality: float = 1.0  # Quality score 0-1
+```
+
+### Key Integration Points
+
+1. **Error Classification**: The orchestrator classifies errors into types (network_timeout, permission_error, rate_limit, etc.)
+2. **Partial Success Detection**: Checks for partial results in failed executions
+3. **Resource Tracking**: Uses psutil to monitor CPU, memory, and tracks API calls
+4. **Failure Metrics Update**: Updates failure rates using exponential moving average
+5. **Reward Calculation**: Uses the enhanced reward calculator instead of simple calculation
+
+## User Feedback System
+
+### Recording User Feedback
+```python
+# Example: Recording user feedback after execution
+await orchestrator.record_user_feedback(
+    execution_id="exec-123",
+    feedback_type="positive",
+    rating=5,
+    result_used=True
+)
+
+# Negative feedback with query reformulation
+await orchestrator.record_user_feedback(
+    execution_id="exec-456", 
+    feedback_type="negative",
+    rating=2,
+    query_reformulated=True,
+    follow_up_time_seconds=3.5
+)
+```
+
+### Feedback Signals
+- **Explicit Feedback**: User ratings (1-5 scale)
+- **Implicit Signals**:
+  - Query reformulation detection (Jaccard similarity < 0.3)
+  - Follow-up query timing
+  - Result usage tracking
+
+## Performance Considerations
+
+### Failure Rate Tracking
+- Uses exponential moving average (α=0.2) for smooth updates
+- Per-tool failure rates tracked individually
+- Global failure type distribution maintained
+
+### Resource Monitoring
+- CPU and memory tracked via psutil
+- API call counting integrated into tool execution
+- Resource penalties calculated logarithmically to avoid harsh penalties
+
+### State Encoding Efficiency
+- 439-dimensional state vector efficiently encoded
+- MD5 hashing for state identification
+- Sparse Q-table representation for memory efficiency
+
+## Configuration Tuning
+
+For detailed configuration information, see [Configuration Guide](../deployment/configuration.md).
+
+### Reward Weights
+Adjust these based on your priorities:
+```json
+"base_weights": {
+    "success": 1.0,       # Increase for success-focused learning
+    "failure": -0.5,      # Make more negative for risk-averse behavior
+    "partial_success": 0.3 # Increase to encourage partial results
+}
+```
+
+### Failure Penalties
+Customize based on error severity in your environment:
+```json
+"failure_penalties": {
+    "network_timeout": -0.2,    # Transient, likely retryable
+    "permission_error": -0.8,   # Severe, unlikely to succeed on retry
+    "rate_limit": -0.3,        # May succeed after delay
+    "connection_error": -0.25,  # Could be temporary
+    "retryable": -0.1,         # Light penalty for retryable errors
+    "non_retryable": -0.7,     # Heavy penalty for permanent failures
+    "unknown": -0.5            # Default for unclassified errors
+}
+```
+
+### Context Multipliers
+Adjust learning behavior in different modes:
+```json
+"context_multipliers": {
+    "exploration": 1.2,     # Encourage trying new things
+    "production": 0.8,      # Conservative in production
+    "high_confidence": 1.0, # Standard rewards when confident
+    "low_confidence": 1.1,  # Slightly boost learning when uncertain
+    "user_initiated": 1.0,  # User queries get full rewards
+    "system_initiated": 0.9 # System queries slightly discounted
+}
+```
+
 ## Hyperparameter Tuning
 
 ### Grid Search Parameters
@@ -316,9 +534,11 @@ def update_learning(execution_result):
 - Discount factor: [0.8, 0.9, 0.95, 0.99]
 - Exploration rate: [0.1, 0.2, 0.3]
 - Experience replay batch size: [16, 32, 64]
+- Failure rate smoothing (α): [0.1, 0.2, 0.3]
 
 ### Optimization Strategy
 1. Start with default parameters
 2. Run grid search on validation set
 3. Select best performing combination
 4. Fine-tune with Bayesian optimization
+5. Monitor failure learning convergence

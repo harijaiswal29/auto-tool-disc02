@@ -12,9 +12,9 @@ The system consists of 5 core layers:
 
 1. **Intent Recognition Layer**: Understands user goals using keyword matching, semantic analysis (sentence-transformers), context tracking, and intent classification
 2. **Tool Discovery Layer**: Finds relevant tools via registry interface, capability matching, graph exploration (NetworkX), and discovery patterns
-3. **Tool Selection & Learning Layer**: Optimizes tool choice using epsilon-greedy multi-armed bandit, Q-learning, combination scoring, and contextual analysis
-4. **Execution & Monitoring Layer**: Manages MCP connections, executes tools in parallel (asyncio), monitors performance, and handles errors
-5. **Learning & Adaptation Layer**: Improves over time using Q-learning engine, pattern mining, feedback processing, and model adaptation
+3. **Tool Selection & Learning Layer**: Optimizes tool choice using epsilon-greedy multi-armed bandit, Q-learning with 439-dimensional state vectors, combination scoring, and contextual analysis
+4. **Execution & Monitoring Layer**: Manages MCP connections, executes tools in parallel (asyncio), monitors performance, handles errors, and tracks resource usage
+5. **Learning & Adaptation Layer**: Improves over time using enhanced Q-learning engine with failure differentiation, pattern mining, feedback processing, and model adaptation
 
 ## Technology Stack
 
@@ -110,11 +110,16 @@ The system consists of 5 core layers:
 #### Learning System (Phase 4 - In Progress)
 - **Q-Learning Engine** (`src/learning/q_learning_engine.py`):
   - ✅ Core Q-learning implementation with experience replay
-  - ✅ State representation from intent vectors, context, and history
+  - ✅ Enhanced state representation (439 dimensions) with failure tracking
   - ✅ Action space management with constraint validation
   - ✅ Epsilon-greedy exploration with decay
   - ✅ Integration with orchestrator for automatic learning
   - ✅ Model persistence to database
+  - ✅ Enhanced reward calculator with sophisticated failure differentiation
+  - ✅ Partial success handling with completion percentage tracking
+  - ✅ Resource efficiency tracking using psutil
+  - ✅ User satisfaction signals (explicit and implicit feedback)
+  - ✅ Tool synergy recognition with configurable bonuses
 
 ### ⏳ Not Yet Implemented
 - **Learning System** (Remaining Components):
@@ -347,6 +352,7 @@ For detailed information on specific topics, refer to these documentation files:
 - @docs/deployment/requirements.md - Non-functional requirements and SLOs
 - @docs/deployment/infrastructure.md - Container specs and CI/CD pipelines
 - @docs/deployment/security.md - Security architecture and best practices
+- @docs/deployment/configuration.md - Configuration guide for learning system parameters
 
 ### Testing Documentation
 - @tests/README.md - Comprehensive test suite documentation, organization, and commands
