@@ -26,6 +26,7 @@ from src.tools.custom_wrappers.weather_mcp import WeatherMCPClient
 from src.tools.filesystem_mcp import FileSystemMCPClient
 from src.tools.postgres_mcp import PostgresMCPClient
 from src.tools.github_mcp import GitHubMCPClient
+from src.tools.financial_datasets_mcp import FinancialDatasetsMCPClient
 
 logger = get_logger(__name__)
 
@@ -388,6 +389,55 @@ class MCPIntegration:
                 
         except Exception as e:
             logger.error(f"[ERROR] Failed to add GitHub server: {e}")
+            return False
+    
+    async def add_financial_datasets_server(self, api_key: Optional[str] = None, endpoint: Optional[str] = None,
+                                          server_id: str = "financial_datasets_default", use_mock: bool = False) -> bool:
+        """
+        Add a Financial Datasets MCP server (remote).
+        
+        Args:
+            api_key: Financial Datasets API key (if not provided, uses FINANCIAL_DATASETS_API_KEY env var)
+            endpoint: Remote MCP server endpoint (optional, uses default if not provided)
+            server_id: Unique identifier for this server instance
+            use_mock: If True, use mock server implementation
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.info(f"[ADD] Adding Financial Datasets server: {server_id}")
+            
+            # Create Financial Datasets client
+            client = FinancialDatasetsMCPClient(api_key, endpoint)
+            
+            # Connect to server (try real first, then mock)
+            if await client.connect(use_mock=use_mock):
+                # Store connection
+                self.active_connections[server_id] = client
+                
+                # Register tools
+                client.register_tools_to_registry(self.registry)
+                
+                # Store server info
+                self.servers[server_id] = {
+                    'type': 'financial_datasets',
+                    'api_key': api_key if not use_mock else None,
+                    'endpoint': endpoint,
+                    'client': client,
+                    'status': 'active',
+                    'is_mock': client.use_mock
+                }
+                
+                mode = "mock" if client.use_mock else "remote"
+                logger.info(f"[SUCCESS] Financial Datasets server {server_id} added successfully ({mode} mode)")
+                return True
+            else:
+                logger.error(f"[FAILED] Could not connect to Financial Datasets server {server_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to add Financial Datasets server: {e}")
             return False
     
     async def execute_tool(self, tool_id: str, arguments: Dict[str, Any]) -> Dict[str, Any]:

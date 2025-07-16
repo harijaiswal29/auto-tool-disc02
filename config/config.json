@@ -51,6 +51,15 @@
       "env": {
         "GITHUB_TOKEN": "${GITHUB_TOKEN}"
       }
+    },
+    "financial_datasets": {
+      "type": "remote",
+      "endpoint": "https://api.financialdatasets.ai/mcp/v1",
+      "auth_type": "api_key",
+      "enabled": true,
+      "env": {
+        "FINANCIAL_DATASETS_API_KEY": "${FINANCIAL_DATASETS_API_KEY}"
+      }
     }
   },
   
@@ -181,6 +190,13 @@
         "base_delay": 2.0,
         "max_delay": 60.0,
         "jitter_factor": 0.3
+      },
+      "financial_datasets": {
+        "type": "exponential_backoff",
+        "max_attempts": 5,
+        "base_delay": 2.0,
+        "max_delay": 30.0,
+        "jitter_factor": 0.3
       }
     },
     "no_retry_errors": [
@@ -215,6 +231,11 @@
       "github": {
         "failure_threshold": 5,
         "recovery_timeout": 120.0,
+        "half_open_test_requests": 3
+      },
+      "financial_datasets": {
+        "failure_threshold": 5,
+        "recovery_timeout": 60.0,
         "half_open_test_requests": 3
       }
     }

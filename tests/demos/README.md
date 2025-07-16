@@ -74,6 +74,29 @@ export GITHUB_TOKEN=your_token_here
 python tests/demos/demo_github_real.py
 ```
 
+### 6. demo_financial_datasets.py
+Demonstrates Financial Datasets MCP integration with real-world financial queries.
+
+**Key Features:**
+- Stock price queries (Apple, Microsoft, Tesla)
+- Financial statement analysis (income, balance sheet, cash flow)
+- Company news and sentiment
+- Cryptocurrency price data
+- Company search functionality
+- Integration with intent recognition and Q-learning
+
+**Usage:**
+```bash
+python tests/demos/demo_financial_datasets.py
+```
+
+**Sample Queries Demonstrated:**
+- "What is Apple's current stock price?"
+- "Show me Amazon's income statement"
+- "Get latest news about Tesla"
+- "What's the current Bitcoin price?"
+- "Show me Apple's complete financial overview"
+
 ## Running All Demos
 
 To run all demos sequentially:

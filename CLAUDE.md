@@ -64,6 +64,7 @@ The system consists of 5 core layers:
   - Filesystem MCP (`src/tools/filesystem_mcp.py`)
   - PostgreSQL MCP (`src/tools/postgres_mcp.py`)
   - GitHub MCP (`src/tools/github_mcp.py`)
+  - Financial Datasets MCP (`src/tools/financial_datasets_mcp.py`) - Remote API for financial data
   - Mock MCP Server Infrastructure for all services
   
 - **AI Agent Implementations**:
@@ -190,6 +191,10 @@ pytest tests/test_retry_logic.py -v
 pytest tests/unit/test_q_learning_engine.py -v
 python src/learning/test_q_learning.py  # Run Q-learning demo
 python demos/demo_q_learning_orchestration.py  # Demo with orchestrator
+
+# Test Financial Datasets MCP
+pytest tests/integration/test_financial_datasets_mcp.py -v
+python src/tools/financial_datasets_mcp.py  # Run Financial Datasets demo
 
 # Monitor Performance
 python -c "from src.agents.intent_recognition_agent import IntentRecognitionAgent; agent = IntentRecognitionAgent(); print(agent.get_metrics_summary())"
