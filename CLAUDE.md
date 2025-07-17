@@ -65,6 +65,8 @@ The system consists of 5 core layers:
   - PostgreSQL MCP (`src/tools/postgres_mcp.py`)
   - GitHub MCP (`src/tools/github_mcp.py`)
   - Financial Datasets MCP (`src/tools/financial_datasets_mcp.py`) - Remote API for financial data
+  - Zerodha MCP (`src/tools/zerodha_mcp.py`) - Trading and portfolio management API
+  - Notion MCP (`src/tools/notion_mcp.py`) - Notion workspace integration with pages, databases, and blocks
   - Mock MCP Server Infrastructure for all services
   
 - **AI Agent Implementations**:
@@ -195,6 +197,16 @@ python demos/demo_q_learning_orchestration.py  # Demo with orchestrator
 # Test Financial Datasets MCP
 pytest tests/integration/test_financial_datasets_mcp.py -v
 python src/tools/financial_datasets_mcp.py  # Run Financial Datasets demo
+
+# Test Zerodha MCP
+pytest tests/integration/test_zerodha_mcp.py -v
+python src/tools/zerodha_mcp.py  # Run Zerodha demo
+
+# Test Notion MCP
+pytest tests/integration/test_notion_mcp.py -v
+pytest tests/unit/test_notion_mcp.py -v
+python demos/demo_notion_mcp.py  # Run Notion demo
+python src/tools/notion_mcp.py  # Run basic Notion test
 
 # Monitor Performance
 python -c "from src.agents.intent_recognition_agent import IntentRecognitionAgent; agent = IntentRecognitionAgent(); print(agent.get_metrics_summary())"

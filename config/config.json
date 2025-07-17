@@ -60,6 +60,40 @@
       "env": {
         "FINANCIAL_DATASETS_API_KEY": "${FINANCIAL_DATASETS_API_KEY}"
       }
+    },
+    "zerodha": {
+      "type": "remote",
+      "endpoint": "https://api.kite.trade/mcp/v1",
+      "auth_type": "oauth",
+      "enabled": true,
+      "env": {
+        "ZERODHA_API_KEY": "${ZERODHA_API_KEY}",
+        "ZERODHA_API_SECRET": "${ZERODHA_API_SECRET}",
+        "ZERODHA_ACCESS_TOKEN": "${ZERODHA_ACCESS_TOKEN}"
+      },
+      "config": {
+        "use_sandbox": false,
+        "sandbox_endpoint": "https://sandbox.kite.trade/mcp/v1",
+        "cache_ttl": 60,
+        "session_expiry": "daily"
+      }
+    },
+    "notion": {
+      "type": "remote",
+      "endpoint": "https://api.notion.com/mcp/v1",
+      "command": ["npx", "-y", "@notionhq/notion-mcp-server"],
+      "auth_type": "integration_token",
+      "enabled": true,
+      "env": {
+        "NOTION_INTEGRATION_TOKEN": "${NOTION_INTEGRATION_TOKEN}",
+        "NOTION_MCP_ENDPOINT": "${NOTION_MCP_ENDPOINT}"
+      },
+      "config": {
+        "api_version": "2022-06-28",
+        "cache_ttl": 300,
+        "markdown_export": true,
+        "max_page_size": 100
+      }
     }
   },
   
@@ -197,6 +231,20 @@
         "base_delay": 2.0,
         "max_delay": 30.0,
         "jitter_factor": 0.3
+      },
+      "zerodha": {
+        "type": "exponential_backoff",
+        "max_attempts": 5,
+        "base_delay": 1.0,
+        "max_delay": 20.0,
+        "jitter_factor": 0.2
+      },
+      "notion": {
+        "type": "exponential_backoff",
+        "max_attempts": 5,
+        "base_delay": 1.5,
+        "max_delay": 30.0,
+        "jitter_factor": 0.25
       }
     },
     "no_retry_errors": [
@@ -236,6 +284,16 @@
       "financial_datasets": {
         "failure_threshold": 5,
         "recovery_timeout": 60.0,
+        "half_open_test_requests": 3
+      },
+      "zerodha": {
+        "failure_threshold": 5,
+        "recovery_timeout": 30.0,
+        "half_open_test_requests": 3
+      },
+      "notion": {
+        "failure_threshold": 5,
+        "recovery_timeout": 45.0,
         "half_open_test_requests": 3
       }
     }

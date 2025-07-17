@@ -1,8 +1,8 @@
 """
-Financial Datasets MCP Client Wrapper
+Zerodha MCP Client Wrapper
 
-This module provides a client wrapper for the remote Financial Datasets MCP server,
-enabling financial data operations through the Model Context Protocol.
+This module provides a client wrapper for the remote Zerodha Kite MCP server,
+enabling trading operations through the Model Context Protocol.
 """
 
 import asyncio
@@ -20,48 +20,52 @@ import time
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.utils.logger import get_logger
 from src.core.tool_registry import ToolRegistry
-from src.tools.mock_financial_datasets_mcp import MockFinancialDatasetsMCPServer
+from src.tools.mock_zerodha_mcp import MockZerodhaMCPServer
 
 logger = get_logger(__name__)
 
-class FinancialDatasetsMCPClient:
+class ZerodhaMCPClient:
     """
-    Client wrapper for remote Financial Datasets MCP server.
+    Client wrapper for remote Zerodha Kite MCP server.
     
-    This client enables financial data operations like:
-    - Retrieving income statements
-    - Fetching balance sheets
-    - Getting cash flow statements
-    - Accessing stock prices (current and historical)
-    - Getting company news
-    - Cryptocurrency data access
+    This client enables trading operations like:
+    - Portfolio management (holdings, positions)
+    - Order management (place, modify, cancel orders)
+    - Market data (quotes, LTP, historical data)
+    - Account information (margins, funds)
+    - Trade and order book access
     """
     
-    def __init__(self, api_key: Optional[str] = None, endpoint: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None, 
+                 access_token: Optional[str] = None, endpoint: Optional[str] = None):
         """
-        Initialize Financial Datasets MCP client.
+        Initialize Zerodha MCP client.
         
         Args:
-            api_key: Financial Datasets API key
+            api_key: Zerodha API key
+            api_secret: Zerodha API secret
+            access_token: User's access token
             endpoint: Remote MCP server endpoint
         """
-        self.api_key = api_key or os.environ.get('FINANCIAL_DATASETS_API_KEY')
-        self.endpoint = endpoint or "https://mcp.financialdatasets.ai/sse"
-        self.server_name = "financial_datasets"
+        self.api_key = api_key or os.environ.get('ZERODHA_API_KEY')
+        self.api_secret = api_secret or os.environ.get('ZERODHA_API_SECRET')
+        self.access_token = access_token or os.environ.get('ZERODHA_ACCESS_TOKEN')
+        self.endpoint = endpoint or "https://mcp.kite.trade/sse" 
+        self.server_name = "zerodha"
         
         self.session: Optional[aiohttp.ClientSession] = None
         self.capabilities: Dict[str, Any] = {}
         self.tools: List[Dict[str, Any]] = []
         self._message_id = 0
         self.connected = False
-        self.mock_server: Optional[MockFinancialDatasetsMCPServer] = None
+        self.mock_server: Optional[MockZerodhaMCPServer] = None
         self.use_mock = False
         
         # Cache for frequently accessed data
         self._cache: Dict[str, Dict[str, Any]] = {}
-        self._cache_ttl = 300  # 5 minutes
+        self._cache_ttl = 60  # 1 minute for market data
         
-        logger.info(f"[INIT] Financial Datasets MCP Client initialized with endpoint: {self.endpoint}")
+        logger.info(f"[INIT] Zerodha MCP Client initialized with endpoint: {self.endpoint}")
     
     def _next_message_id(self) -> int:
         """Generate next message ID for JSON-RPC."""
@@ -82,7 +86,7 @@ class FinancialDatasetsMCPClient:
     
     async def connect(self, use_mock: bool = False) -> bool:
         """
-        Connect to the Financial Datasets MCP server.
+        Connect to the Zerodha MCP server.
         
         Args:
             use_mock: If True, use mock server instead of real MCP server
@@ -94,8 +98,8 @@ class FinancialDatasetsMCPClient:
             self.use_mock = use_mock
             
             if use_mock:
-                logger.info("[CONNECTING] Using mock Financial Datasets MCP server...")
-                self.mock_server = MockFinancialDatasetsMCPServer()
+                logger.info("[CONNECTING] Using mock Zerodha MCP server...")
+                self.mock_server = MockZerodhaMCPServer()
                 
                 # Simulate initialization
                 init_request = {
@@ -104,7 +108,7 @@ class FinancialDatasetsMCPClient:
                     "params": {
                         "protocolVersion": "1.0",
                         "clientInfo": {
-                            "name": "FinancialDatasetsMCPClient",
+                            "name": "ZerodhaMCPClient",
                             "version": "0.1.0"
                         }
                     },
@@ -115,7 +119,7 @@ class FinancialDatasetsMCPClient:
                 
                 if response and "result" in response:
                     self.capabilities = response["result"].get("capabilities", {})
-                    logger.info("[SUCCESS] Connected to mock Financial Datasets MCP server")
+                    logger.info("[SUCCESS] Connected to mock Zerodha MCP server")
                     
                     # Discover tools
                     await self.discover_tools()
@@ -123,16 +127,17 @@ class FinancialDatasetsMCPClient:
                     return True
             else:
                 # Connect to real remote server
-                if not self.api_key:
-                    logger.error("[ERROR] No API key provided for Financial Datasets")
+                if not self.api_key or not self.access_token:
+                    logger.error("[ERROR] No API key or access token provided for Zerodha")
                     return False
                 
-                logger.info(f"[CONNECTING] Connecting to remote Financial Datasets MCP server at {self.endpoint}")
+                logger.info(f"[CONNECTING] Connecting to remote Zerodha MCP server at {self.endpoint}")
                 
                 # Create aiohttp session
                 self.session = aiohttp.ClientSession(
                     headers={
-                        "Authorization": f"Bearer {self.api_key}",
+                        "X-Kite-Version": "3",
+                        "Authorization": f"token {self.api_key}:{self.access_token}",
                         "Content-Type": "application/json"
                     }
                 )
@@ -144,7 +149,7 @@ class FinancialDatasetsMCPClient:
                     "params": {
                         "protocolVersion": "1.0",
                         "clientInfo": {
-                            "name": "FinancialDatasetsMCPClient",
+                            "name": "ZerodhaMCPClient",
                             "version": "0.1.0"
                         }
                     },
@@ -156,7 +161,7 @@ class FinancialDatasetsMCPClient:
                         result = await response.json()
                         if "result" in result:
                             self.capabilities = result["result"].get("capabilities", {})
-                            logger.info("[SUCCESS] Connected to remote Financial Datasets MCP server")
+                            logger.info("[SUCCESS] Connected to remote Zerodha MCP server")
                             
                             # Discover tools
                             await self.discover_tools()
@@ -168,7 +173,7 @@ class FinancialDatasetsMCPClient:
                         return False
                         
         except Exception as e:
-            logger.error(f"[ERROR] Failed to connect to Financial Datasets MCP server: {e}")
+            logger.error(f"[ERROR] Failed to connect to Zerodha MCP server: {e}")
             return False
     
     async def disconnect(self) -> None:
@@ -177,13 +182,13 @@ class FinancialDatasetsMCPClient:
             if self.session and not self.session.closed:
                 await self.session.close()
             self.connected = False
-            logger.info("[DISCONNECT] Disconnected from Financial Datasets MCP server")
+            logger.info("[DISCONNECT] Disconnected from Zerodha MCP server")
         except Exception as e:
             logger.error(f"[ERROR] Error during disconnect: {e}")
     
     async def discover_tools(self) -> List[Dict[str, Any]]:
         """
-        Discover available tools from the Financial Datasets MCP server.
+        Discover available tools from the Zerodha MCP server.
         
         Returns:
             List of tool definitions
@@ -237,9 +242,9 @@ class FinancialDatasetsMCPClient:
             Tool execution result
         """
         try:
-            # Check cache for GET-like operations
+            # Check cache for market data operations
             cache_key = self._get_cache_key(tool_name, arguments)
-            if tool_name in ['get_stock_price', 'get_income_statement', 'get_balance_sheet']:
+            if tool_name in ['get_quote', 'get_ltp', 'get_margins']:
                 cached = self._cache.get(cache_key)
                 if cached and self._is_cache_valid(cached):
                     logger.info(f"[CACHE] Returning cached result for {tool_name}")
@@ -301,59 +306,100 @@ class FinancialDatasetsMCPClient:
             logger.error(f"[ERROR] Failed to call tool {tool_name}: {e}")
             raise
     
-    # Convenience methods for common financial data operations
+    # Convenience methods for common trading operations
     
-    async def get_stock_price(self, symbol: str, date: Optional[str] = None) -> Dict[str, Any]:
-        """Get stock price for a symbol."""
-        args = {"symbol": symbol}
-        if date:
-            args["date"] = date
-        return await self.call_tool("get_stock_price", args)
+    async def get_holdings(self) -> List[Dict[str, Any]]:
+        """Get user's equity holdings."""
+        return await self.call_tool("get_holdings", {})
     
-    async def get_income_statement(self, symbol: str, period: Optional[str] = "latest") -> Dict[str, Any]:
-        """Get income statement for a company."""
-        return await self.call_tool("get_income_statement", {
+    async def get_positions(self) -> Dict[str, Any]:
+        """Get user's open positions."""
+        return await self.call_tool("get_positions", {})
+    
+    async def place_order(self, exchange: str, symbol: str, transaction_type: str,
+                         quantity: int, product: str, order_type: str,
+                         price: Optional[float] = None, trigger_price: Optional[float] = None) -> Dict[str, Any]:
+        """Place a buy/sell order."""
+        params = {
+            "exchange": exchange,
             "symbol": symbol,
-            "period": period
+            "transaction_type": transaction_type,
+            "quantity": quantity,
+            "product": product,
+            "order_type": order_type
+        }
+        
+        if price is not None:
+            params["price"] = price
+        if trigger_price is not None:
+            params["trigger_price"] = trigger_price
+            
+        return await self.call_tool("place_order", params)
+    
+    async def modify_order(self, order_id: str, quantity: Optional[int] = None,
+                          price: Optional[float] = None, trigger_price: Optional[float] = None) -> Dict[str, Any]:
+        """Modify an existing order."""
+        params = {"order_id": order_id}
+        
+        if quantity is not None:
+            params["quantity"] = quantity
+        if price is not None:
+            params["price"] = price
+        if trigger_price is not None:
+            params["trigger_price"] = trigger_price
+            
+        return await self.call_tool("modify_order", params)
+    
+    async def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        """Cancel an existing order."""
+        return await self.call_tool("cancel_order", {"order_id": order_id})
+    
+    async def get_orders(self) -> List[Dict[str, Any]]:
+        """Get list of all orders for the day."""
+        return await self.call_tool("get_orders", {})
+    
+    async def get_trades(self) -> List[Dict[str, Any]]:
+        """Get list of all executed trades."""
+        return await self.call_tool("get_trades", {})
+    
+    async def get_quote(self, exchange: str, symbol: str) -> Dict[str, Any]:
+        """Get market quote for an instrument."""
+        return await self.call_tool("get_quote", {
+            "exchange": exchange,
+            "symbol": symbol
         })
     
-    async def get_balance_sheet(self, symbol: str, period: Optional[str] = "latest") -> Dict[str, Any]:
-        """Get balance sheet for a company."""
-        return await self.call_tool("get_balance_sheet", {
-            "symbol": symbol,
-            "period": period
+    async def get_ltp(self, instruments: List[str]) -> Dict[str, Dict[str, float]]:
+        """Get last traded price for instruments."""
+        return await self.call_tool("get_ltp", {"instruments": instruments})
+    
+    async def get_historical_data(self, instrument_token: str, from_date: str,
+                                 to_date: str, interval: str) -> Dict[str, Any]:
+        """Get historical candle data."""
+        return await self.call_tool("get_historical_data", {
+            "instrument_token": instrument_token,
+            "from_date": from_date,
+            "to_date": to_date,
+            "interval": interval
         })
     
-    async def get_cash_flow(self, symbol: str, period: Optional[str] = "latest") -> Dict[str, Any]:
-        """Get cash flow statement for a company."""
-        return await self.call_tool("get_cash_flow_statement", {
-            "symbol": symbol,
-            "period": period
-        })
+    async def get_margins(self, segment: Optional[str] = None) -> Dict[str, Any]:
+        """Get account margins and funds."""
+        params = {}
+        if segment:
+            params["segment"] = segment
+        return await self.call_tool("get_margins", params)
     
-    async def get_company_news(self, symbol: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get latest news for a company."""
-        result = await self.call_tool("get_company_news", {
-            "symbol": symbol,
-            "limit": limit
-        })
-        return result.get("news", [])
-    
-    async def get_crypto_price(self, symbol: str, currency: str = "USD") -> Dict[str, Any]:
-        """Get cryptocurrency price."""
-        return await self.call_tool("get_crypto_price", {
-            "symbol": symbol,
-            "currency": currency
-        })
-    
-    async def search_companies(self, query: str) -> List[Dict[str, Any]]:
-        """Search for companies by name or ticker."""
-        result = await self.call_tool("search_companies", {"query": query})
-        return result.get("companies", [])
+    async def get_instruments(self, exchange: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get list of tradeable instruments."""
+        params = {}
+        if exchange:
+            params["exchange"] = exchange
+        return await self.call_tool("get_instruments", params)
     
     def register_tools_to_registry(self, registry: ToolRegistry) -> None:
         """
-        Register Financial Datasets tools to the tool registry.
+        Register Zerodha tools to the tool registry.
         
         Args:
             registry: Tool registry instance
@@ -361,15 +407,15 @@ class FinancialDatasetsMCPClient:
         try:
             for tool in self.tools:
                 tool_data = {
-                    "id": f"financial_datasets_{tool['name']}",
+                    "id": f"zerodha_{tool['name']}",
                     "name": tool["name"],
                     "type": "mcp",
-                    "endpoint": self.endpoint if not self.use_mock else "mock://financial_datasets",
+                    "endpoint": self.endpoint if not self.use_mock else "mock://zerodha",
                     "capabilities": {
                         "description": tool.get("description", ""),
                         "input_schema": tool.get("inputSchema", {}),
-                        "category": "finance",
-                        "domain": "financial_data"
+                        "category": "trading",
+                        "domain": "finance"
                     },
                     "server_id": self.server_name,
                     "client": self
@@ -384,9 +430,9 @@ class FinancialDatasetsMCPClient:
 
 
 async def main():
-    """Test the Financial Datasets MCP client."""
+    """Test the Zerodha MCP client."""
     # Test with mock server
-    client = FinancialDatasetsMCPClient()
+    client = ZerodhaMCPClient()
     
     try:
         # Connect
@@ -395,20 +441,43 @@ async def main():
             logger.error("Failed to connect")
             return
         
-        # Test stock price
-        logger.info("\n=== Testing Stock Price ===")
-        price = await client.get_stock_price("AAPL")
-        logger.info(f"Apple stock price: ${price.get('price', 'N/A')}")
+        # Test holdings
+        logger.info("\n=== Testing Holdings ===")
+        holdings = await client.get_holdings()
+        logger.info(f"Found {len(holdings)} holdings")
+        for holding in holdings[:2]:  # Show first 2
+            logger.info(f"  {holding['tradingsymbol']}: {holding['quantity']} @ {holding['average_price']}")
         
-        # Test income statement
-        logger.info("\n=== Testing Income Statement ===")
-        income = await client.get_income_statement("MSFT")
-        logger.info(f"Microsoft revenue: ${income.get('revenue', 'N/A')}")
+        # Test positions
+        logger.info("\n=== Testing Positions ===")
+        positions = await client.get_positions()
+        logger.info(f"Net positions: {len(positions.get('net', []))}")
+        logger.info(f"Day positions: {len(positions.get('day', []))}")
         
-        # Test company search
-        logger.info("\n=== Testing Company Search ===")
-        companies = await client.search_companies("Tesla")
-        logger.info(f"Found {len(companies)} companies")
+        # Test quote
+        logger.info("\n=== Testing Quote ===")
+        quote = await client.get_quote("NSE", "RELIANCE")
+        logger.info(f"RELIANCE LTP: {quote.get('last_price', 'N/A')}")
+        
+        # Test order placement
+        logger.info("\n=== Testing Order Placement ===")
+        order = await client.place_order(
+            exchange="NSE",
+            symbol="INFY",
+            transaction_type="BUY",
+            quantity=10,
+            product="CNC",
+            order_type="LIMIT",
+            price=1450.00
+        )
+        logger.info(f"Order placed: {order.get('order_id', 'N/A')}")
+        
+        # Test margins
+        logger.info("\n=== Testing Margins ===")
+        margins = await client.get_margins()
+        equity_margins = margins.get("equity", {})
+        available = equity_margins.get("available", {})
+        logger.info(f"Available cash: {available.get('cash', 'N/A')}")
         
     finally:
         await client.disconnect()

@@ -14,6 +14,7 @@ from typing import Dict, Any, List
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.utils.logger import get_logger
+from src.tools.mock_zerodha_mcp import MockZerodhaMCPServer
 
 logger = get_logger(__name__)
 
@@ -324,6 +325,27 @@ async def test_mock_servers():
         "id": 3
     })
     logger.info(f"[TIME] Current time: {time_response}")
+    
+    # Test Zerodha server
+    zerodha_server = MockZerodhaMCPServer()
+    zerodha_init = await zerodha_server.handle_request({
+        "jsonrpc": "2.0",
+        "method": "initialize",
+        "id": 4
+    })
+    logger.info(f"[ZERODHA] Initialize response: {zerodha_init}")
+    
+    # Get holdings
+    holdings_response = await zerodha_server.handle_request({
+        "jsonrpc": "2.0",
+        "method": "tools/call",
+        "params": {
+            "name": "get_holdings",
+            "arguments": {}
+        },
+        "id": 5
+    })
+    logger.info(f"[ZERODHA] Holdings: {len(holdings_response['result'])} stocks")
     
     logger.info("[TEST] Mock server tests complete!")
 

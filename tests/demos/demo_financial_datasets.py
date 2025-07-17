@@ -54,7 +54,7 @@ class FinancialDatasetsDemo:
         logger.info("Adding Financial Datasets MCP server (mock mode)...")
         success = await self.mcp_integration.add_financial_datasets_server(
             server_id="financial_demo",
-            use_mock=True
+            use_mock=False
         )
         
         if success:
