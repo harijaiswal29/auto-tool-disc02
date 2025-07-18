@@ -11,6 +11,16 @@ This system provides an intelligent framework for:
 - **Execution & Monitoring**: Managing tool execution with performance tracking
 - **Continuous Adaptation**: Learning from patterns and user feedback
 
+## High-Level Architecture
+
+The system consists of 5 core layers:
+
+1. **Intent Recognition Layer**: Understands user goals using keyword matching, semantic analysis (sentence-transformers), context tracking, and intent classification
+2. **Tool Discovery Layer**: Finds relevant tools via registry interface, capability matching, graph exploration (NetworkX), and discovery patterns
+3. **Tool Selection & Learning Layer**: Optimizes tool choice using epsilon-greedy multi-armed bandit, Q-learning with 439-dimensional state vectors, combination scoring, and contextual analysis
+4. **Execution & Monitoring Layer**: Manages MCP connections, executes tools in parallel (asyncio), monitors performance, handles errors, and tracks resource usage
+5. **Learning & Adaptation Layer**: Improves over time using enhanced Q-learning engine with failure differentiation, pattern mining, feedback processing, and model adaptation
+
 ## Features
 
 - **Modular Pipeline Architecture**: 7-stage processing pipeline with pluggable components
@@ -26,6 +36,16 @@ This system provides an intelligent framework for:
 - **Connection Pool Management**: Health checks and efficient resource utilization
 - **Retry Metrics & Alerting**: Comprehensive monitoring of retry patterns and failures
 - **Extensible Design**: Easy to add new tools and capabilities
+
+## Technology Stack
+
+- **Language**: Python 3.8+
+- **Database**: SQLite (with aiosqlite for async operations)
+- **ML Libraries**: scikit-learn, sentence-transformers (all-MiniLM-L6-v2), numpy/pandas
+- **Async**: asyncio
+- **Graph**: NetworkX
+- **Web Framework**: FastAPI
+- **MCP Integration**: Official Model Context Protocol SDK, JSON-RPC 2.0
 
 ## Architecture
 
@@ -61,19 +81,42 @@ The system consists of 5 core layers:
    - Performance-based reward calculation
    - Model persistence and versioning
 
-## Project Status
+## Current Implementation Status
 
-**Current Phase**: Phase 4 - Learning System (Weeks 9-11)
+**Phase Status**: Phase 4 - Learning System (Weeks 9-11)
 
-### Completed Phases:
-- ✅ **Phase 1**: Foundation (Core infrastructure, logging, configuration)
-- ✅ **Phase 2**: Tool Ecosystem (MCP integrations, tool registry)
-- ✅ **Phase 3**: Core Intelligence (Intent recognition, tool discovery, orchestration)
+### ✅ Implemented
 
-### Recent Accomplishments:
-- ✅ **Retry and Resilience System**: Exponential backoff, circuit breakers, connection pooling
-- ✅ **Comprehensive Retry Metrics**: Monitoring, alerting, and failure pattern analysis
-- ✅ **Fault Tolerance**: Automatic recovery with configurable policies per service
+#### Recent Accomplishments (Phase 3 Completion)
+- **Intent Recognition Pipeline**: Modular 7-stage architecture with >90% test coverage
+- **Testing Infrastructure**: Unit, integration, performance, and edge case tests
+- **Retry and Resilience System**: Exponential backoff, circuit breakers, connection pooling
+- **Documentation**: Complete API docs, architecture diagrams, performance requirements
+
+#### Core Components
+- **Core Infrastructure**: MCP Integration, Tool Registry, Configuration System
+- **MCP Client Implementations**: SQLite, Search, Weather, Filesystem, PostgreSQL, GitHub, Financial Datasets, Zerodha, Notion MCP
+- **AI Agent Implementations**: Intent Recognition, Tool Discovery, Orchestrator Agents
+- **Integration Features**: Complete pipeline from natural language query to tool execution
+- **Testing Infrastructure**: >80% overall coverage, >90% for core components
+- **Monitoring & Metrics**: Real-time metrics, performance tracking, retry monitoring
+
+#### Learning System (Phase 4 - In Progress)
+- **Q-Learning Engine**: ✅ Core implementation with experience replay
+- **Enhanced State Representation**: ✅ 439-dimensional vectors with failure tracking
+- **Action Space Management**: ✅ With constraint validation
+- **Epsilon-greedy Exploration**: ✅ With decay
+- **Model Persistence**: ✅ Database integration
+- **Enhanced Reward Calculator**: ✅ Sophisticated failure differentiation
+- **Pattern Miner**: ✅ Sequential and combination pattern mining
+
+### ⏳ Not Yet Implemented
+- Deep Q-learning neural network implementation
+- Automated baseline comparisons
+- A/B testing framework
+- Real-time monitoring dashboard UI
+- Multi-tenant support
+- Distributed execution support
 
 ### Performance Achievements:
 - Intent Recognition: <50ms average, <100ms p95
@@ -135,8 +178,20 @@ pytest tests/ -v
 python demo_retry_logic.py
 pytest tests/test_retry_logic.py -v
 
+# Test Q-Learning
+pytest tests/unit/test_q_learning_engine.py -v
+python src/learning/test_q_learning.py  # Run Q-learning demo
+python demos/demo_q_learning_orchestration.py  # Demo with orchestrator
+
+# Test Pattern Mining
+pytest tests/unit/test_pattern_miner.py -v
+python demos/demo_pattern_mining.py  # Run pattern mining demo
+
 # Monitor retry metrics
 python -c "from src.monitoring.retry_metrics import RetryMetricsCollector; from src.core.tool_registry import ToolRegistry; collector = RetryMetricsCollector(ToolRegistry()); print(collector.get_retry_statistics())"
+
+# Monitor Performance
+python -c "from src.agents.intent_recognition_agent import IntentRecognitionAgent; agent = IntentRecognitionAgent(); print(agent.get_metrics_summary())"
 ```
 
 ## Testing
@@ -307,20 +362,44 @@ Key configuration options:
 ```
 auto-tool-disc/
 ├── src/
-│   ├── agents/           # AI agents (intent, discovery, orchestrator)
-│   ├── core/             # Core MCP integration
-│   ├── learning/         # Q-learning implementation
-│   ├── monitoring/       # Performance monitoring
-│   ├── pipeline/         # Modular pipeline architecture
-│   ├── services/         # Context persistence, etc.
-│   └── tools/            # Tool implementations
+│   ├── agents/             # AI agent implementations
+│   │   ├── intent_recognition_agent.py
+│   │   ├── tool_discovery_agent.py
+│   │   └── orchestrator_agent.py
+│   ├── core/               # Core MCP integration
+│   │   └── mcp_integration.py
+│   ├── database/           # Data models and persistence
+│   ├── learning/           # Q-learning algorithms
+│   │   ├── q_learning_engine.py
+│   │   └── pattern_miner.py
+│   ├── monitoring/         # Performance monitoring
+│   ├── pipeline/           # Modular pipeline architecture
+│   │   └── stages/
+│   ├── services/           # Service layer
+│   ├── state_machine/      # Conversation state management
+│   ├── tools/              # Tool implementations and wrappers
+│   └── utils/              # Utilities
 ├── tests/
-│   ├── unit/            # Unit tests
-│   ├── integration/     # Integration tests
-│   └── e2e/             # End-to-end tests
-├── config/              # Configuration files
-├── data/                # Logs, metrics, registry
-└── docs/                # Detailed documentation
+│   ├── unit/               # Unit tests
+│   ├── integration/        # Integration tests
+│   ├── e2e/               # End-to-end tests
+│   ├── performance/        # Performance tests
+│   └── demos/              # Demonstration scripts
+├── data/                   # Runtime data
+│   ├── logs/              # Application logs
+│   ├── metrics/           # Performance metrics
+│   ├── patterns/          # Discovered patterns
+│   └── registry/          # Tool registry database
+├── config/                 # Configuration files
+│   └── config.json        # Main configuration
+├── docs/                   # Documentation
+│   ├── architecture/      # System design docs
+│   ├── implementation/    # Implementation details
+│   ├── api/              # API documentation
+│   └── deployment/       # Deployment guides
+├── requirements.txt       # Python dependencies
+├── README.md             # This file
+└── CLAUDE.md            # AI assistant guidance
 ```
 
 ## Documentation
@@ -332,6 +411,16 @@ For detailed documentation, see:
 - [Tool Discovery](docs/implementation/tool-discovery.md)
 - [Learning System](docs/implementation/learning-system.md)
 - [API Reference](docs/api/rest-api.md)
+
+## Important Conventions
+
+- **MCP Communication**: Follow JSON-RPC 2.0 spec strictly
+- **Logging**: All modules must integrate with existing logging system
+- **Mock Servers**: Temporary until official MCP servers available
+- **Configuration**: Q-learning parameters (α=0.1, γ=0.9, ε=0.2) in config.json
+- **Pipeline Architecture**: All stages must implement PipelineStage interface
+- **Testing**: Maintain >80% overall coverage (>90% for core components)
+- **Performance**: Intent recognition must complete within 100ms (p95)
 
 ## Development
 
@@ -353,6 +442,19 @@ mypy src/
 3. Update documentation
 4. Run full test suite
 5. Check code quality
+
+## Development Timeline
+
+- **Phase 1**: Foundation (Weeks 1-3) ✅
+- **Phase 2**: Tool Ecosystem (Weeks 4-5) ✅
+- **Phase 3**: Core Intelligence (Weeks 6-8) ✅
+- **Phase 4**: Learning System (Weeks 9-11) - Current
+- **Phase 5**: Optimization & Testing (Weeks 12-13)
+- **Phase 6**: Documentation & Submission (Weeks 14-16)
+
+## Evaluation Target
+
+Demonstrate measurable improvement in tool selection accuracy and task completion rate over 16-week development period compared to random selection baseline.
 
 ## Contributing
 
@@ -393,6 +495,28 @@ We welcome contributions to improve the Autonomous Tool Discovery system!
 - Add more comprehensive tests
 - Optimize performance
 - Create visualization tools
+
+## Security Notes
+
+- Implement Zero Trust principles for tool access
+- Validate all MCP server responses
+- Sandbox untrusted tool executions
+- Log all tool invocations for audit
+- Use temporary tokens for external API access
+- Input validation: Sanitize all user queries in Intent Recognition
+- Embedding cache security: No sensitive data in cached embeddings
+- Context persistence: Implement user privacy controls
+- Rate limiting: Prevent abuse of Intent Recognition API
+
+## Performance Targets
+
+- **Intent Recognition Accuracy**: >90%
+- **Processing Time**: <100ms (p95) for intent recognition
+- **Cache Hit Rate**: >70% for embedding cache
+- **Tool Selection Accuracy**: >80% (improvement from baseline)
+- **Task Completion Rate**: >85%
+- **Learning Convergence**: Within 1000 episodes
+- **System Availability**: 99.9% uptime
 
 ## License
 
