@@ -482,6 +482,17 @@ class QLearningEngine:
             capacity=q_config.get('buffer_capacity', 10000)
         )
         
+        # Initialize pattern miner
+        # Import here to avoid circular import
+        from .pattern_miner import PatternMiner
+        self.pattern_miner = PatternMiner(
+            config,
+            min_support=q_config.get('pattern_min_support', 0.1),
+            min_confidence=q_config.get('pattern_min_confidence', 0.8)
+        )
+        self.use_patterns = q_config.get('use_patterns', True)
+        self.pattern_weight = q_config.get('pattern_weight', 0.3)  # Weight for pattern suggestions
+        
         # Training parameters
         self.batch_size = q_config.get('batch_size', 32)
         self.update_frequency = q_config.get('update_frequency', 4)
@@ -497,15 +508,20 @@ class QLearningEngine:
         
         logger.info(f"Q-Learning Engine initialized with α={self.learning_rate}, "
                    f"γ={self.discount_factor}, ε={self.exploration_rate}")
+        
+        # Initialize patterns asynchronously after creation
+        self._patterns_loaded = False
     
     async def select_action(self, state: np.ndarray, available_tools: List[str],
-                          constraints: Dict[str, Any]) -> Tuple[str, ...]:
-        """Select action using epsilon-greedy strategy.
+                          constraints: Dict[str, Any], 
+                          current_tools: Optional[List[str]] = None) -> Tuple[str, ...]:
+        """Select action using epsilon-greedy strategy with pattern guidance.
         
         Args:
             state: Current state vector
             available_tools: List of available tool IDs
             constraints: Tool combination constraints
+            current_tools: Tools already used in current sequence (for pattern matching)
             
         Returns:
             Selected tool combination
@@ -523,17 +539,85 @@ class QLearningEngine:
             action = random.choice(valid_actions)
             logger.debug(f"Exploration: selected {action}")
         else:
-            # Exploitation: best known action
-            q_values = await self.q_table.get_all_q_values(state, valid_actions)
+            # Exploitation: best known action with pattern guidance
+            action = await self._select_best_action_with_patterns(
+                state, valid_actions, current_tools
+            )
             
-            if q_values:
-                # Select action with highest Q-value
-                action = max(q_values.items(), key=lambda x: x[1])[0]
-                logger.debug(f"Exploitation: selected {action} with Q={q_values[action]:.3f}")
+        return action
+    
+    async def _select_best_action_with_patterns(self, state: np.ndarray, 
+                                              valid_actions: List[Tuple[str, ...]],
+                                              current_tools: Optional[List[str]] = None) -> Tuple[str, ...]:
+        """Select best action considering both Q-values and patterns.
+        
+        Args:
+            state: Current state vector
+            valid_actions: List of valid tool combinations
+            current_tools: Tools already used in sequence
+            
+        Returns:
+            Best action based on combined scoring
+        """
+        # Get Q-values
+        q_values = await self.q_table.get_all_q_values(state, valid_actions)
+        
+        # If using patterns and we have current tools
+        if self.use_patterns and current_tools:
+            # Ensure patterns are loaded
+            if not self._patterns_loaded:
+                await self.initialize_patterns()
+            # Get pattern-based scores
+            pattern_scores = {}
+            
+            for action in valid_actions:
+                # Create potential sequence
+                potential_sequence = current_tools + list(action)
+                
+                # Get matching patterns
+                matching_patterns = self.pattern_miner.get_matching_patterns(
+                    potential_sequence
+                )
+                
+                # Calculate pattern score
+                if matching_patterns:
+                    # Use the highest scoring pattern
+                    best_pattern = matching_patterns[0]
+                    pattern_score = best_pattern.confidence * best_pattern.lift
+                    pattern_scores[action] = pattern_score
+                else:
+                    pattern_scores[action] = 0.0
+            
+            # Combine Q-values and pattern scores
+            combined_scores = {}
+            for action in valid_actions:
+                q_value = q_values.get(action, 0.0)
+                pattern_score = pattern_scores.get(action, 0.0)
+                
+                # Weighted combination
+                combined_score = (
+                    (1 - self.pattern_weight) * q_value + 
+                    self.pattern_weight * pattern_score
+                )
+                combined_scores[action] = combined_score
+            
+            # Select action with highest combined score
+            if combined_scores:
+                action = max(combined_scores.items(), key=lambda x: x[1])[0]
+                logger.debug(f"Pattern-guided selection: {action} "
+                           f"(Q={q_values.get(action, 0):.3f}, "
+                           f"Pattern={pattern_scores.get(action, 0):.3f})")
             else:
-                # No Q-values yet, random selection
                 action = random.choice(valid_actions)
-                logger.debug(f"No Q-values, random selection: {action}")
+                
+        else:
+            # Use only Q-values
+            if q_values:
+                action = max(q_values.items(), key=lambda x: x[1])[0]
+                logger.debug(f"Q-value selection: {action} with Q={q_values[action]:.3f}")
+            else:
+                action = random.choice(valid_actions)
+                logger.debug(f"Random selection (no Q-values): {action}")
         
         return action
     
@@ -699,6 +783,46 @@ class QLearningEngine:
                 else:
                     logger.warning("No saved model found")
     
+    async def initialize_patterns(self):
+        """Load existing patterns from database."""
+        if not self._patterns_loaded:
+            try:
+                await self.pattern_miner.load_patterns()
+                self._patterns_loaded = True
+                logger.info(f"Loaded {len(self.pattern_miner.discovered_patterns)} patterns")
+            except Exception as e:
+                logger.warning(f"Failed to load patterns: {e}")
+    
+    async def update_patterns(self):
+        """Mine new patterns from recent execution history."""
+        try:
+            logger.info("Starting pattern mining update...")
+            patterns = await self.pattern_miner.mine_patterns()
+            
+            total_patterns = sum(len(p) for p in patterns.values())
+            logger.info(f"Pattern mining complete. Discovered {total_patterns} patterns")
+            
+            # Patterns are automatically stored and loaded by pattern_miner
+            return patterns
+        except Exception as e:
+            logger.error(f"Pattern mining failed: {e}")
+            return {}
+    
+    async def suggest_tools_from_patterns(self, current_tools: List[str], k: int = 3) -> List[Tuple[str, float]]:
+        """Get tool suggestions based on discovered patterns.
+        
+        Args:
+            current_tools: Tools already used in sequence
+            k: Number of suggestions to return
+            
+        Returns:
+            List of (tool, score) tuples
+        """
+        if not self._patterns_loaded:
+            await self.initialize_patterns()
+            
+        return self.pattern_miner.suggest_next_tools(current_tools, k)
+    
     def get_metrics(self) -> Dict[str, Any]:
         """Get current learning metrics."""
         return {
@@ -708,5 +832,7 @@ class QLearningEngine:
             'success_rate': self.success_count / max(self.episode_count, 1),
             'exploration_rate': self.exploration_rate,
             'q_table_stats': self.q_table.get_statistics(),
-            'buffer_size': len(self.experience_buffer)
+            'buffer_size': len(self.experience_buffer),
+            'patterns_loaded': self._patterns_loaded,
+            'pattern_count': len(self.pattern_miner.discovered_patterns) if self._patterns_loaded else 0
         }

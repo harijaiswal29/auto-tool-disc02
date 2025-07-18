@@ -203,37 +203,89 @@ class ExperienceReplayBuffer:
 
 ## Pattern Mining Architecture
 
-**Note**: The PatternMiner class is not yet implemented. This is a planned feature for discovering common tool usage patterns.
+The PatternMiner class (`src/learning/pattern_miner.py`) has been fully implemented to discover and analyze tool usage patterns.
+
+### Core Components
 
 ```python
-class PatternMiner:  # NOT YET IMPLEMENTED
-    def __init__(self, min_support=0.1, min_confidence=0.8):
+class PatternMiner:
+    def __init__(self, config: Config, min_support: float = 0.1, min_confidence: float = 0.8):
+        self.config = config
         self.min_support = min_support
         self.min_confidence = min_confidence
-        self.pattern_db = PatternDatabase()
+        self.min_lift = 1.0  # Only consider patterns with positive correlation
+        self.discovered_patterns = {}
+        self.pattern_cache = {}
     
-    def mine_sequential_patterns(self, execution_logs):
-        # Extract tool sequences
-        sequences = self.extract_sequences(execution_logs)
-        
-        # Apply PrefixSpan algorithm
-        patterns = self.prefixspan(sequences, self.min_support)
-        
-        # Calculate pattern metrics
-        for pattern in patterns:
-            pattern.support = self.calculate_support(pattern, sequences)
-            pattern.confidence = self.calculate_confidence(pattern, sequences)
-            pattern.lift = self.calculate_lift(pattern, sequences)
-        
-        # Store high-value patterns
-        valuable_patterns = [
-            p for p in patterns 
-            if p.confidence >= self.min_confidence
-        ]
-        
-        self.pattern_db.store(valuable_patterns)
-        return valuable_patterns
+    async def extract_sequences(self, time_window: Optional[timedelta] = None) -> List[ExecutionSequence]:
+        """Extract execution sequences from database."""
+        # Queries execution_history table
+        # Returns ExecutionSequence objects with tools, success, reward, context
+        pass
+    
+    async def mine_sequential_patterns(self, sequences: List[ExecutionSequence]) -> List[Pattern]:
+        """Mine sequential patterns using simplified PrefixSpan algorithm."""
+        # Finds patterns where order matters (A -> B -> C)
+        # Calculates support, confidence, and lift
+        # Filters by minimum thresholds
+        pass
+    
+    async def mine_combination_patterns(self, sequences: List[ExecutionSequence]) -> List[Pattern]:
+        """Mine combination patterns where order doesn't matter."""
+        # Finds patterns of tools that work well together
+        # Useful for discovering tool synergies
+        pass
 ```
+
+### Pattern Metrics
+
+1. **Support**: Frequency of pattern occurrence in all sequences
+   - Formula: `count(pattern) / total_sequences`
+   - Minimum threshold: 0.1 (10%)
+
+2. **Confidence**: Success rate when pattern is used
+   - Formula: `successful_with_pattern / total_with_pattern`
+   - Minimum threshold: 0.8 (80%)
+
+3. **Lift**: How much more likely the pattern is compared to random
+   - Formula: `P(pattern) / (P(prefix) * P(suffix))`
+   - Values > 1.0 indicate positive correlation
+
+### Integration with Q-Learning
+
+The PatternMiner is integrated with QLearningEngine to enhance tool selection:
+
+```python
+class QLearningEngine:
+    def __init__(self, config: Dict[str, Any]):
+        # ... other initialization ...
+        self.pattern_miner = PatternMiner(
+            config,
+            min_support=q_config.get('pattern_min_support', 0.1),
+            min_confidence=q_config.get('pattern_min_confidence', 0.8)
+        )
+        self.use_patterns = q_config.get('use_patterns', True)
+        self.pattern_weight = q_config.get('pattern_weight', 0.3)
+    
+    async def _select_best_action_with_patterns(self, state, valid_actions, current_tools):
+        """Combines Q-values with pattern scores for action selection."""
+        # Get Q-values for all valid actions
+        q_values = await self.q_table.get_all_q_values(state, valid_actions)
+        
+        # Get pattern-based scores
+        pattern_scores = self._calculate_pattern_scores(valid_actions, current_tools)
+        
+        # Weighted combination
+        combined_score = (1 - self.pattern_weight) * q_value + self.pattern_weight * pattern_score
+```
+
+### Key Features
+
+1. **Sequential Pattern Mining**: Discovers ordered tool sequences that lead to success
+2. **Combination Pattern Mining**: Finds tool combinations that work well together
+3. **Pattern-Based Suggestions**: Suggests next tools based on current sequence
+4. **Database Persistence**: Patterns are stored and loaded from the database
+5. **Performance Optimization**: Caching and efficient algorithms for real-time use
 
 ## Model Persistence
 
