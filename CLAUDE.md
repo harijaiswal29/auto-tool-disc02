@@ -134,9 +134,20 @@ The system consists of 5 core layers:
   - ✅ Comprehensive unit tests (`tests/unit/test_pattern_miner.py`)
   - ✅ Demo script (`demos/demo_pattern_mining.py`)
 
+- **Deep Q-Learning** (`src/learning/deep_q_network.py`, `src/learning/dqn_agent.py`):
+  - ✅ Neural network architectures (Standard DQN, Dueling DQN, Noisy DQN)
+  - ✅ Target network for stable learning
+  - ✅ Double DQN to reduce overestimation bias
+  - ✅ Prioritized Experience Replay with sum-tree implementation
+  - ✅ GPU acceleration support
+  - ✅ Model checkpointing and persistence
+  - ✅ Integration with Q-Learning engine (configurable via `dqn.enabled`)
+  - ✅ Training utilities with learning rate scheduling
+  - ✅ Comprehensive unit tests (`tests/unit/test_dqn.py`)
+  - ✅ Comparison demo script (`demos/demo_dqn_learning.py`)
+
 ### ⏳ Not Yet Implemented
 - **Learning System** (Remaining Components):
-  - Deep Q-learning neural network implementation
   - Advanced reward calculation strategies (beyond current implementation)
   
 - **Evaluation Framework**:
@@ -206,6 +217,10 @@ python demos/demo_q_learning_orchestration.py  # Demo with orchestrator
 # Test Pattern Mining
 pytest tests/unit/test_pattern_miner.py -v
 python demos/demo_pattern_mining.py  # Run pattern mining demo
+
+# Test Deep Q-Learning
+pytest tests/unit/test_dqn.py -v
+python demos/demo_dqn_learning.py  # Compare DQN vs tabular Q-learning
 
 # Test Financial Datasets MCP
 pytest tests/integration/test_financial_datasets_mcp.py -v
@@ -369,6 +384,7 @@ For detailed information on specific topics, refer to these documentation files:
 ### Implementation Details
 - @docs/implementation/learning-system.md - Q-learning, rewards, pattern mining
 - @docs/implementation/q_learning_implementation.md - Q-learning engine implementation details
+- @docs/implementation/deep-q-learning.md - Deep Q-Learning with neural networks
 - @docs/implementation/intent-recognition.md - NLP pipeline and classification
 - @docs/implementation/tool-discovery.md - Discovery algorithms and caching
 - @docs/implementation/execution-engine.md - Task management and monitoring

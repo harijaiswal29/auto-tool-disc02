@@ -121,6 +121,31 @@
     "enable_learning": true
   },
   
+  "dqn": {
+    "enabled": false,
+    "network_type": "standard",
+    "network_architecture": [512, 256, 128],
+    "dropout_rate": 0.2,
+    "learning_rate": 0.0001,
+    "discount_factor": 0.99,
+    "tau": 0.001,
+    "target_update_frequency": 1000,
+    "double_dqn": true,
+    "dueling_dqn": false,
+    "noisy_std_init": 0.5,
+    "gradient_clip": 1.0,
+    "batch_size": 64,
+    "memory_size": 100000,
+    "exploration_rate": 0.1,
+    "exploration_decay": 0.995,
+    "min_exploration_rate": 0.01,
+    "prioritized_replay": true,
+    "prioritized_replay_alpha": 0.6,
+    "prioritized_replay_beta": 0.4,
+    "prioritized_replay_beta_increment": 0.001,
+    "device": "auto"
+  },
+  
   "intent_recognition": {
     "model": "all-MiniLM-L6-v2",
     "similarity_threshold": 0.7,

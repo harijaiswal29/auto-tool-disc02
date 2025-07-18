@@ -477,10 +477,32 @@ class QLearningEngine:
         # Initialize components
         self.state_encoder = StateRepresentation()
         self.action_space = ActionSpace(max_tools=q_config.get('max_tools', 3))
-        self.q_table = QTable(self.learning_rate, self.discount_factor)
-        self.experience_buffer = ExperienceReplayBuffer(
-            capacity=q_config.get('buffer_capacity', 10000)
-        )
+        
+        # Check if DQN is enabled
+        self.use_dqn = config.get('dqn', {}).get('enabled', False)
+        
+        if self.use_dqn:
+            # Initialize DQN agent
+            from .dqn_agent import DQNAgent
+            # Get maximum possible action space size
+            # This is an upper bound - actual valid actions may be fewer
+            max_action_combinations = self._estimate_max_actions(q_config.get('max_tools', 3))
+            self.dqn_agent = DQNAgent(
+                config, 
+                self.state_encoder.total_dimensions,
+                max_action_combinations
+            )
+            # DQN uses its own experience replay
+            self.experience_buffer = None
+            logger.info("Using Deep Q-Network (DQN) for value function approximation")
+        else:
+            # Use traditional tabular Q-learning
+            self.q_table = QTable(self.learning_rate, self.discount_factor)
+            self.experience_buffer = ExperienceReplayBuffer(
+                capacity=q_config.get('buffer_capacity', 10000)
+            )
+            self.dqn_agent = None
+            logger.info("Using tabular Q-learning")
         
         # Initialize pattern miner
         # Import here to avoid circular import
@@ -512,6 +534,23 @@ class QLearningEngine:
         # Initialize patterns asynchronously after creation
         self._patterns_loaded = False
     
+    def _estimate_max_actions(self, max_tools: int) -> int:
+        """Estimate maximum number of possible action combinations.
+        
+        This provides an upper bound for the DQN output layer size.
+        Actual valid actions may be fewer due to constraints.
+        """
+        # Assume we have at most 10 different tools available
+        # and can combine up to max_tools at a time
+        max_available_tools = 10
+        
+        # Calculate sum of combinations: C(n,1) + C(n,2) + ... + C(n,max_tools)
+        from math import comb
+        total = sum(comb(max_available_tools, i) for i in range(1, min(max_tools + 1, max_available_tools + 1)))
+        
+        # Add some buffer
+        return min(total + 10, 1000)  # Cap at 1000 to avoid too large networks
+    
     async def select_action(self, state: np.ndarray, available_tools: List[str],
                           constraints: Dict[str, Any], 
                           current_tools: Optional[List[str]] = None) -> Tuple[str, ...]:
@@ -533,16 +572,22 @@ class QLearningEngine:
             logger.warning("No valid actions available")
             return ()
         
-        # Epsilon-greedy selection
-        if random.random() < self.exploration_rate:
-            # Exploration: random action
-            action = random.choice(valid_actions)
-            logger.debug(f"Exploration: selected {action}")
+        if self.use_dqn:
+            # Use DQN for action selection
+            action = self.dqn_agent.select_action(state, valid_actions, training=True)
+            logger.debug(f"DQN selected action: {action}")
         else:
-            # Exploitation: best known action with pattern guidance
-            action = await self._select_best_action_with_patterns(
-                state, valid_actions, current_tools
-            )
+            # Use tabular Q-learning
+            # Epsilon-greedy selection
+            if random.random() < self.exploration_rate:
+                # Exploration: random action
+                action = random.choice(valid_actions)
+                logger.debug(f"Exploration: selected {action}")
+            else:
+                # Exploitation: best known action with pattern guidance
+                action = await self._select_best_action_with_patterns(
+                    state, valid_actions, current_tools
+                )
             
         return action
     
@@ -637,36 +682,54 @@ class QLearningEngine:
             constraints: Tool constraints
             done: Whether episode is complete
         """
-        # Get valid next actions
-        next_actions = self.action_space.get_valid_actions(
-            next_available_tools, constraints
-        ) if not done else []
+        if self.use_dqn:
+            # DQN learning
+            # Get valid next actions for DQN
+            next_valid_actions = self.action_space.get_valid_actions(
+                next_available_tools, constraints
+            ) if not done else []
+            
+            # Store transition in DQN's replay buffer
+            self.dqn_agent.store_transition(
+                state, action, reward, next_state, next_valid_actions, done
+            )
+            
+            # Perform training step
+            loss = self.dqn_agent.train_step()
+            if loss is not None:
+                logger.debug(f"DQN training loss: {loss:.4f}")
+        else:
+            # Tabular Q-learning
+            # Get valid next actions
+            next_actions = self.action_space.get_valid_actions(
+                next_available_tools, constraints
+            ) if not done else []
+            
+            # Update Q-table
+            await self.q_table.update(state, action, reward, next_state, next_actions)
+            
+            # Store experience
+            experience = {
+                'state': state,
+                'action': action,
+                'reward': reward,
+                'next_state': next_state,
+                'next_actions': next_actions,
+                'done': done,
+                'timestamp': datetime.now()
+            }
+            self.experience_buffer.add(experience)
+            
+            # Periodic batch learning from replay buffer
+            self.steps_since_update += 1
+            if self.steps_since_update >= self.update_frequency:
+                await self._replay_experiences()
+                self.steps_since_update = 0
         
-        # Update Q-table
-        await self.q_table.update(state, action, reward, next_state, next_actions)
-        
-        # Store experience
-        experience = {
-            'state': state,
-            'action': action,
-            'reward': reward,
-            'next_state': next_state,
-            'next_actions': next_actions,
-            'done': done,
-            'timestamp': datetime.now()
-        }
-        self.experience_buffer.add(experience)
-        
-        # Update metrics
+        # Update metrics (common for both)
         self.total_reward += reward
         if reward > 0:
             self.success_count += 1
-        
-        # Periodic batch learning from replay buffer
-        self.steps_since_update += 1
-        if self.steps_since_update >= self.update_frequency:
-            await self._replay_experiences()
-            self.steps_since_update = 0
     
     async def _replay_experiences(self):
         """Learn from batch of experiences in replay buffer."""
@@ -685,67 +748,95 @@ class QLearningEngine:
     
     def decay_exploration(self):
         """Decay exploration rate over time."""
-        self.exploration_rate = max(
-            self.exploration_rate * self.exploration_decay,
-            self.min_exploration_rate
-        )
+        if self.use_dqn:
+            # DQN manages its own exploration
+            self.dqn_agent.decay_epsilon()
+            self.exploration_rate = self.dqn_agent.epsilon  # Keep in sync for metrics
+        else:
+            # Tabular Q-learning exploration decay
+            self.exploration_rate = max(
+                self.exploration_rate * self.exploration_decay,
+                self.min_exploration_rate
+            )
         self.episode_count += 1
     
     async def save_model(self, version: Optional[str] = None):
-        """Save Q-table and learning state to database."""
+        """Save Q-table/DQN and learning state to database."""
         if version is None:
             version = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Prepare model data - convert tuple keys to strings for JSON
-        q_values_serialized = {}
-        for (state_hash, action_str), value in self.q_table.q_values.items():
-            key = f"{state_hash}|{action_str}"
-            q_values_serialized[key] = value
-        
-        update_counts_serialized = {}
-        for (state_hash, action_str), count in self.q_table.update_count.items():
-            key = f"{state_hash}|{action_str}"
-            update_counts_serialized[key] = count
-        
-        model_data = {
-            'q_values': q_values_serialized,
-            'update_counts': update_counts_serialized,
-            'metadata': {
-                'version': version,
-                'timestamp': datetime.now().isoformat(),
-                'learning_rate': self.learning_rate,
-                'discount_factor': self.discount_factor,
-                'exploration_rate': self.exploration_rate,
-                'episode_count': self.episode_count,
-                'total_reward': self.total_reward,
-                'success_count': self.success_count,
-                'q_table_stats': self.q_table.get_statistics()
+        if self.use_dqn:
+            # Save DQN model
+            checkpoint_path = f"models/dqn_checkpoint_{version}.pt"
+            self.dqn_agent.save_checkpoint(checkpoint_path)
+            
+            model_data = {
+                'model_type': 'dqn',
+                'checkpoint_path': checkpoint_path,
+                'metadata': {
+                    'version': version,
+                    'timestamp': datetime.now().isoformat(),
+                    'episode_count': self.episode_count,
+                    'total_reward': self.total_reward,
+                    'success_count': self.success_count,
+                    'dqn_metrics': self.dqn_agent.get_metrics()
+                }
             }
-        }
+        else:
+            # Save tabular Q-learning model
+            # Prepare model data - convert tuple keys to strings for JSON
+            q_values_serialized = {}
+            for (state_hash, action_str), value in self.q_table.q_values.items():
+                key = f"{state_hash}|{action_str}"
+                q_values_serialized[key] = value
+            
+            update_counts_serialized = {}
+            for (state_hash, action_str), count in self.q_table.update_count.items():
+                key = f"{state_hash}|{action_str}"
+                update_counts_serialized[key] = count
+            
+            model_data = {
+                'model_type': 'tabular',
+                'q_values': q_values_serialized,
+                'update_counts': update_counts_serialized,
+                'metadata': {
+                    'version': version,
+                    'timestamp': datetime.now().isoformat(),
+                    'learning_rate': self.learning_rate,
+                    'discount_factor': self.discount_factor,
+                    'exploration_rate': self.exploration_rate,
+                    'episode_count': self.episode_count,
+                    'total_reward': self.total_reward,
+                    'success_count': self.success_count,
+                    'q_table_stats': self.q_table.get_statistics()
+                }
+            }
         
         # Save to database
         async with self.db_manager.get_connection() as conn:
             await conn.execute(
                 """INSERT INTO model_snapshots (version, model_type, model_data, created_at)
-                   VALUES (?, 'q_learning', ?, datetime('now'))""",
-                (version, json.dumps(model_data))
+                   VALUES (?, ?, ?, datetime('now'))""",
+                (version, 'dqn' if self.use_dqn else 'q_learning', json.dumps(model_data))
             )
             await conn.commit()
         
-        logger.info(f"Model saved with version: {version}")
+        logger.info(f"{'DQN' if self.use_dqn else 'Q-Learning'} model saved with version: {version}")
     
     async def load_model(self, version: Optional[str] = None):
-        """Load Q-table and learning state from database."""
+        """Load Q-table/DQN and learning state from database."""
         async with self.db_manager.get_connection() as conn:
+            model_type = 'dqn' if self.use_dqn else 'q_learning'
+            
             if version:
                 query = """SELECT model_data FROM model_snapshots 
-                          WHERE version = ? AND model_type = 'q_learning'"""
-                params = (version,)
+                          WHERE version = ? AND model_type = ?"""
+                params = (version, model_type)
             else:
                 query = """SELECT model_data FROM model_snapshots 
-                          WHERE model_type = 'q_learning' 
+                          WHERE model_type = ? 
                           ORDER BY created_at DESC LIMIT 1"""
-                params = ()
+                params = (model_type,)
             
             async with conn.execute(query, params) as cursor:
                 row = await cursor.fetchone()
@@ -753,35 +844,50 @@ class QLearningEngine:
                 if row:
                     model_data = json.loads(row[0])
                     
-                    # Restore Q-values - deserialize string keys back to tuples
-                    self.q_table.q_values = {}
-                    for key_str, value in model_data['q_values'].items():
-                        parts = key_str.split('|', 1)  # Split only on first |
-                        if len(parts) == 2:
-                            state_hash, action_str = parts
-                            self.q_table.q_values[(state_hash, action_str)] = value
+                    if self.use_dqn:
+                        # Load DQN model
+                        if 'checkpoint_path' in model_data:
+                            checkpoint_path = model_data['checkpoint_path']
+                            if os.path.exists(checkpoint_path):
+                                self.dqn_agent.load_checkpoint(checkpoint_path)
+                            else:
+                                logger.warning(f"DQN checkpoint not found: {checkpoint_path}")
+                    else:
+                        # Load tabular Q-learning model
+                        # Restore Q-values - deserialize string keys back to tuples
+                        self.q_table.q_values = {}
+                        for key_str, value in model_data.get('q_values', {}).items():
+                            parts = key_str.split('|', 1)  # Split only on first |
+                            if len(parts) == 2:
+                                state_hash, action_str = parts
+                                self.q_table.q_values[(state_hash, action_str)] = value
+                        
+                        # Restore update counts
+                        self.q_table.update_count = defaultdict(int)
+                        for key_str, count in model_data.get('update_counts', {}).items():
+                            parts = key_str.split('|', 1)
+                            if len(parts) == 2:
+                                state_hash, action_str = parts
+                                self.q_table.update_count[(state_hash, action_str)] = count
                     
-                    # Restore update counts
-                    self.q_table.update_count = defaultdict(int)
-                    for key_str, count in model_data['update_counts'].items():
-                        parts = key_str.split('|', 1)
-                        if len(parts) == 2:
-                            state_hash, action_str = parts
-                            self.q_table.update_count[(state_hash, action_str)] = count
-                    
-                    # Restore metadata
+                    # Restore metadata (common for both)
                     metadata = model_data['metadata']
-                    self.exploration_rate = metadata.get(
-                        'exploration_rate', self.exploration_rate
-                    )
                     self.episode_count = metadata.get('episode_count', 0)
                     self.total_reward = metadata.get('total_reward', 0)
                     self.success_count = metadata.get('success_count', 0)
                     
-                    logger.info(f"Model loaded: version={metadata['version']}, "
-                              f"episodes={self.episode_count}")
+                    if self.use_dqn:
+                        # Sync exploration rate from DQN
+                        self.exploration_rate = self.dqn_agent.epsilon
+                    else:
+                        self.exploration_rate = metadata.get(
+                            'exploration_rate', self.exploration_rate
+                        )
+                    
+                    logger.info(f"{'DQN' if self.use_dqn else 'Q-Learning'} model loaded: "
+                              f"version={metadata['version']}, episodes={self.episode_count}")
                 else:
-                    logger.warning("No saved model found")
+                    logger.warning(f"No saved {'DQN' if self.use_dqn else 'Q-learning'} model found")
     
     async def initialize_patterns(self):
         """Load existing patterns from database."""
@@ -825,14 +931,29 @@ class QLearningEngine:
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get current learning metrics."""
-        return {
+        base_metrics = {
             'episode_count': self.episode_count,
             'total_reward': self.total_reward,
             'avg_reward': self.total_reward / max(self.episode_count, 1),
             'success_rate': self.success_count / max(self.episode_count, 1),
             'exploration_rate': self.exploration_rate,
-            'q_table_stats': self.q_table.get_statistics(),
-            'buffer_size': len(self.experience_buffer),
             'patterns_loaded': self._patterns_loaded,
-            'pattern_count': len(self.pattern_miner.discovered_patterns) if self._patterns_loaded else 0
+            'pattern_count': len(self.pattern_miner.discovered_patterns) if self._patterns_loaded else 0,
+            'learning_type': 'dqn' if self.use_dqn else 'tabular'
         }
+        
+        if self.use_dqn:
+            # Add DQN-specific metrics
+            dqn_metrics = self.dqn_agent.get_metrics()
+            base_metrics.update({
+                'dqn_metrics': dqn_metrics,
+                'buffer_size': dqn_metrics.get('memory_size', 0)
+            })
+        else:
+            # Add tabular Q-learning specific metrics
+            base_metrics.update({
+                'q_table_stats': self.q_table.get_statistics(),
+                'buffer_size': len(self.experience_buffer)
+            })
+        
+        return base_metrics

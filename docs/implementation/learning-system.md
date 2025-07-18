@@ -14,14 +14,30 @@
 - Resource Efficiency Tracking
 - User Satisfaction Signals
 - Tool Synergy Recognition
+- Pattern Miner (`src/learning/pattern_miner.py`)
+- Deep Q-Learning with Neural Networks (`src/learning/deep_q_network.py`, `src/learning/dqn_agent.py`)
+- Prioritized Experience Replay (`src/learning/prioritized_replay_buffer.py`)
+- DQN Training Utilities (`src/learning/dqn_trainer.py`)
 
 **⏳ Not Yet Implemented:**
-- Pattern Miner (PatternMiner class)
-- Deep Q-Learning with neural networks
+- Advanced reward calculation strategies (beyond current implementation)
 
 ## Overview
 
-The learning system uses Q-learning with pattern mining to continuously improve tool selection and execution strategies. The core Q-learning engine has been implemented in `src/learning/q_learning_engine.py`.
+The learning system uses Q-learning with pattern mining to continuously improve tool selection and execution strategies. The system supports both traditional tabular Q-learning and Deep Q-Learning (DQN) with neural networks. The core Q-learning engine has been implemented in `src/learning/q_learning_engine.py`.
+
+### Learning Approaches
+
+1. **Tabular Q-Learning** (Default)
+   - Stores Q-values in a sparse table
+   - Suitable for smaller state spaces
+   - Exact value storage for visited states
+
+2. **Deep Q-Learning** (Optional)
+   - Uses neural networks for value approximation
+   - Handles high-dimensional continuous states
+   - Generalizes across similar states
+   - See [Deep Q-Learning Documentation](deep-q-learning.md) for details
 
 ## Q-Learning Implementation
 
