@@ -66,3 +66,21 @@ coverage_report.txt
 docs/_build/
 docs/_static/
 docs/_templates/
+# Model files
+models/
+*.pt
+*.pth
+
+# Demo results and images
+*.png
+*_demo_results.md
+*_DEMO_*.md
+
+# Temporary evaluation files
+simple_evaluation_*.py
+run_*_evaluation.py
+
+# Evaluation reports
+src/evaluation/reports/*.pdf
+src/evaluation/reports/*.json
+src/evaluation/reports/*.html

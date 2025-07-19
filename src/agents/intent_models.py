@@ -9,27 +9,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional, Tuple
 
+# Import from the new location to avoid circular imports
+from src.models.intent import Intent, IntentResult
 
-@dataclass
-class Intent:
-    """Represents a classified intent with confidence score."""
-    type: str  # e.g., "query.search", "action.create"
-    confidence: float
-    entities: List[str] = field(default_factory=list)
-    keywords: List[str] = field(default_factory=list)
-    parameters: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class IntentResult:
-    """Result of intent recognition processing."""
-    query: str
-    normalized_query: str
-    primary_intent: Intent
-    all_intents: List[Intent]
-    features: Dict[str, Any]
-    processing_time_ms: float
-    confidence_passed: bool
+# Re-export for backward compatibility
+__all__ = ['Intent', 'IntentResult', 'TextPreprocessor', 'MultiIntentHandler']
 
 
 class TextPreprocessor:

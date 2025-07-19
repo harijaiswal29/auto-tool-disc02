@@ -192,9 +192,32 @@
   },
   
   "evaluation": {
-    "metrics": ["accuracy", "response_time", "tool_efficiency"],
+    "enabled": true,
+    "baselines": ["random", "popular", "fixed_policy", "greedy", "context_agnostic"],
+    "evaluation_interval": 100,
+    "min_episodes_for_comparison": 50,
+    "confidence_level": 0.95,
+    "metrics": ["accuracy", "response_time", "tool_efficiency", "convergence_rate", "sample_efficiency"],
     "baseline_comparison": true,
-    "experiment_repetitions": 5
+    "experiment_repetitions": 5,
+    "report_generation": {
+      "format": ["pdf", "html"],
+      "frequency": "daily",
+      "include_visualizations": true,
+      "output_dir": "src/evaluation/reports"
+    },
+    "statistical_tests": {
+      "use_t_test": true,
+      "use_mann_whitney": true,
+      "effect_size_calculation": true,
+      "significance_level": 0.05
+    },
+    "performance_regression": {
+      "enabled": true,
+      "threshold": 0.1,
+      "window_size": 100,
+      "alert_on_regression": true
+    }
   },
   
   "orchestration": {

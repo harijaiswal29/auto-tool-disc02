@@ -9,7 +9,7 @@ from collections import defaultdict
 from typing import Dict, Any, Optional, List, Tuple
 
 from src.pipeline.base import PipelineStage, PipelineData
-from src.agents.intent_models import Intent
+from src.models.intent import Intent
 
 
 class IntentClassifierStage(PipelineStage):

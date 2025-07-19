@@ -19,10 +19,17 @@
 - Prioritized Experience Replay (`src/learning/prioritized_replay_buffer.py`)
 - DQN Training Utilities (`src/learning/dqn_trainer.py`)
 - Advanced Reward Strategies (`src/learning/advanced_rewards/`)
+- Automated Baseline Comparisons (`src/evaluation/`)
+
+**✅ Recently Added - Evaluation Framework:**
+- Baseline Strategies (`src/evaluation/baseline_strategies.py`)
+- Evaluation Engine (`src/evaluation/evaluation_engine.py`)
+- Metrics Collector (`src/evaluation/metrics_collector.py`)
+- Comparison Visualizer (`src/evaluation/comparison_visualizer.py`)
+- Comprehensive Documentation (`docs/evaluation/baseline-comparisons.md`)
 
 **⏳ Not Yet Implemented:**
-- Automated baseline comparisons
-- Performance regression detection
+- Performance regression detection (partially implemented - basic detection in evaluation framework)
 
 ## Overview
 
@@ -722,3 +729,77 @@ manager.enable_ab_testing(['control', 'temporal', 'hierarchical'])
 3. Select best performing combination
 4. Fine-tune with Bayesian optimization
 5. Monitor failure learning convergence
+
+## Evaluation Framework
+
+The system includes a comprehensive evaluation framework for automated baseline comparisons and performance tracking.
+
+### Key Components
+
+1. **Baseline Strategies** (`src/evaluation/baseline_strategies.py`)
+   - Random Selection: Establishes worst-case baseline
+   - Most Popular Tools: Frequency-based selection
+   - Fixed Policy: Rule-based expert knowledge
+   - Greedy Single-Tool: Simple optimization
+   - Context-Agnostic Q-Learning: Limited state representation
+
+2. **Evaluation Engine** (`src/evaluation/evaluation_engine.py`)
+   - Automated test scenario generation
+   - Parallel strategy execution
+   - Statistical significance testing
+   - Performance regression detection
+
+3. **Metrics Collection** (`src/evaluation/metrics_collector.py`)
+   - Performance metrics (reward, time, resource usage)
+   - Learning metrics (convergence, efficiency, regret)
+   - Comparative analysis (improvement %, effect size)
+   - Tool usage patterns and synergies
+
+4. **Visualization** (`src/evaluation/comparison_visualizer.py`)
+   - Learning curves comparison
+   - Performance distributions
+   - Statistical significance plots
+   - Multi-metric radar charts
+   - Automated PDF/HTML reports
+
+### Running Evaluations
+
+```bash
+# Quick evaluation (500 episodes)
+python demos/demo_baseline_evaluation.py --mode quick
+
+# Comprehensive evaluation (2000 episodes)
+python demos/demo_baseline_evaluation.py --mode full
+```
+
+### Results Interpretation
+
+The evaluation provides:
+- **Best Strategy Identification**: Which approach performs best
+- **Statistical Significance**: P-values and effect sizes
+- **Convergence Analysis**: Learning stability metrics
+- **Performance Rankings**: Comparative leaderboard
+
+Example output:
+```
+Best Strategy: q_learning
+Improvement over baseline: 82.2% (p < 0.001, Cohen's d = 2.1)
+Convergence: Episode 450
+Win Rate: 94.3%
+```
+
+### Configuration
+
+```json
+{
+  "evaluation": {
+    "enabled": true,
+    "baselines": ["random", "popular", "fixed_policy", "greedy", "context_agnostic"],
+    "evaluation_interval": 100,
+    "min_episodes_for_comparison": 50,
+    "confidence_level": 0.95
+  }
+}
+```
+
+For detailed information, see [Baseline Comparisons Documentation](../evaluation/baseline-comparisons.md).
