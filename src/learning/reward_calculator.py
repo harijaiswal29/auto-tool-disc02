@@ -18,6 +18,15 @@ import logging
 
 from utils.logger import get_logger
 
+# Import advanced reward strategies
+try:
+    from .advanced_rewards.strategy_manager import StrategyManager
+    ADVANCED_REWARDS_AVAILABLE = True
+except ImportError:
+    ADVANCED_REWARDS_AVAILABLE = False
+    logger = get_logger(__name__)
+    logger.warning("Advanced reward strategies not available")
+
 logger = get_logger(__name__)
 
 
@@ -41,9 +50,25 @@ class RewardCalculator:
     multiple factors including failure types, resource usage, and context.
     """
     
-    def __init__(self, config: Dict[str, Any]):
-        """Initialize reward calculator with configuration."""
+    def __init__(self, config: Dict[str, Any], use_advanced_strategies: bool = True):
+        """Initialize reward calculator with configuration.
+        
+        Args:
+            config: Configuration dictionary
+            use_advanced_strategies: Whether to use advanced reward strategies
+        """
         self.config = config.get('reward_calculation', {})
+        self.use_advanced_strategies = use_advanced_strategies and ADVANCED_REWARDS_AVAILABLE
+        
+        # Initialize advanced strategy manager if enabled
+        self.strategy_manager = None
+        if self.use_advanced_strategies and config.get('advanced_reward_strategies', {}).get('enabled', True):
+            try:
+                self.strategy_manager = StrategyManager(config)
+                logger.info("Advanced reward strategies enabled")
+            except Exception as e:
+                logger.error(f"Failed to initialize advanced strategies: {e}")
+                self.use_advanced_strategies = False
         
         # Base weights
         self.base_weights = self.config.get('base_weights', {
@@ -100,13 +125,80 @@ class RewardCalculator:
     def calculate_reward(self, 
                         execution_results: List[ExecutionMetrics],
                         context: Dict[str, Any],
-                        user_feedback: Optional[Dict[str, Any]] = None) -> Tuple[float, Dict[str, float]]:
+                        user_feedback: Optional[Dict[str, Any]] = None,
+                        state: Optional[np.ndarray] = None,
+                        action: Optional[List[str]] = None,
+                        next_state: Optional[np.ndarray] = None) -> Tuple[float, Dict[str, float]]:
         """
         Calculate comprehensive reward based on execution results and context.
+        
+        Args:
+            execution_results: Results from tool execution
+            context: Execution context
+            user_feedback: Optional user feedback
+            state: Current state vector (for advanced strategies)
+            action: Action taken (for advanced strategies)
+            next_state: Next state vector (for advanced strategies)
         
         Returns:
             Tuple of (total_reward, component_breakdown)
         """
+        # If advanced strategies are enabled and we have state information, use them
+        if (self.use_advanced_strategies and self.strategy_manager and 
+            state is not None and action is not None and next_state is not None):
+            
+            # Convert ExecutionMetrics to format expected by strategy manager
+            strategy_results = []
+            for metric in execution_results:
+                strategy_results.append({
+                    'tool_id': metric.tool_id,
+                    'success': metric.success,
+                    'partial_success': metric.partial_success,
+                    'completion_percentage': metric.completion_percentage,
+                    'execution_time_ms': metric.execution_time_ms,
+                    'error_type': metric.error_type,
+                    'retry_count': metric.retry_count,
+                    'resource_usage': metric.resource_usage,
+                    'result_quality': metric.result_quality
+                })
+            
+            # Calculate using advanced strategies
+            advanced_reward, advanced_breakdown = self.strategy_manager.calculate_reward(
+                state, action, next_state, strategy_results, context
+            )
+            
+            # Also calculate basic reward for comparison
+            basic_reward, basic_breakdown = self._calculate_basic_reward(
+                execution_results, context, user_feedback
+            )
+            
+            # Combine advanced and basic rewards
+            if self.config.get('blend_basic_advanced', True):
+                blend_ratio = self.config.get('advanced_blend_ratio', 0.7)
+                total_reward = blend_ratio * advanced_reward + (1 - blend_ratio) * basic_reward
+                
+                breakdown = {
+                    'advanced_reward': advanced_reward,
+                    'basic_reward': basic_reward,
+                    'blended_total': total_reward,
+                    'advanced_components': advanced_breakdown,
+                    'basic_components': basic_breakdown
+                }
+            else:
+                # Use only advanced strategies
+                total_reward = advanced_reward
+                breakdown = advanced_breakdown
+            
+            return total_reward, breakdown
+        
+        # Fall back to basic reward calculation
+        return self._calculate_basic_reward(execution_results, context, user_feedback)
+    
+    def _calculate_basic_reward(self, 
+                               execution_results: List[ExecutionMetrics],
+                               context: Dict[str, Any],
+                               user_feedback: Optional[Dict[str, Any]] = None) -> Tuple[float, Dict[str, float]]:
+        """Calculate reward using the basic (original) method."""
         if not execution_results:
             return -0.5, {'no_results': -0.5}
         
