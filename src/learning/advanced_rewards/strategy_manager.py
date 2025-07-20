@@ -10,6 +10,7 @@ from collections import defaultdict
 import time
 import logging
 import json
+import asyncio
 
 from .base_strategy import BaseRewardStrategy, RewardStrategyResult
 from .temporal_rewards import TemporalRewardCalculator
@@ -23,6 +24,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from utils.logger import get_logger
 from database.database import DatabaseManager
+
+# Import new A/B testing framework
+try:
+    from evaluation.ab_testing_framework import ABTestingFramework, ExperimentConfig, AssignmentStrategy
+    from evaluation.ab_test_manager import ABTestManager
+    AB_TESTING_AVAILABLE = True
+except ImportError:
+    AB_TESTING_AVAILABLE = False
+    logger = get_logger(__name__)
+    logger.warning("A/B testing framework not available")
 
 logger = get_logger(__name__)
 
@@ -56,6 +67,20 @@ class StrategyManager:
         self.ab_test_groups = defaultdict(list)
         self.ab_test_results = defaultdict(lambda: {'rewards': [], 'performance': []})
         
+        # Initialize new A/B testing framework if available
+        self.ab_test_manager = None
+        # Check if a shared ab_test_manager is provided
+        if '_shared_ab_test_manager' in config:
+            self.ab_test_manager = config['_shared_ab_test_manager']
+            logger.info("Using shared A/B test manager instance")
+        elif AB_TESTING_AVAILABLE and config.get('use_advanced_ab_testing', True):
+            try:
+                self.ab_test_manager = ABTestManager(config)
+                # Initialization will be done in the async initialize() method
+                logger.info("Created A/B test manager instance")
+            except Exception as e:
+                logger.error(f"Failed to create A/B test manager: {e}")
+        
         # Performance tracking
         self.strategy_performance = defaultdict(lambda: {
             'total_reward': 0.0,
@@ -68,6 +93,12 @@ class StrategyManager:
         self.combination_method = config.get('combination_method', 'weighted_average')
         
         logger.info(f"Initialized StrategyManager with {len(self.strategies)} strategies")
+    
+    async def initialize(self):
+        """Initialize the strategy manager and wait for AB test manager to be ready."""
+        if self.ab_test_manager:
+            await self.ab_test_manager.initialize()
+            logger.info("AB test manager initialized successfully")
     
     def _initialize_strategies(self) -> Dict[str, BaseRewardStrategy]:
         """Initialize all reward strategies."""
@@ -173,8 +204,23 @@ class StrategyManager:
     
     def _select_active_strategies(self, context: Dict[str, Any]) -> Dict[str, BaseRewardStrategy]:
         """Select which strategies to use based on context."""
-        if self.ab_testing_enabled:
-            # A/B testing mode - select based on test group
+        # Check if using advanced A/B testing framework
+        if self.ab_test_manager and context.get('experiment_name'):
+            # Get variant assignment for user
+            user_id = context.get('user_id', 'default_user')
+            experiment_name = context['experiment_name']
+            
+            # This is synchronous, but we'll handle it here for compatibility
+            # In a real async context, this should be awaited
+            variant = context.get('ab_test_variant')
+            
+            if variant and variant != 'control':
+                # Use specific strategy for variant
+                if variant in self.strategies:
+                    return {variant: self.strategies[variant]}
+        
+        elif self.ab_testing_enabled:
+            # Legacy A/B testing mode - select based on test group
             test_group = context.get('ab_test_group', 'control')
             if test_group == 'control':
                 # Use all strategies
@@ -392,6 +438,88 @@ class StrategyManager:
         """Disable A/B testing."""
         self.ab_testing_enabled = False
         logger.info("Disabled A/B testing")
+    
+    async def create_strategy_experiment(self, name: str, description: str,
+                                       strategies_to_test: List[str],
+                                       control_strategy: str = 'all',
+                                       min_sample_size: int = 100,
+                                       max_duration_days: int = 7) -> Optional[str]:
+        """Create an A/B test experiment for strategy comparison.
+        
+        Args:
+            name: Experiment name
+            description: Experiment description
+            strategies_to_test: List of strategy names to test
+            control_strategy: Control group strategy ('all' uses ensemble)
+            min_sample_size: Minimum sample size per variant
+            max_duration_days: Maximum experiment duration
+            
+        Returns:
+            Experiment ID if created successfully
+        """
+        if not self.ab_test_manager:
+            logger.error("A/B test manager not initialized")
+            return None
+        
+        # Create variants
+        variants = ['control'] + strategies_to_test
+        
+        # Create experiment config
+        config = ExperimentConfig(
+            name=name,
+            description=description,
+            variants=variants,
+            primary_metric='reward',
+            secondary_metrics=['success_rate', 'computation_time'],
+            assignment_strategy=AssignmentStrategy.DETERMINISTIC,
+            min_sample_size=min_sample_size,
+            max_duration_days=max_duration_days,
+            enable_early_stopping=True,
+            early_stopping_threshold=0.01
+        )
+        
+        try:
+            experiment_id = await self.ab_test_manager.create_experiment(config)
+            await self.ab_test_manager.start_experiment(experiment_id)
+            logger.info(f"Created strategy experiment: {name}")
+            return experiment_id
+        except Exception as e:
+            logger.error(f"Failed to create experiment: {e}")
+            return None
+    
+    async def get_experiment_variant(self, experiment_name: str, user_id: str) -> Optional[str]:
+        """Get variant assignment for a user in an experiment."""
+        if not self.ab_test_manager:
+            return None
+        
+        return await self.ab_test_manager.get_variant_for_user(experiment_name, user_id)
+    
+    async def record_experiment_result(self, experiment_name: str, user_id: str,
+                                     reward: float, success_rate: float,
+                                     computation_time: float):
+        """Record results for an experiment."""
+        if not self.ab_test_manager:
+            return
+        
+        # Record primary metric (reward)
+        await self.ab_test_manager.record_metric(
+            experiment_name, user_id, 'reward', reward
+        )
+        
+        # Record secondary metrics
+        await self.ab_test_manager.record_metric(
+            experiment_name, user_id, 'success_rate', success_rate
+        )
+        await self.ab_test_manager.record_metric(
+            experiment_name, user_id, 'computation_time', computation_time
+        )
+    
+    async def analyze_strategy_experiment(self, experiment_name: str) -> Dict[str, Any]:
+        """Analyze results of a strategy experiment."""
+        if not self.ab_test_manager:
+            return {'error': 'A/B test manager not initialized'}
+        
+        return await self.ab_test_manager.stop_experiment(experiment_name)
     
     def save_state(self) -> Dict[str, Any]:
         """Save manager state."""

@@ -230,6 +230,44 @@ pytest --cov=src tests/ --cov-report=html
 # Open htmlcov/index.html in browser
 ```
 
+## Demo Scripts
+
+The project includes comprehensive demonstration scripts showcasing various features:
+
+### A/B Testing Framework Demo
+```bash
+# Run complete A/B testing demonstration (6 scenarios)
+python demos/demo_ab_testing_framework.py
+```
+
+Demonstrates:
+- Basic A/B testing with conversion rates
+- Multi-variant experiments with weighted assignment
+- Bayesian statistical analysis
+- Multi-armed bandits for adaptive optimization
+- Reward strategy comparison with actual calculations
+- Full lifecycle management with persistence
+
+### Other Key Demos
+```bash
+# Advanced reward strategies
+python demos/demo_advanced_rewards.py
+
+# Pattern mining
+python demos/demo_pattern_mining.py
+
+# Q-learning with orchestrator
+python demos/demo_q_learning_orchestration.py
+
+# Deep Q-learning comparison
+python demos/demo_dqn_learning.py
+
+# Baseline evaluation
+python demos/demo_baseline_evaluation.py --mode quick
+```
+
+See `demos/README.md` for detailed documentation of all available demos.
+
 ## Performance Monitoring
 
 The system includes comprehensive performance monitoring:

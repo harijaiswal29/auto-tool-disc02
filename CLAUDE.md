@@ -169,10 +169,21 @@ The system consists of 5 core layers:
   - ✅ Performance regression detection (basic)
   - ✅ Demo script and full test coverage
   
+### ✅ Recently Completed - Advanced Evaluation Features
+  
+- **A/B Testing Framework** (`src/evaluation/ab_testing_framework.py`, `src/evaluation/ab_test_manager.py`)
+  - ✅ Comprehensive A/B testing with multiple assignment strategies
+  - ✅ Statistical analysis (frequentist and Bayesian)
+  - ✅ Multi-armed bandit support with Thompson sampling
+  - ✅ Database persistence and experiment lifecycle management
+  - ✅ API endpoints for experiment management
+  - ✅ Integration with reward strategy manager
+  - ✅ Full documentation and demo scripts
+  - ✅ Unit test coverage
+
 ### ⏳ Not Yet Implemented
   
 - **Advanced Evaluation Features**:
-  - A/B testing framework (partially implemented)
   - Real-time performance regression alerts
   - Distributed evaluation support
   
@@ -246,6 +257,12 @@ python demos/demo_dqn_learning.py  # Compare DQN vs tabular Q-learning
 # Test Advanced Reward Strategies
 pytest tests/unit/test_advanced_rewards.py -v
 python demos/demo_advanced_rewards.py  # Demo advanced reward strategies
+
+# Test A/B Testing Framework
+pytest tests/unit/test_ab_testing_framework.py -v
+pytest tests/unit/test_ab_test_manager.py -v
+python demos/demo_ab_testing_framework.py  # Run full A/B testing demo (6 scenarios)
+python run_demo5_only.py  # Run only Demo 5 (reward strategy comparison)
 
 # Test Evaluation Framework
 pytest tests/unit/test_baseline_strategies.py -v
