@@ -344,6 +344,238 @@ For endpoints returning lists:
 }
 ```
 
+## Real-time Monitoring Endpoints
+
+### GET /api/v1/monitoring/performance
+Get current performance metrics for all strategies.
+
+**Response:**
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "monitoring_enabled": true,
+  "strategies": {
+    "q_learning": {
+      "performance": {
+        "current_reward": 0.85,
+        "avg_reward": 0.82,
+        "min_reward": 0.75,
+        "max_reward": 0.90
+      },
+      "resource_usage": {
+        "cpu_percent": 15.2,
+        "memory_mb": 128.5,
+        "execution_time_ms": 45.3
+      },
+      "trends": {
+        "trend": "stable",
+        "confidence": 0.92,
+        "recent_performance": 0.83,
+        "previous_performance": 0.81,
+        "change_percentage": 2.47
+      }
+    }
+  },
+  "system": {
+    "active_alerts": 2,
+    "total_episodes": 1500
+  }
+}
+```
+
+### GET /api/v1/monitoring/performance/{strategy_name}
+Get detailed performance metrics for a specific strategy.
+
+**Query Parameters:**
+- `time_window`: Time window in seconds (default: 300)
+
+**Response:**
+```json
+{
+  "strategy": "q_learning",
+  "time_window": 300,
+  "metrics": {
+    "reward": {
+      "current": 0.85,
+      "average": 0.82,
+      "count": 150
+    },
+    "selection_time": {
+      "current": 0.045,
+      "average": 0.052,
+      "count": 150
+    }
+  },
+  "trends": {
+    "trend": "improving",
+    "confidence": 0.88,
+    "recent_performance": 0.84,
+    "previous_performance": 0.80,
+    "change_percentage": 5.0
+  },
+  "baseline": {
+    "mean": 0.81,
+    "std": 0.08
+  }
+}
+```
+
+### GET /api/v1/monitoring/alerts
+Get performance regression alerts.
+
+**Query Parameters:**
+- `hours`: Time window in hours (default: 24)
+- `severity`: Filter by severity (info, warning, critical)
+- `acknowledged`: Filter by acknowledgment status
+
+**Response:**
+```json
+{
+  "alerts": [
+    {
+      "timestamp": "2024-01-15T10:25:00Z",
+      "metric_name": "q_learning_reward",
+      "detection_method": "CUSUM",
+      "severity": "warning",
+      "current_value": 0.65,
+      "baseline_value": 0.82,
+      "deviation": -2.125,
+      "confidence": 0.87,
+      "message": "CUSUM detected sustained performance regression in q_learning_reward",
+      "metadata": {
+        "cusum_high": 8.5,
+        "threshold": 7.0
+      }
+    }
+  ],
+  "statistics": {
+    "total_delivered": 45,
+    "total_suppressed": 12,
+    "total_acknowledged": 40,
+    "active_alerts": 5,
+    "by_severity": {
+      "info": 20,
+      "warning": 18,
+      "critical": 7
+    }
+  }
+}
+```
+
+### POST /api/v1/monitoring/alerts/acknowledge
+Acknowledge a performance alert.
+
+**Request Body:**
+```json
+{
+  "alert_index": 5,
+  "user": "admin"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "alert_index": 5,
+  "acknowledged_by": "admin",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+### POST /api/v1/monitoring/baseline/reset
+Reset performance baseline for a strategy.
+
+**Request Body:**
+```json
+{
+  "strategy_name": "q_learning"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "strategy": "q_learning",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+### GET /api/v1/monitoring/anomalies
+Get detected anomalies for a metric.
+
+**Query Parameters:**
+- `metric_name`: Name of the metric (required)
+- `threshold`: Z-score threshold for anomaly detection (default: 3.0)
+
+**Response:**
+```json
+{
+  "metric": "q_learning_reward",
+  "threshold": 3.0,
+  "anomalies": [
+    {
+      "timestamp": "2024-01-15T10:28:00Z",
+      "value": 0.45,
+      "z_score": 4.5,
+      "baseline_mean": 0.82,
+      "baseline_std": 0.08
+    }
+  ]
+}
+```
+
+### GET /api/v1/monitoring/status
+Get monitoring service status.
+
+**Response:**
+```json
+{
+  "status": "active",
+  "details": {
+    "enabled": true,
+    "websocket_clients": 3,
+    "strategies_monitored": 5,
+    "active_alerts": 2,
+    "performance_buffer_size": {
+      "q_learning": 1000,
+      "random": 1000,
+      "greedy": 800
+    }
+  }
+}
+```
+
+### WebSocket /api/v1/monitoring/ws
+WebSocket endpoint for real-time metric streaming.
+
+**Client Messages:**
+```json
+{
+  "type": "subscribe",
+  "metrics": ["q_learning_reward", "random_reward"],
+  "interval": 1.0
+}
+```
+
+**Server Messages:**
+```json
+{
+  "type": "metrics",
+  "data": {
+    "q_learning_reward": {
+      "timestamp": "2024-01-15T10:30:00Z",
+      "value": 0.85
+    },
+    "random_reward": {
+      "timestamp": "2024-01-15T10:30:00Z",
+      "value": 0.42
+    }
+  }
+}
+```
+
 ## Versioning
 
 - Current version: v1

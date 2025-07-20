@@ -27,6 +27,8 @@ from evaluation.baseline_strategies import (
     FixedPolicyBaseline, GreedySingleToolBaseline, ContextAgnosticQLearningBaseline
 )
 from evaluation.metrics_collector import MetricsCollector
+from evaluation.performance_regression_detector import PerformanceRegressionDetector
+from evaluation.alert_manager import AlertManager
 from models.intent import Intent
 from utils.logger import get_logger
 
@@ -69,8 +71,24 @@ class EvaluationEngine:
         self.evaluation_results = defaultdict(list)
         self.comparison_results = {}
         
+        # Real-time monitoring components
+        self.regression_detector = PerformanceRegressionDetector(
+            config.get('regression_detection', {})
+        )
+        self.alert_manager = AlertManager(config.get('alert_config', {}))
+        
+        # Online evaluation state
+        self.online_monitoring_enabled = False
+        self.monitored_metrics = config.get('monitored_metrics', [
+            'reward', 'selection_time', 'convergence_rate', 'regret'
+        ])
+        self.baseline_performance = {}
+        
         # Initialize strategies
         self._initialize_strategies()
+        
+        # Setup metric observers
+        self._setup_metric_observers()
         
     def _initialize_strategies(self):
         """Initialize all evaluation strategies."""
@@ -460,15 +478,155 @@ class EvaluationEngine:
             'total_strategies': len(self.strategies)
         }
     
-    async def run_online_evaluation(self, callback: Callable[[str, float], None]):
+    def _setup_metric_observers(self):
+        """Setup observers for real-time metric monitoring."""
+        def metric_observer(metric_name: str, value: float, timestamp: datetime):
+            """Observer function for metric updates."""
+            if self.online_monitoring_enabled:
+                # Update regression detector
+                alerts = self.regression_detector.update_metric(
+                    metric_name, value, timestamp
+                )
+                
+                # Process any alerts
+                for alert in alerts:
+                    asyncio.create_task(
+                        self.alert_manager.process_alert(alert)
+                    )
+        
+        # Add observer to metrics collector
+        self.metrics_collector.add_metric_observer(metric_observer)
+    
+    async def run_online_evaluation(self, orchestrator_callback: Callable = None,
+                                   update_interval: float = 1.0):
         """Run online evaluation during normal operation.
         
         Args:
-            callback: Function to call with (strategy_name, reward) after each episode
+            orchestrator_callback: Callback to get live performance data
+            update_interval: How often to check for updates (seconds)
         """
-        # This would integrate with the actual system to evaluate strategies
-        # in real-time during normal operation
-        pass
+        self.online_monitoring_enabled = True
+        self.metrics_collector.enable_streaming()
+        
+        logger.info("Starting online performance monitoring")
+        
+        try:
+            while self.online_monitoring_enabled:
+                # Check each strategy's current performance
+                for strategy_name in self.strategies:
+                    if orchestrator_callback:
+                        # Get latest performance from orchestrator
+                        perf_data = await orchestrator_callback(strategy_name)
+                        
+                        if perf_data:
+                            # Record metrics
+                            self._record_online_metrics(strategy_name, perf_data)
+                            
+                            # Check for performance trends
+                            self._analyze_performance_trends(strategy_name)
+                
+                # Update baselines periodically
+                self._update_performance_baselines()
+                
+                await asyncio.sleep(update_interval)
+                
+        except Exception as e:
+            logger.error(f"Error in online evaluation: {e}")
+        finally:
+            self.online_monitoring_enabled = False
+            self.metrics_collector.disable_streaming()
+    
+    def _record_online_metrics(self, strategy_name: str, perf_data: Dict[str, Any]):
+        """Record real-time performance metrics."""
+        timestamp = datetime.now()
+        
+        # Record standard metrics
+        if 'reward' in perf_data:
+            metric_name = f"{strategy_name}_reward"
+            self.metrics_collector.record_real_time_metric(
+                metric_name, perf_data['reward'], timestamp
+            )
+            
+        if 'selection_time' in perf_data:
+            metric_name = f"{strategy_name}_selection_time"
+            self.metrics_collector.record_real_time_metric(
+                metric_name, perf_data['selection_time'], timestamp
+            )
+            
+        if 'regret' in perf_data:
+            metric_name = f"{strategy_name}_regret"
+            self.metrics_collector.record_real_time_metric(
+                metric_name, perf_data['regret'], timestamp
+            )
+    
+    def _analyze_performance_trends(self, strategy_name: str):
+        """Analyze performance trends for a strategy."""
+        trends = self.metrics_collector.get_performance_trends(strategy_name)
+        
+        if trends['trend'] == 'degrading' and trends['confidence'] > 0.8:
+            # Generate trend alert
+            alert = self.regression_detector.RegressionAlert(
+                timestamp=datetime.now(),
+                metric_name=f"{strategy_name}_performance",
+                detection_method='trend_analysis',
+                severity='warning',
+                current_value=trends['recent_performance'],
+                baseline_value=trends['previous_performance'],
+                deviation=trends['change_percentage'],
+                confidence=trends['confidence'],
+                message=f"Performance degradation detected for {strategy_name}: "
+                       f"{trends['change_percentage']:.1f}% decrease",
+                metadata={'trends': trends}
+            )
+            
+            asyncio.create_task(
+                self.alert_manager.process_alert(alert)
+            )
+    
+    def _update_performance_baselines(self):
+        """Update performance baselines for anomaly detection."""
+        for strategy_name in self.strategies:
+            # Get current baseline
+            reward_baseline = self.metrics_collector.get_metric_baseline(
+                f"{strategy_name}_reward"
+            )
+            
+            if reward_baseline:
+                self.baseline_performance[strategy_name] = {
+                    'reward': reward_baseline,
+                    'updated_at': datetime.now()
+                }
+    
+    def enable_online_monitoring(self):
+        """Enable real-time performance monitoring."""
+        self.online_monitoring_enabled = True
+        logger.info("Online performance monitoring enabled")
+    
+    def disable_online_monitoring(self):
+        """Disable real-time performance monitoring."""
+        self.online_monitoring_enabled = False
+        logger.info("Online performance monitoring disabled")
+    
+    def get_regression_alerts(self, hours: int = 24) -> List[Any]:
+        """Get recent regression alerts."""
+        return self.regression_detector.get_recent_alerts(hours)
+    
+    def get_alert_statistics(self) -> Dict[str, Any]:
+        """Get alert statistics."""
+        return self.alert_manager.get_alert_statistics()
+    
+    def reset_performance_baseline(self, strategy_name: str):
+        """Reset performance baseline for a strategy."""
+        metric_names = [
+            f"{strategy_name}_reward",
+            f"{strategy_name}_selection_time",
+            f"{strategy_name}_regret"
+        ]
+        
+        for metric_name in metric_names:
+            self.regression_detector.reset_baseline(metric_name)
+            
+        logger.info(f"Reset performance baseline for {strategy_name}")
     
     def save_results(self, filepath: str):
         """Save evaluation results to file."""

@@ -181,10 +181,26 @@ The system consists of 5 core layers:
   - ✅ Full documentation and demo scripts
   - ✅ Unit test coverage
 
+- **Real-time Performance Regression Alerts** (`src/evaluation/`)
+  - ✅ Performance Regression Detector (`performance_regression_detector.py`)
+    - Multiple statistical algorithms (CUSUM, EWMA, Z-score)
+    - Adaptive baseline tracking
+    - Configurable sensitivity thresholds
+  - ✅ Alert Manager (`alert_manager.py`)
+    - Multi-channel alert routing (log, file, webhook)
+    - Alert suppression and deduplication
+    - Severity-based handling
+  - ✅ Enhanced Metrics Collector with real-time tracking
+  - ✅ Online evaluation in EvaluationEngine
+  - ✅ Real-time Monitoring Service (`realtime_monitor.py`)
+    - WebSocket support for live dashboards
+    - Continuous performance analysis
+  - ✅ API endpoints for monitoring (`src/api/monitoring_api.py`)
+  - ✅ Demo script (`demos/demo_realtime_monitoring.py`)
+
 ### ⏳ Not Yet Implemented
   
 - **Advanced Evaluation Features**:
-  - Real-time performance regression alerts
   - Distributed evaluation support
   
 - **Production Features**:
@@ -270,6 +286,14 @@ pytest tests/unit/test_evaluation_engine.py -v
 pytest tests/unit/test_metrics_collector.py -v
 pytest tests/integration/test_baseline_evaluation.py -v
 python demos/demo_baseline_evaluation.py --mode quick  # Run baseline evaluation demo
+
+# Test Real-time Performance Monitoring
+python demos/demo_realtime_monitoring.py  # Run real-time monitoring demo
+# Note: The demo simulates performance degradation and shows:
+# - Statistical regression detection (CUSUM, EWMA, Z-score)
+# - Alert generation and routing
+# - WebSocket-based real-time updates
+# - Performance baseline tracking
 
 # Test Financial Datasets MCP
 pytest tests/integration/test_financial_datasets_mcp.py -v

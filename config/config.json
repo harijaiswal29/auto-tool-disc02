@@ -447,5 +447,46 @@
         "few_shot_threshold": 5
       }
     }
+  },
+  
+  "regression_detection": {
+    "enabled": true,
+    "z_score_threshold": 2.5,
+    "cusum_threshold": 5.0,
+    "ewma_lambda": 0.2,
+    "ewma_L": 3.0,
+    "baseline_window": 100,
+    "min_samples": 20
+  },
+  
+  "alert_config": {
+    "file_channel": {
+      "enabled": true,
+      "path": "data/logs/alerts.log"
+    },
+    "webhook_channel": {
+      "enabled": false,
+      "url": "http://localhost:8080/webhook"
+    },
+    "email_channel": {
+      "enabled": false
+    }
+  },
+  
+  "realtime_monitoring": {
+    "enabled": true,
+    "update_interval": 1.0,
+    "metrics_window": 300,
+    "anomaly_threshold": 3.0,
+    "enable_websocket": true,
+    "ws_host": "localhost",
+    "ws_port": 8765,
+    "monitored_metrics": [
+      "reward",
+      "selection_time",
+      "convergence_rate",
+      "regret"
+    ],
+    "streaming_enabled": false
   }
 }

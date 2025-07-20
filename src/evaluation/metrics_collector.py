@@ -9,13 +9,14 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Tuple, Optional, Callable
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 import json
 import logging
 from dataclasses import dataclass, asdict
 import pandas as pd
+import asyncio
 
 from utils.logger import get_logger
 
@@ -72,6 +73,13 @@ class MetricsCollector:
         self.performance_history = defaultdict(list)
         self.tool_usage_counts = defaultdict(lambda: defaultdict(int))
         self.scenario_performance = defaultdict(lambda: defaultdict(list))
+        
+        # Real-time tracking
+        self.real_time_metrics = defaultdict(lambda: deque(maxlen=1000))
+        self.metric_observers: List[Callable] = []
+        self.baseline_tracker = defaultdict(lambda: {'values': deque(maxlen=100), 'baseline': None})
+        self.streaming_enabled = config.get('streaming_enabled', False)
+        self.update_interval = config.get('update_interval', 1.0)  # seconds
         
     def record_episode(self, strategy_name: str, episode_id: int, reward: float,
                       tools_selected: List[str], selection_time: float,
@@ -411,3 +419,168 @@ class MetricsCollector:
         summary['efficiency_summary'] = self.calculate_relative_metrics()
         
         return summary
+    
+    # Real-time tracking methods
+    def record_real_time_metric(self, metric_name: str, value: float, 
+                               timestamp: Optional[datetime] = None):
+        """Record a real-time metric value."""
+        timestamp = timestamp or datetime.now()
+        
+        # Store in real-time metrics
+        self.real_time_metrics[metric_name].append({
+            'timestamp': timestamp,
+            'value': value
+        })
+        
+        # Update baseline tracker
+        baseline_data = self.baseline_tracker[metric_name]
+        baseline_data['values'].append(value)
+        
+        # Update baseline if enough samples
+        if len(baseline_data['values']) >= 20 and baseline_data['baseline'] is None:
+            baseline_data['baseline'] = {
+                'mean': np.mean(list(baseline_data['values'])),
+                'std': np.std(list(baseline_data['values']))
+            }
+        elif baseline_data['baseline'] and len(baseline_data['values']) % 10 == 0:
+            # Update baseline periodically using exponential moving average
+            alpha = 0.1
+            # Convert deque to list and get last 10 values
+            values_list = list(baseline_data['values'])
+            last_10_values = values_list[-10:]
+            baseline_data['baseline']['mean'] = (
+                alpha * np.mean(last_10_values) + 
+                (1 - alpha) * baseline_data['baseline']['mean']
+            )
+            baseline_data['baseline']['std'] = (
+                alpha * np.std(last_10_values) + 
+                (1 - alpha) * baseline_data['baseline']['std']
+            )
+        
+        # Notify observers
+        for observer in self.metric_observers:
+            try:
+                observer(metric_name, value, timestamp)
+            except Exception as e:
+                logger.error(f"Error notifying observer: {e}")
+    
+    def add_metric_observer(self, observer: Callable):
+        """Add an observer for real-time metric updates."""
+        self.metric_observers.append(observer)
+    
+    def remove_metric_observer(self, observer: Callable):
+        """Remove a metric observer."""
+        if observer in self.metric_observers:
+            self.metric_observers.remove(observer)
+    
+    def get_real_time_metrics(self, metric_name: str, 
+                             time_window: Optional[timedelta] = None) -> List[Dict[str, Any]]:
+        """Get real-time metrics within a time window."""
+        metrics = self.real_time_metrics.get(metric_name, [])
+        
+        if not time_window:
+            return list(metrics)
+        
+        cutoff = datetime.now() - time_window
+        return [m for m in metrics if m['timestamp'] >= cutoff]
+    
+    def get_metric_baseline(self, metric_name: str) -> Optional[Dict[str, float]]:
+        """Get baseline statistics for a metric."""
+        baseline_data = self.baseline_tracker.get(metric_name)
+        return baseline_data.get('baseline') if baseline_data else None
+    
+    def calculate_metric_deviation(self, metric_name: str, value: float) -> Optional[float]:
+        """Calculate deviation from baseline in standard deviations."""
+        baseline = self.get_metric_baseline(metric_name)
+        if not baseline or baseline['std'] == 0:
+            return None
+        
+        return (value - baseline['mean']) / baseline['std']
+    
+    async def stream_metrics(self, callback: Callable, metrics: List[str], 
+                           interval: Optional[float] = None):
+        """Stream real-time metrics to a callback."""
+        interval = interval or self.update_interval
+        
+        while self.streaming_enabled:
+            try:
+                # Collect latest metrics
+                updates = {}
+                for metric_name in metrics:
+                    latest = self.real_time_metrics.get(metric_name)
+                    if latest:
+                        updates[metric_name] = latest[-1]
+                
+                # Send update
+                if updates:
+                    await callback(updates)
+                
+                # Wait for next update
+                await asyncio.sleep(interval)
+                
+            except Exception as e:
+                logger.error(f"Error streaming metrics: {e}")
+                break
+    
+    def enable_streaming(self):
+        """Enable metric streaming."""
+        self.streaming_enabled = True
+    
+    def disable_streaming(self):
+        """Disable metric streaming."""
+        self.streaming_enabled = False
+    
+    def get_performance_trends(self, strategy_name: str, 
+                              window_size: int = 50) -> Dict[str, Any]:
+        """Analyze performance trends for a strategy."""
+        rewards = self.performance_history.get(strategy_name, [])
+        
+        if len(rewards) < window_size:
+            return {'trend': 'insufficient_data', 'confidence': 0}
+        
+        # Calculate moving averages
+        recent_avg = np.mean(rewards[-window_size:])
+        previous_avg = np.mean(rewards[-2*window_size:-window_size])
+        
+        # Calculate trend
+        if recent_avg > previous_avg * 1.05:
+            trend = 'improving'
+        elif recent_avg < previous_avg * 0.95:
+            trend = 'degrading'
+        else:
+            trend = 'stable'
+        
+        # Calculate confidence based on variance
+        recent_std = np.std(rewards[-window_size:])
+        confidence = 1 - min(recent_std / abs(recent_avg) if recent_avg != 0 else 1, 1)
+        
+        return {
+            'trend': trend,
+            'confidence': confidence,
+            'recent_performance': recent_avg,
+            'previous_performance': previous_avg,
+            'change_percentage': ((recent_avg - previous_avg) / previous_avg * 100) if previous_avg != 0 else 0
+        }
+    
+    def detect_anomalies(self, metric_name: str, threshold: float = 3.0) -> List[Dict[str, Any]]:
+        """Detect anomalies in real-time metrics using z-score."""
+        metrics = list(self.real_time_metrics.get(metric_name, []))
+        baseline = self.get_metric_baseline(metric_name)
+        
+        if not baseline or len(metrics) < 10:
+            return []
+        
+        anomalies = []
+        for metric in metrics:
+            z_score = abs((metric['value'] - baseline['mean']) / baseline['std']) if baseline['std'] > 0 else 0
+            
+            if z_score > threshold:
+                anomalies.append({
+                    'timestamp': metric['timestamp'],
+                    'value': metric['value'],
+                    'z_score': z_score,
+                    'baseline_mean': baseline['mean'],
+                    'baseline_std': baseline['std']
+                })
+        
+        return anomalies
