@@ -519,7 +519,6 @@ q_config = {
 
 ### Planned Features
 - Real-time performance regression alerts
-- Distributed evaluation support
 - Advanced segmentation analysis
 - Automated insight generation
 - Integration with external analytics platforms

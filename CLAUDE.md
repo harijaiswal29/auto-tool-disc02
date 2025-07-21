@@ -214,9 +214,6 @@ The system consists of 5 core layers:
 
 ### ⏳ Not Yet Implemented
   
-- **Advanced Evaluation Features**:
-  - Distributed evaluation support
-  
 - **Production Features**:
   - Real-time monitoring dashboard UI
   - Production deployment configurations

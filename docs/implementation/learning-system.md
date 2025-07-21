@@ -31,7 +31,6 @@
 
 **⏳ Not Yet Implemented:**
 - Performance regression detection (partially implemented - basic detection in evaluation framework)
-- Distributed evaluation support (for large-scale parallel evaluation across multiple machines/processes)
 
 ## Overview
 

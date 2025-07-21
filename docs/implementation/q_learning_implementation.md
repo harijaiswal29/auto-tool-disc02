@@ -352,4 +352,3 @@ python demos/demo_q_learning_orchestration.py
 3. **Transfer Learning**: Apply learned knowledge to new domains
 4. **Online Learning**: Continuous adaptation in production
 5. **Explainability**: Visualize learned policies and decisions
-6. **Distributed Evaluation**: Scale evaluation across multiple machines for faster hyperparameter search and strategy comparison
