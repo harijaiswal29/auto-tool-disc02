@@ -113,7 +113,7 @@ The system consists of 5 core layers:
 #### Learning System (Phase 4 - In Progress)
 - **Q-Learning Engine** (`src/learning/q_learning_engine.py`):
   - ✅ Core Q-learning implementation with experience replay
-  - ✅ Enhanced state representation (439 dimensions) with failure tracking
+  - ✅ Enhanced state representation (447 dimensions) with failure tracking and context
   - ✅ Action space management with constraint validation
   - ✅ Epsilon-greedy exploration with decay
   - ✅ Integration with orchestrator for automatic learning
@@ -123,16 +123,30 @@ The system consists of 5 core layers:
   - ✅ Resource efficiency tracking using psutil
   - ✅ User satisfaction signals (explicit and implicit feedback)
   - ✅ Tool synergy recognition with configurable bonuses
+  - ✅ Context-aware tool selection with user expertise and domain tracking
 
 - **Pattern Miner** (`src/learning/pattern_miner.py`):
   - ✅ Sequential pattern mining using simplified PrefixSpan algorithm
   - ✅ Combination pattern mining for tool synergies
+  - ✅ Temporal pattern mining for time-based patterns
+    - Hourly patterns (tools used at specific times)
+    - Periodic patterns (daily/weekly cycles)
+    - Duration patterns (consistent execution times)
+    - Time-clustered patterns (tools used together in time windows)
+  - ✅ Context-aware pattern mining with user expertise and domain grouping
   - ✅ Pattern metrics calculation (support, confidence, lift)
-  - ✅ Database persistence for discovered patterns
-  - ✅ Pattern-based tool suggestions
+  - ✅ Database persistence for discovered patterns with temporal metadata
+  - ✅ Pattern-based tool suggestions with temporal and context awareness
   - ✅ Integration with Q-Learning engine for enhanced action selection
-  - ✅ Comprehensive unit tests (`tests/unit/test_pattern_miner.py`)
+  - ✅ Comprehensive unit tests including temporal patterns (`tests/unit/test_pattern_miner.py`)
   - ✅ Demo script (`demos/demo_pattern_mining.py`)
+
+- **Context-Aware Patterns** (`src/learning/context_extractor.py`):
+  - ✅ User expertise extraction (novice, intermediate, expert)
+  - ✅ Domain detection (engineering, data_science, web_dev, devops, general)
+  - ✅ Context-based pattern grouping and mining
+  - ✅ Personalized tool recommendations based on user context
+  - ✅ Database schema updates with context columns and indexes
 
 - **Deep Q-Learning** (`src/learning/deep_q_network.py`, `src/learning/dqn_agent.py`):
   - ✅ Neural network architectures (Standard DQN, Dueling DQN, Noisy DQN)

@@ -36,7 +36,9 @@ class StateRepresentation:
             'performance_metrics': 5,   # Success rate, response time, etc.
             'failure_rates': 10,       # Per-tool failure rates
             'failure_types': 5,        # Network, permission, timeout, rate_limit, other
-            'retry_patterns': 5        # Retry statistics and patterns
+            'retry_patterns': 5,       # Retry statistics and patterns
+            'user_expertise': 3,       # One-hot: novice, intermediate, expert
+            'domain_context': 5        # One-hot: general, engineering, data_science, web_dev, devops
         }
         self.total_dimensions = sum(self.state_dimensions.values())
     
@@ -88,6 +90,14 @@ class StateRepresentation:
         # Retry patterns
         retry_features = self._encode_retry_patterns(context.get('retry_patterns', {}))
         state_components.append(retry_features)
+        
+        # User expertise
+        expertise_features = self._encode_user_expertise(context.get('user_expertise', 'intermediate'))
+        state_components.append(expertise_features)
+        
+        # Domain context
+        domain_features = self._encode_domain_context(context.get('domain', 'general'))
+        state_components.append(domain_features)
         
         # Combine all components
         state_vector = np.concatenate(state_components)
@@ -212,6 +222,44 @@ class StateRepresentation:
         features[2] = min(retry_patterns.get('avg_retry_delay_ms', 1000) / 10000, 1.0)
         features[3] = retry_patterns.get('circuit_breaker_triggers', 0) / 10.0
         features[4] = min(retry_patterns.get('max_consecutive_failures', 0) / 5.0, 1.0)
+        
+        return features
+    
+    def _encode_user_expertise(self, expertise: str) -> np.ndarray:
+        """Encode user expertise level as one-hot vector."""
+        features = np.zeros(self.state_dimensions['user_expertise'])
+        
+        expertise_map = {
+            'novice': 0,
+            'intermediate': 1,
+            'expert': 2
+        }
+        
+        if expertise in expertise_map:
+            features[expertise_map[expertise]] = 1.0
+        else:
+            # Default to intermediate
+            features[1] = 1.0
+        
+        return features
+    
+    def _encode_domain_context(self, domain: str) -> np.ndarray:
+        """Encode domain context as one-hot vector."""
+        features = np.zeros(self.state_dimensions['domain_context'])
+        
+        domain_map = {
+            'general': 0,
+            'engineering': 1,
+            'data_science': 2,
+            'web_dev': 3,
+            'devops': 4
+        }
+        
+        if domain in domain_map:
+            features[domain_map[domain]] = 1.0
+        else:
+            # Default to general
+            features[0] = 1.0
         
         return features
     
@@ -513,6 +561,9 @@ class QLearningEngine:
             min_confidence=q_config.get('pattern_min_confidence', 0.8)
         )
         self.use_patterns = q_config.get('use_patterns', True)
+        self.use_incremental_patterns = q_config.get('use_incremental_patterns', True)
+        self.pattern_batch_size = q_config.get('pattern_batch_size', 1000)
+        self.pattern_decay_factor = q_config.get('pattern_decay_factor', 0.95)
         self.pattern_weight = q_config.get('pattern_weight', 0.3)  # Weight for pattern suggestions
         
         # Training parameters
@@ -533,6 +584,9 @@ class QLearningEngine:
         
         # Initialize patterns asynchronously after creation
         self._patterns_loaded = False
+        
+        # Current context for context-aware patterns
+        self.current_context = {}
     
     def _estimate_max_actions(self, max_tools: int) -> int:
         """Estimate maximum number of possible action combinations.
@@ -553,7 +607,8 @@ class QLearningEngine:
     
     async def select_action(self, state: np.ndarray, available_tools: List[str],
                           constraints: Dict[str, Any], 
-                          current_tools: Optional[List[str]] = None) -> Tuple[str, ...]:
+                          current_tools: Optional[List[str]] = None,
+                          context: Optional[Dict[str, Any]] = None) -> Tuple[str, ...]:
         """Select action using epsilon-greedy strategy with pattern guidance.
         
         Args:
@@ -561,10 +616,14 @@ class QLearningEngine:
             available_tools: List of available tool IDs
             constraints: Tool combination constraints
             current_tools: Tools already used in current sequence (for pattern matching)
+            context: Optional context with user_expertise and domain
             
         Returns:
             Selected tool combination
         """
+        # Store context for pattern matching
+        if context:
+            self.current_context = context
         # Get valid actions
         valid_actions = self.action_space.get_valid_actions(available_tools, constraints)
         
@@ -619,9 +678,13 @@ class QLearningEngine:
                 # Create potential sequence
                 potential_sequence = current_tools + list(action)
                 
-                # Get matching patterns
-                matching_patterns = self.pattern_miner.get_matching_patterns(
-                    potential_sequence
+                # Get matching patterns with context
+                # Extract context from state (assumes context is passed in select_action)
+                user_expertise = self.current_context.get('user_expertise', 'intermediate')
+                domain = self.current_context.get('domain', 'general')
+                
+                matching_patterns = self.pattern_miner.get_context_matching_patterns(
+                    potential_sequence, user_expertise, domain
                 )
                 
                 # Calculate pattern score
@@ -899,14 +962,35 @@ class QLearningEngine:
             except Exception as e:
                 logger.warning(f"Failed to load patterns: {e}")
     
-    async def update_patterns(self):
-        """Mine new patterns from recent execution history."""
+    async def update_patterns(self, use_incremental: Optional[bool] = None, batch_size: Optional[int] = None):
+        """Mine new patterns from recent execution history.
+        
+        Args:
+            use_incremental: If True, use incremental update; if False, do full mining
+            batch_size: Maximum number of sequences to process in incremental update
+        """
         try:
-            logger.info("Starting pattern mining update...")
-            patterns = await self.pattern_miner.mine_patterns()
+            # Use configuration if not explicitly specified
+            if use_incremental is None:
+                use_incremental = self.use_incremental_patterns
+            if batch_size is None:
+                batch_size = self.pattern_batch_size
+                
+            if use_incremental:
+                logger.info("Starting incremental pattern mining update...")
+                patterns = await self.pattern_miner.incremental_update(
+                    batch_size=batch_size,
+                    decay_factor=self.pattern_decay_factor
+                )
+            else:
+                logger.info("Starting full pattern mining update...")
+                patterns = await self.pattern_miner.mine_patterns()
             
             total_patterns = sum(len(p) for p in patterns.values())
-            logger.info(f"Pattern mining complete. Discovered {total_patterns} patterns")
+            logger.info(f"Pattern mining complete. Discovered/updated {total_patterns} patterns")
+            
+            # Update patterns loaded flag
+            self._patterns_loaded = True
             
             # Patterns are automatically stored and loaded by pattern_miner
             return patterns

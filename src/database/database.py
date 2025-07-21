@@ -82,7 +82,8 @@ class DatabaseManager:
                     lift REAL,
                     contexts JSON,
                     discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    usage_count INTEGER DEFAULT 0
+                    usage_count INTEGER DEFAULT 0,
+                    temporal_metadata JSON  -- Stores temporal pattern information
                 )
             """)
             
@@ -98,6 +99,8 @@ class DatabaseManager:
                     execution_time_ms INTEGER,
                     success BOOLEAN,
                     reward REAL,
+                    user_expertise TEXT DEFAULT 'intermediate',
+                    domain TEXT DEFAULT 'general',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -171,10 +174,55 @@ class DatabaseManager:
                 )
             """)
             
+            # Create pattern mining metadata table for incremental updates
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS pattern_mining_metadata (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key TEXT NOT NULL UNIQUE,
+                    value TEXT,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Insert default values if not exist
+            await db.execute("""
+                INSERT OR IGNORE INTO pattern_mining_metadata (key, value) 
+                VALUES ('last_processed_execution_id', NULL)
+            """)
+            await db.execute("""
+                INSERT OR IGNORE INTO pattern_mining_metadata (key, value) 
+                VALUES ('last_update_timestamp', datetime('now'))
+            """)
+            
+            # Create pattern statistics table for running counts
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS pattern_statistics (
+                    pattern_hash TEXT PRIMARY KEY,
+                    pattern_type TEXT NOT NULL,
+                    tool_sequence JSON NOT NULL,
+                    occurrence_count INTEGER DEFAULT 0,
+                    success_count INTEGER DEFAULT 0,
+                    total_support REAL DEFAULT 0.0,
+                    total_confidence REAL DEFAULT 0.0,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
             # Create indexes for efficient queries
             await db.execute("""
                 CREATE INDEX IF NOT EXISTS idx_failure_history_tool 
                 ON failure_history(tool_id, failure_type)
+            """)
+            
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_execution_history_created_at
+                ON execution_history(created_at DESC)
+            """)
+            
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pattern_statistics_last_seen
+                ON pattern_statistics(last_seen DESC)
             """)
             
             await db.execute("""

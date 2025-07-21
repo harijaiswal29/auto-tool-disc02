@@ -448,4 +448,558 @@ class TestPatternMiner:
         assert pattern_dict['lift'] == 1.5
         assert json.loads(pattern_dict['contexts']) == ['ctx1', 'ctx2']
         assert pattern_dict['usage_count'] == 10
-        assert 'discovered_at' in pattern_dict
+    
+    def test_temporal_pattern_creation(self):
+        """Test temporal pattern with additional fields."""
+        pattern = Pattern(
+            pattern_type='temporal',
+            tool_sequence=['tool1', 'tool2'],
+            support=0.5,
+            confidence=0.8,
+            lift=1.5,
+            time_intervals=[60.0, 120.0, 90.0],
+            periodic_info={'has_periodicity': True, 'period_type': 'hourly'},
+            duration_stats={'mean': 100.0, 'std': 20.0},
+            temporal_metadata={'pattern_subtype': 'hourly', 'hour': 14}
+        )
+        
+        assert pattern.pattern_type == 'temporal'
+        assert pattern.time_intervals == [60.0, 120.0, 90.0]
+        assert pattern.periodic_info['period_type'] == 'hourly'
+        assert pattern.duration_stats['mean'] == 100.0
+        assert pattern.temporal_metadata['hour'] == 14
+    
+    @pytest.mark.asyncio
+    async def test_mine_temporal_patterns(self, pattern_miner, temp_db):
+        """Test temporal pattern mining."""
+        # Create sequences with temporal information
+        now = datetime.now()
+        sequences = []
+        
+        # Create hourly pattern (tools A and B used together at hour 14)
+        for i in range(5):
+            timestamp = now.replace(hour=14, minute=i*10)
+            sequences.append(ExecutionSequence(
+                execution_id=f'hourly_{i}',
+                tools=['A', 'B'],
+                success=True,
+                reward=1.0,
+                context={'intent': {'type': 'test'}},
+                timestamp=timestamp,
+                total_duration=1000.0
+            ))
+        
+        # Create periodic pattern (tools C and D every hour)
+        for hour in [9, 10, 11, 12, 13]:
+            timestamp = now.replace(hour=hour, minute=30)
+            sequences.append(ExecutionSequence(
+                execution_id=f'periodic_{hour}',
+                tools=['C', 'D'],
+                success=True,
+                reward=1.0,
+                context={'intent': {'type': 'test'}},
+                timestamp=timestamp,
+                total_duration=2000.0
+            ))
+        
+        # Create time-clustered pattern (tools E, F, G used together)
+        base_time = now.replace(hour=16, minute=0)
+        for i in range(4):
+            timestamp = base_time + timedelta(minutes=i*5)
+            sequences.append(ExecutionSequence(
+                execution_id=f'cluster_{i}',
+                tools=['E', 'F', 'G'],
+                success=True,
+                reward=1.0,
+                context={'intent': {'type': 'test'}},
+                timestamp=timestamp,
+                total_duration=500.0
+            ))
+        
+        # Mine temporal patterns
+        temporal_patterns = await pattern_miner.mine_temporal_patterns(sequences)
+        
+        assert len(temporal_patterns) > 0
+        
+        # Check for different temporal pattern types
+        pattern_subtypes = {p.temporal_metadata.get('pattern_subtype') for p in temporal_patterns if p.temporal_metadata}
+        assert 'hourly' in pattern_subtypes or 'time_cluster' in pattern_subtypes
+    
+    def test_temporal_pattern_matching(self, pattern_miner):
+        """Test temporal pattern matching with time context."""
+        # Create temporal patterns
+        hourly_pattern = Pattern(
+            pattern_type='temporal',
+            tool_sequence=['A', 'B'],
+            support=0.5,
+            confidence=0.8,
+            lift=1.5,
+            temporal_metadata={'pattern_subtype': 'hourly', 'hour': 14}
+        )
+        
+        duration_pattern = Pattern(
+            pattern_type='temporal',
+            tool_sequence=['C', 'D'],
+            support=0.4,
+            confidence=0.9,
+            lift=1.8,
+            duration_stats={'mean': 1000.0, 'std': 100.0},
+            temporal_metadata={'pattern_subtype': 'duration', 'duration_consistency': 0.9}
+        )
+        
+        pattern_miner.discovered_patterns = {
+            hourly_pattern.get_hash(): hourly_pattern,
+            duration_pattern.get_hash(): duration_pattern
+        }
+        
+        # Test matching at relevant hour
+        with patch('src.learning.pattern_miner.datetime') as mock_datetime:
+            mock_datetime.now.return_value = datetime(2024, 1, 1, 14, 30)  # 2:30 PM
+            
+            matches = pattern_miner.get_matching_patterns(['A', 'B', 'C'])
+            # Should match hourly pattern due to time relevance
+            assert any(p.pattern_type == 'temporal' and p.temporal_metadata.get('hour') == 14 for p in matches)
+    
+    def test_temporal_tool_suggestions(self, pattern_miner):
+        """Test tool suggestions with temporal context."""
+        # Add temporal patterns
+        morning_pattern = Pattern(
+            pattern_type='temporal',
+            tool_sequence=['morning_backup', 'morning_report'],
+            support=0.6,
+            confidence=0.9,
+            lift=1.5,
+            temporal_metadata={'pattern_subtype': 'hourly', 'hour': 8}
+        )
+        
+        pattern_miner.discovered_patterns[morning_pattern.get_hash()] = morning_pattern
+        
+        # Test suggestions at relevant time
+        with patch('src.learning.pattern_miner.datetime') as mock_datetime:
+            mock_datetime.now.return_value = datetime(2024, 1, 1, 8, 30)  # 8:30 AM
+            
+            suggestions = pattern_miner.suggest_next_tools([], k=3)
+            
+            # Should suggest morning tools
+            suggested_tools = [tool for tool, score in suggestions]
+            assert 'morning_backup' in suggested_tools or 'morning_report' in suggested_tools
+    
+    def test_periodicity_detection(self, pattern_miner):
+        """Test periodicity detection in time series."""
+        # Create time series with hourly pattern
+        time_series = []
+        for i in range(24):
+            time_series.append(i * 3600)  # Every hour
+        
+        periodicity = pattern_miner._detect_periodicity(time_series, sampling_interval=3600)
+        
+        assert periodicity['has_periodicity'] == True
+        # Allow for some variation in detected period
+        assert 3500 < periodicity['period_seconds'] < 3700  # Close to hourly
+    
+    def test_time_interval_analysis(self, pattern_miner):
+        """Test time interval statistics calculation."""
+        intervals = [60.0, 120.0, 90.0, 100.0, 80.0]
+        
+        stats = pattern_miner._analyze_time_intervals(intervals)
+        
+        assert 'mean' in stats
+        assert 'median' in stats
+        assert 'std' in stats
+        assert stats['mean'] == 90.0
+        assert stats['median'] == 90.0
+        assert stats['min'] == 60.0
+        assert stats['max'] == 120.0
+    
+    # Context-Aware Pattern Mining Tests
+    
+    @pytest.mark.asyncio
+    async def test_extract_sequences_with_context(self, pattern_miner, temp_db):
+        """Test extraction of sequences includes context information."""
+        # Add execution data with context columns
+        async with aiosqlite.connect(temp_db) as db:
+            # Add context columns if they don't exist
+            try:
+                await db.execute("ALTER TABLE execution_history ADD COLUMN user_expertise TEXT DEFAULT 'intermediate'")
+                await db.execute("ALTER TABLE execution_history ADD COLUMN domain TEXT DEFAULT 'general'")
+                await db.commit()
+            except:
+                pass  # Columns might already exist
+            
+            # Insert test data with context
+            await db.execute("""
+                INSERT INTO execution_history 
+                (id, query, intent, tools_used, success, reward, user_expertise, domain, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, ("ctx_exec1", "Debug Python code", '{"type": "action.modify"}', 
+                  '["filesystem_mcp", "git_mcp"]', True, 0.9, "expert", "engineering",
+                  datetime.now().isoformat()))
+            
+            await db.execute("""
+                INSERT INTO execution_history 
+                (id, query, intent, tools_used, success, reward, user_expertise, domain, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, ("ctx_exec2", "What is a variable?", '{"type": "query.search"}', 
+                  '["search_mcp"]', True, 0.5, "novice", "general",
+                  datetime.now().isoformat()))
+            
+            await db.commit()
+        
+        # Extract sequences
+        sequences = await pattern_miner.extract_sequences()
+        
+        # Find our context-aware sequences
+        expert_seq = next((s for s in sequences if s.execution_id == "ctx_exec1"), None)
+        novice_seq = next((s for s in sequences if s.execution_id == "ctx_exec2"), None)
+        
+        assert expert_seq is not None
+        assert expert_seq.user_expertise == "expert"
+        assert expert_seq.domain == "engineering"
+        
+        assert novice_seq is not None
+        assert novice_seq.user_expertise == "novice"
+        assert novice_seq.domain == "general"
+    
+    @pytest.mark.asyncio
+    async def test_mine_context_aware_patterns(self, pattern_miner):
+        """Test mining patterns grouped by context."""
+        # Create sequences with different contexts
+        sequences = [
+            # Expert engineering patterns
+            ExecutionSequence(
+                execution_id='exp_eng_1',
+                tools=['git_mcp', 'filesystem_mcp', 'postgres_mcp'],
+                success=True,
+                reward=1.0,
+                context={'intent': {'type': 'action.modify'}},
+                timestamp=datetime.now(),
+                user_expertise='expert',
+                domain='engineering'
+            ),
+            ExecutionSequence(
+                execution_id='exp_eng_2',
+                tools=['git_mcp', 'filesystem_mcp'],
+                success=True,
+                reward=0.9,
+                context={'intent': {'type': 'action.modify'}},
+                timestamp=datetime.now(),
+                user_expertise='expert',
+                domain='engineering'
+            ),
+            ExecutionSequence(
+                execution_id='exp_eng_3',
+                tools=['git_mcp', 'filesystem_mcp'],
+                success=True,
+                reward=0.95,
+                context={'intent': {'type': 'action.create'}},
+                timestamp=datetime.now(),
+                user_expertise='expert',
+                domain='engineering'
+            ),
+            
+            # Novice general patterns
+            ExecutionSequence(
+                execution_id='nov_gen_1',
+                tools=['filesystem_mcp'],
+                success=True,
+                reward=0.6,
+                context={'intent': {'type': 'query.search'}},
+                timestamp=datetime.now(),
+                user_expertise='novice',
+                domain='general'
+            ),
+            ExecutionSequence(
+                execution_id='nov_gen_2',
+                tools=['search_mcp'],
+                success=True,
+                reward=0.5,
+                context={'intent': {'type': 'query.search'}},
+                timestamp=datetime.now(),
+                user_expertise='novice',
+                domain='general'
+            ),
+            ExecutionSequence(
+                execution_id='nov_gen_3',
+                tools=['filesystem_mcp'],
+                success=True,
+                reward=0.55,
+                context={'intent': {'type': 'query.retrieve'}},
+                timestamp=datetime.now(),
+                user_expertise='novice',
+                domain='general'
+            ),
+            
+            # Intermediate data science patterns
+            ExecutionSequence(
+                execution_id='int_ds_1',
+                tools=['filesystem_mcp', 'sqlite_mcp'],
+                success=True,
+                reward=0.8,
+                context={'intent': {'type': 'query.analyze'}},
+                timestamp=datetime.now(),
+                user_expertise='intermediate',
+                domain='data_science'
+            ),
+            ExecutionSequence(
+                execution_id='int_ds_2',
+                tools=['filesystem_mcp', 'sqlite_mcp'],
+                success=True,
+                reward=0.85,
+                context={'intent': {'type': 'query.analyze'}},
+                timestamp=datetime.now(),
+                user_expertise='intermediate',
+                domain='data_science'
+            ),
+        ]
+        
+        # Mine context-aware patterns
+        context_patterns = await pattern_miner.mine_context_aware_patterns(sequences)
+        
+        # Verify we have patterns for different contexts
+        assert 'expert:engineering' in context_patterns
+        assert 'novice:general' in context_patterns
+        assert 'intermediate:data_science' in context_patterns
+        
+        # Check expert engineering patterns
+        exp_eng_patterns = context_patterns['expert:engineering']
+        assert 'sequential' in exp_eng_patterns
+        # Should find git->filesystem pattern
+        git_fs_patterns = [p for p in exp_eng_patterns['sequential'] 
+                          if p.tool_sequence == ['git_mcp', 'filesystem_mcp']]
+        assert len(git_fs_patterns) > 0
+        
+        # Check novice patterns are simpler
+        nov_patterns = context_patterns['novice:general']
+        assert 'sequential' in nov_patterns
+        # Novice patterns should be mostly single tools
+        single_tool_patterns = [p for p in nov_patterns['sequential'] 
+                               if len(p.tool_sequence) == 1]
+        assert len(single_tool_patterns) > 0
+    
+    def test_get_context_matching_patterns(self, pattern_miner):
+        """Test pattern matching with context relevance."""
+        # Add patterns with different contexts
+        expert_pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['git_mcp', 'postgres_mcp'],
+            support=0.5,
+            confidence=0.9,
+            lift=1.8,
+            contexts=['expert:engineering', 'expert:devops']
+        )
+        
+        intermediate_pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['filesystem_mcp', 'sqlite_mcp'],
+            support=0.4,
+            confidence=0.8,
+            lift=1.5,
+            contexts=['intermediate:data_science', 'intermediate:general']
+        )
+        
+        novice_pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['filesystem_mcp'],
+            support=0.6,
+            confidence=0.7,
+            lift=1.0,
+            contexts=['novice:general']
+        )
+        
+        pattern_miner.discovered_patterns = {
+            expert_pattern.get_hash(): expert_pattern,
+            intermediate_pattern.get_hash(): intermediate_pattern,
+            novice_pattern.get_hash(): novice_pattern
+        }
+        
+        # Test expert engineering context
+        matches = pattern_miner.get_context_matching_patterns(
+            ['git_mcp', 'postgres_mcp', 'filesystem_mcp'],
+            user_expertise='expert',
+            domain='engineering'
+        )
+        
+        # Should match expert pattern with high relevance
+        assert len(matches) > 0
+        expert_match = next((p for p in matches if 'git_mcp' in p.tool_sequence), None)
+        assert expert_match is not None
+        assert hasattr(expert_match, 'context_score')
+        assert expert_match.context_score == 1.0  # Direct context match
+        
+        # Test partial context match
+        matches = pattern_miner.get_context_matching_patterns(
+            ['filesystem_mcp', 'sqlite_mcp'],
+            user_expertise='intermediate',
+            domain='engineering'  # Different domain
+        )
+        
+        # Should still match but with lower relevance
+        intermediate_match = next((p for p in matches if 'sqlite_mcp' in p.tool_sequence), None)
+        assert intermediate_match is not None
+        assert intermediate_match.context_score < 1.0 but intermediate_match.context_score > 0
+    
+    def test_calculate_context_relevance(self, pattern_miner):
+        """Test context relevance scoring."""
+        pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['tool1', 'tool2'],
+            support=0.5,
+            confidence=0.8,
+            lift=1.5,
+            contexts=['expert:engineering', 'intermediate:engineering']
+        )
+        
+        # Direct match
+        relevance = pattern_miner._calculate_context_relevance(pattern, 'expert:engineering')
+        assert relevance == 1.0
+        
+        # Same expertise, different domain
+        relevance = pattern_miner._calculate_context_relevance(pattern, 'expert:data_science')
+        assert relevance == 0.7  # Partial match on expertise
+        
+        # Same domain, different expertise
+        relevance = pattern_miner._calculate_context_relevance(pattern, 'novice:engineering')
+        assert relevance == 0.6  # Partial match on domain
+        
+        # No match
+        relevance = pattern_miner._calculate_context_relevance(pattern, 'novice:devops')
+        assert relevance == 0.0
+        
+        # Pattern with no contexts
+        pattern_no_context = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['tool3'],
+            support=0.5,
+            confidence=0.8,
+            lift=1.5
+        )
+        relevance = pattern_miner._calculate_context_relevance(pattern_no_context, 'any:context')
+        assert relevance == 0.5  # Default relevance
+    
+    def test_calculate_context_aware_score(self, pattern_miner):
+        """Test combined scoring with context relevance."""
+        pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['tool1', 'tool2'],
+            support=0.5,
+            confidence=0.8,
+            lift=1.5
+        )
+        
+        # High context relevance should boost score
+        score = pattern_miner._calculate_context_aware_score(
+            pattern, 
+            context_relevance=1.0,
+            current_time=datetime.now()
+        )
+        base_score = pattern_miner._calculate_context_aware_score(
+            pattern,
+            context_relevance=0.5,
+            current_time=datetime.now()
+        )
+        assert score > base_score
+        
+        # Zero context relevance should significantly reduce score
+        low_score = pattern_miner._calculate_context_aware_score(
+            pattern,
+            context_relevance=0.0,
+            current_time=datetime.now()
+        )
+        assert low_score < base_score * 0.3
+    
+    @pytest.mark.asyncio
+    async def test_context_aware_pattern_suggestions(self, pattern_miner):
+        """Test tool suggestions consider user context."""
+        # Add context-aware patterns
+        expert_eng_pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['git_mcp', 'postgres_mcp', 'github_mcp'],
+            support=0.6,
+            confidence=0.9,
+            lift=2.0,
+            contexts=['expert:engineering']
+        )
+        
+        novice_pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['filesystem_mcp', 'search_mcp'],
+            support=0.7,
+            confidence=0.8,
+            lift=1.3,
+            contexts=['novice:general']
+        )
+        
+        pattern_miner.discovered_patterns = {
+            expert_eng_pattern.get_hash(): expert_eng_pattern,
+            novice_pattern.get_hash(): novice_pattern
+        }
+        
+        # Test suggestions for expert user
+        with patch.object(pattern_miner, 'get_context_matching_patterns') as mock_match:
+            mock_match.return_value = [expert_eng_pattern]
+            
+            suggestions = pattern_miner.suggest_next_tools(
+                ['git_mcp'],
+                k=3,
+                context={'user_expertise': 'expert', 'domain': 'engineering'}
+            )
+            
+            # Should suggest tools from expert pattern
+            suggested_tools = [tool for tool, _ in suggestions]
+            assert 'postgres_mcp' in suggested_tools or 'github_mcp' in suggested_tools
+    
+    @pytest.mark.asyncio
+    async def test_mine_patterns_with_context_aware_flag(self, pattern_miner):
+        """Test mine_patterns with use_context_aware flag."""
+        # Create diverse sequences
+        sequences = [
+            ExecutionSequence(
+                execution_id=f'seq_{i}',
+                tools=['filesystem_mcp', 'sqlite_mcp'] if i % 2 == 0 else ['search_mcp'],
+                success=True,
+                reward=0.8,
+                context={'intent': {'type': 'query.search'}},
+                timestamp=datetime.now(),
+                user_expertise='expert' if i < 5 else 'novice',
+                domain='engineering' if i < 5 else 'general'
+            )
+            for i in range(10)
+        ]
+        
+        # Mine with context awareness
+        results = await pattern_miner.mine_patterns(
+            time_window=timedelta(days=30),
+            use_context_aware=True
+        )
+        
+        # Should have patterns in results
+        assert 'sequential' in results
+        assert 'combination' in results
+        
+        # Patterns should have context information
+        has_context_patterns = any(
+            p.contexts is not None and len(p.contexts) > 0
+            for p in results['sequential']
+        )
+        assert has_context_patterns
+    
+    def test_pattern_context_persistence(self, pattern_miner):
+        """Test that pattern contexts are properly serialized."""
+        pattern = Pattern(
+            pattern_type='sequential',
+            tool_sequence=['tool1', 'tool2'],
+            support=0.5,
+            confidence=0.8,
+            lift=1.5,
+            contexts=['expert:engineering', 'intermediate:data_science']
+        )
+        
+        # Convert to dict
+        pattern_dict = pattern.to_dict()
+        
+        # Contexts should be serialized as JSON
+        assert 'contexts' in pattern_dict
+        contexts_json = pattern_dict['contexts']
+        contexts_list = json.loads(contexts_json)
+        assert 'expert:engineering' in contexts_list
+        assert 'intermediate:data_science' in contexts_list

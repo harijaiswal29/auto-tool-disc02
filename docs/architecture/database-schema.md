@@ -139,8 +139,43 @@ CREATE TABLE discovered_patterns (
     lift REAL,
     contexts JSON,
     discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    usage_count INTEGER DEFAULT 0
+    usage_count INTEGER DEFAULT 0,
+    temporal_metadata JSON  -- Stores temporal pattern information
 );
+```
+
+### Pattern Mining Metadata (For Incremental Updates)
+```sql
+CREATE TABLE pattern_mining_metadata (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT NOT NULL UNIQUE,
+    value TEXT,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Default entries for tracking incremental updates
+INSERT OR IGNORE INTO pattern_mining_metadata (key, value) 
+VALUES ('last_processed_execution_id', NULL);
+INSERT OR IGNORE INTO pattern_mining_metadata (key, value) 
+VALUES ('last_update_timestamp', datetime('now'));
+```
+
+### Pattern Statistics (For Incremental Mining)
+```sql
+CREATE TABLE pattern_statistics (
+    pattern_hash TEXT PRIMARY KEY,
+    pattern_type TEXT NOT NULL,
+    tool_sequence JSON NOT NULL,
+    occurrence_count INTEGER DEFAULT 0,
+    success_count INTEGER DEFAULT 0,
+    total_support REAL DEFAULT 0.0,
+    total_confidence REAL DEFAULT 0.0,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for efficient incremental queries
+CREATE INDEX idx_pattern_statistics_last_seen ON pattern_statistics(last_seen DESC);
 ```
 
 ### Execution History
@@ -155,8 +190,18 @@ CREATE TABLE execution_history (
     execution_time_ms INTEGER,
     success BOOLEAN,
     reward REAL,
+    user_expertise TEXT DEFAULT 'intermediate',
+    domain TEXT DEFAULT 'general',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Index for efficient incremental pattern mining
+CREATE INDEX idx_execution_history_created_at ON execution_history(created_at DESC);
+
+-- Indexes for context-aware queries
+CREATE INDEX idx_execution_history_expertise ON execution_history(user_expertise);
+CREATE INDEX idx_execution_history_domain ON execution_history(domain);
+CREATE INDEX idx_execution_history_context ON execution_history(user_expertise, domain);
 ```
 
 ## Metrics Tables

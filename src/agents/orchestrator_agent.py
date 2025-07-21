@@ -8,6 +8,7 @@ to provide end-to-end query processing capabilities.
 import asyncio
 import json
 import time
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional, Tuple
 import sys
@@ -24,10 +25,12 @@ from src.state_machine.conversation_state_machine import ConversationStateMachin
 from src.state_machine.handlers import register_handlers
 from src.learning.q_learning_engine import QLearningEngine
 from src.learning.reward_calculator import RewardCalculator, ExecutionMetrics
+from src.learning.context_extractor import ContextExtractor, UserContext
 from src.database.database import DatabaseManager
 import numpy as np
 import psutil
 import resource
+import uuid
 
 
 @dataclass
@@ -126,6 +129,9 @@ class OrchestratorAgent:
         # Initialize enhanced reward calculator
         self.reward_calculator = RewardCalculator(config)
         
+        # Initialize context extractor for context-aware patterns
+        self.context_extractor = ContextExtractor()
+        
         # Initialize database manager for failure tracking
         self.db_manager = DatabaseManager()
         asyncio.create_task(self.db_manager.initialize())
@@ -140,6 +146,18 @@ class OrchestratorAgent:
             'retry_patterns': {}
         }
         self.current_state = None
+        
+        # Initialize context for session tracking
+        self.context = {
+            'session_start': datetime.now()
+        }
+        
+        # Track user statistics for context extraction
+        self.user_stats = {
+            'success_rate': 0.5,
+            'query_count': 0,
+            'avg_tools_used': 1.0
+        }
         
         self.logger.info("Orchestrator Agent initialized successfully")
     
@@ -193,8 +211,18 @@ class OrchestratorAgent:
             self.logger.info(f"Intent recognized: {intent_result.primary_intent.type} "
                            f"(confidence: {intent_result.primary_intent.confidence:.2f})")
             
-            # Store intent confidence in context for reward calculation
+            # Step 1.5: Extract user context for context-aware patterns
+            self.user_stats['query_count'] += 1
+            user_context = self.context_extractor.extract_context(
+                query=query,
+                user_stats=self.user_stats,
+                intent_type=intent_result.primary_intent.type
+            )
+            self.logger.info(f"User context extracted - Expertise: {user_context.user_expertise}, Domain: {user_context.domain}")
+            
+            # Store intent confidence and context for reward calculation
             self.context['last_intent_confidence'] = intent_result.primary_intent.confidence
+            self.context['user_context'] = user_context
             
             # Update state machine with intent
             intent_dict = {
@@ -453,9 +481,11 @@ class OrchestratorAgent:
     async def _select_tools_with_q_learning(self, discovered_tools: List[Dict[str, Any]], 
                                           intent_result: IntentResult) -> List[Dict[str, Any]]:
         """Select tools using Q-learning engine."""
-        # Encode current state
+        # Encode current state with user context
+        user_context = self.context.get('user_context')
         context = {
-            'domain': self.config.get('project', {}).get('domain', 'general'),
+            'domain': user_context.domain if user_context else 'general',
+            'user_expertise': user_context.user_expertise if user_context else 'intermediate',
             'query_count': len(self.execution_history),
             'success_rate': self._calculate_success_rate(),
             'metrics': {
@@ -487,9 +517,9 @@ class OrchestratorAgent:
         # Define constraints (tool relationships)
         constraints = await self._get_tool_constraints(available_tool_ids)
         
-        # Select action (tool combination) using Q-learning
+        # Select action (tool combination) using Q-learning with context
         selected_tool_ids = await self.q_learning_engine.select_action(
-            state, available_tool_ids, constraints
+            state, available_tool_ids, constraints, context=context
         )
         
         # Map selected IDs back to tool objects
@@ -798,6 +828,53 @@ class OrchestratorAgent:
         
         return min(quality_score, 1.0)
     
+    async def _save_execution_to_database(self, execution_record: Dict[str, Any], 
+                                         intent_result: IntentResult):
+        """Save execution record to database for pattern mining."""
+        try:
+            async with self.db_manager.get_connection() as conn:
+                await conn.execute("""
+                    INSERT INTO execution_history 
+                    (id, user_id, session_id, query, intent, tools_used, 
+                     execution_time_ms, success, reward, user_expertise, domain, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    execution_record['execution_id'],
+                    None,  # user_id - not implemented yet
+                    execution_record['execution_id'],  # Using execution_id as session_id
+                    execution_record['query'],
+                    json.dumps({
+                        'type': intent_result.primary_intent.type,
+                        'confidence': intent_result.primary_intent.confidence,
+                        'keywords': intent_result.primary_intent.keywords
+                    }),
+                    json.dumps(execution_record['tools']),
+                    execution_record['execution_time_ms'],
+                    execution_record['success'],
+                    execution_record['reward'],
+                    execution_record['user_expertise'],
+                    execution_record['domain'],
+                    datetime.now().isoformat()
+                ))
+                await conn.commit()
+                self.logger.debug(f"Saved execution {execution_record['execution_id']} to database with context")
+        except Exception as e:
+            self.logger.error(f"Failed to save execution to database: {e}")
+    
+    def _update_user_stats(self, execution_results: List[ToolExecutionResult]):
+        """Update user statistics based on execution results."""
+        # Calculate success rate with exponential moving average
+        success = any(r.success for r in execution_results)
+        alpha = 0.1  # Learning rate for moving average
+        self.user_stats['success_rate'] = (1 - alpha) * self.user_stats['success_rate'] + alpha * (1.0 if success else 0.0)
+        
+        # Update average tools used
+        tools_used = len(execution_results)
+        self.user_stats['avg_tools_used'] = (1 - alpha) * self.user_stats['avg_tools_used'] + alpha * tools_used
+        
+        self.logger.debug(f"Updated user stats - Success rate: {self.user_stats['success_rate']:.2f}, "
+                         f"Avg tools: {self.user_stats['avg_tools_used']:.2f}")
+    
     def _generate_summary(self, intent_result: IntentResult, 
                          execution_results: List[ToolExecutionResult]) -> str:
         """Generate a human-readable summary of the execution results."""
@@ -952,8 +1029,10 @@ class OrchestratorAgent:
         executed_tools = tuple(r.tool_id for r in execution_results)
         
         # Prepare next state (after execution)
+        user_context = self.context.get('user_context')
         next_context = {
-            'domain': self.config.get('project', {}).get('domain', 'general'),
+            'domain': user_context.domain if user_context else 'general',
+            'user_expertise': user_context.user_expertise if user_context else 'intermediate',
             'query_count': len(self.execution_history) + 1,
             'success_rate': self._calculate_success_rate(),
             'metrics': {
@@ -997,8 +1076,11 @@ class OrchestratorAgent:
         # Decay exploration rate
         self.q_learning_engine.decay_exploration()
         
+        # Get user context
+        user_context = self.context.get('user_context')
+        
         # Update execution history
-        self.execution_history.append({
+        execution_record = {
             'execution_id': self.current_session_id,
             'query': self.context.get('current_query', ''),
             'tools': [r.tool_id for r in execution_results],
@@ -1012,8 +1094,17 @@ class OrchestratorAgent:
                 'mode': 'exploration' if self.q_learning_engine.exploration_rate > 0.15 else 'production',
                 'intent_confidence': intent_result.primary_intent.confidence,
                 'user_initiated': True
-            }
-        })
+            },
+            'user_expertise': user_context.user_expertise if user_context else 'intermediate',
+            'domain': user_context.domain if user_context else 'general'
+        }
+        self.execution_history.append(execution_record)
+        
+        # Save to database for pattern mining
+        await self._save_execution_to_database(execution_record, intent_result)
+        
+        # Update user statistics for future context extraction
+        self._update_user_stats(execution_results)
         
         # Keep history size manageable
         if len(self.execution_history) > 100:

@@ -18,7 +18,7 @@ The Q-Learning Engine is a core component of Phase 4 that enables the system to 
 
 ### State Representation
 
-The state vector consists of 439 dimensions:
+The state vector consists of 447 dimensions:
 - **Intent Vector** (384 dims): Sentence transformer embeddings from intent recognition
 - **Context Features** (10 dims): Domain, session info, user history
 - **Tool History** (20 dims): Recent tool usage patterns
@@ -26,6 +26,8 @@ The state vector consists of 439 dimensions:
 - **Failure Rates** (10 dims): Per-tool failure rate tracking
 - **Failure Types** (5 dims): Network, permission, timeout, rate_limit, other
 - **Retry Patterns** (5 dims): Retry statistics and patterns
+- **User Expertise** (3 dims): One-hot encoding for novice, intermediate, expert
+- **Domain Context** (5 dims): One-hot encoding for general, engineering, data_science, web_dev, devops
 
 ```python
 state_dimensions = {
@@ -35,7 +37,9 @@ state_dimensions = {
     'performance_metrics': 5,  # Success rate, response time, etc.
     'failure_rates': 10,       # Per-tool failure rates
     'failure_types': 5,        # Network, permission, timeout, rate_limit, other
-    'retry_patterns': 5        # Retry statistics and patterns
+    'retry_patterns': 5,       # Retry statistics and patterns
+    'user_expertise': 3,       # One-hot: novice, intermediate, expert
+    'domain_context': 5        # One-hot: general, engineering, data_science, web_dev, devops
 }
 ```
 
@@ -98,6 +102,37 @@ The Q-learning engine integrates seamlessly with the orchestrator agent:
 3. **Model Persistence**: The learned model is periodically saved to database
 4. **Exploration vs Exploitation**: Epsilon-greedy strategy balances trying new combinations vs using known good ones
 
+## Context-Aware Tool Selection
+
+The Q-learning engine now incorporates user expertise and domain context for personalized tool selection:
+
+### Context Extraction
+```python
+# Extract context from query
+context_extractor = ContextExtractor()
+user_context = context_extractor.extract_context(
+    query=user_query,
+    user_stats={'success_rate': 0.8, 'query_count': 50},
+    intent_type='query.search'
+)
+# Returns: UserContext(user_expertise='intermediate', domain='engineering')
+```
+
+### State Encoding with Context
+The context is encoded as part of the state vector:
+- User expertise: 3-dimensional one-hot encoding (novice, intermediate, expert)
+- Domain: 5-dimensional one-hot encoding (general, engineering, data_science, web_dev, devops)
+
+### Pattern-Based Selection
+```python
+# Get context-aware patterns
+patterns = await pattern_miner.get_context_matching_patterns(
+    current_tools=['filesystem_mcp'],
+    context=user_context
+)
+# Returns patterns relevant to intermediate engineering users
+```
+
 ## Configuration
 
 Add to `config/config.json`:
@@ -114,7 +149,10 @@ Add to `config/config.json`:
     "buffer_capacity": 10000,
     "batch_size": 32,
     "update_frequency": 4,
-    "enable_learning": true
+    "enable_learning": true,
+    "use_context_aware_patterns": true,
+    "min_sequences_per_context": 10,
+    "context_relevance_threshold": 0.7
   }
 }
 ```
@@ -128,12 +166,19 @@ Add to `config/config.json`:
 config = load_config()
 q_engine = QLearningEngine(config)
 
-# Select action (tool combination)
+# Extract context from query
+context_extractor = ContextExtractor()
+user_context = context_extractor.extract_context(
+    query="Find and analyze Python files",
+    user_stats={'success_rate': 0.8, 'query_count': 50}
+)
+
+# Select action (tool combination) with context
 state = encode_current_state()
 available_tools = ['filesystem_mcp', 'sqlite_mcp', 'search_mcp']
 constraints = {'conflicts': {}, 'requires': {}}
 
-action = await q_engine.select_action(state, available_tools, constraints)
+action = await q_engine.select_action(state, available_tools, constraints, context=user_context)
 
 # Learn from experience
 reward = calculate_reward(execution_results)
@@ -307,3 +352,4 @@ python demos/demo_q_learning_orchestration.py
 3. **Transfer Learning**: Apply learned knowledge to new domains
 4. **Online Learning**: Continuous adaptation in production
 5. **Explainability**: Visualize learned policies and decisions
+6. **Distributed Evaluation**: Scale evaluation across multiple machines for faster hyperparameter search and strategy comparison
