@@ -9,7 +9,7 @@ Test Evidence:
 1. Docker container: auto_tool_disc_postgres (Running on port 5432)
 2. Database: auto_tool_disc (7 tables, sample data loaded)
 3. MCP Server: Connected and executing queries successfully
-4. Test Logs: Available in test_results/postgres_mcp/
+4. Test Logs: Available in tests/data/results/postgres_mcp/
 
 Key Test Results:
 -----------------
@@ -35,6 +35,6 @@ How to Run Tests Yourself:
    python tests/integration/test_postgres_final.py
 
 3. Check test results:
-   cat test_results/postgres_mcp/06_final_verification.log
+   cat tests/data/results/postgres_mcp/test_summary.md
 
 ================================================================================

@@ -1,0 +1,3 @@
+# This file ensures the temp directory is tracked by git
+# Temporary test files will be stored here
+# Files in this directory should be cleaned up after test runs

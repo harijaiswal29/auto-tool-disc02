@@ -62,6 +62,14 @@ coverage.json
 coverage_report.txt
 .tox/
 
+# Test outputs
+tests/data/logs/*
+!tests/data/logs/.gitkeep
+tests/data/temp/*
+!tests/data/temp/.gitkeep
+tests/data/results/**/*.log
+tests/data/results/**/*.xml
+
 # Documentation builds
 docs/_build/
 docs/_static/

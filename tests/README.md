@@ -58,6 +58,7 @@ tests/
 │   │   └── queries.json   # Sample user queries
 │   ├── expected/          # Expected output files
 │   ├── logs/             # Test execution logs
+│   ├── results/          # Test results (JUnit XML, summaries, reports)
 │   └── temp/             # Temporary test files
 ├── conftest.py            # Pytest configuration
 ```
@@ -333,6 +334,7 @@ tests/data/
 │   └── queries.json  # Sample user queries
 ├── expected/         # Expected output files
 ├── logs/            # Test execution logs
+├── results/          # Test results (JUnit XML, summaries, reports)
 └── temp/            # Temporary test files
 ```
 

@@ -92,7 +92,7 @@ async def demonstrate_postgres_mcp():
     print("\n\n🗄️ PART 3: Tool Registry Integration")
     print("-" * 60)
     
-    registry = ToolRegistry("test_results/postgres_mcp/test_registry.db")
+    registry = ToolRegistry("tests/data/temp/postgres_mcp/test_registry.db")
     
     # Register tools from real client
     client = PostgresMCPClient(real_connection)
