@@ -139,9 +139,9 @@ class SetupVerifier:
         
         self.check("Logging system works", test_logging)
     
-    def verify_mcp_prerequisites(self):
-        """Check if MCP prerequisites are met."""
-        logger.info("\n🔧 Checking MCP Prerequisites")
+    def verify_npm_installation(self):
+        """Check if npm is installed (will be needed for Phase 2)."""
+        logger.info("\n🔧 Checking npm Installation (for Phase 2)")
         logger.info("-" * 40)
         
         # Check if npm is installed
@@ -155,30 +155,8 @@ class SetupVerifier:
         npm_installed = self.check("npm is installed", check_npm)
         
         if not npm_installed:
-            self.warnings.append("Install Node.js and npm to use MCP servers")
-        
-        # Check if any MCP servers are installed
-        mcp_servers = [
-            "@modelcontextprotocol/server-filesystem",
-            "@modelcontextprotocol/server-sqlite",
-            "@modelcontextprotocol/server-time"
-        ]
-        
-        for server in mcp_servers:
-            def check_server(s=server):
-                try:
-                    # Check if globally installed
-                    result = subprocess.run(
-                        ["npm", "list", "-g", s], 
-                        capture_output=True, 
-                        text=True
-                    )
-                    return s in result.stdout
-                except:
-                    return False
-            
-            if not self.check(f"MCP server installed: {server}", check_server):
-                self.warnings.append(f"Install with: npm install -g {server}")
+            self.warnings.append("npm not found - will be needed in Phase 2 for MCP servers")
+            self.warnings.append("Install Node.js and npm from: https://nodejs.org/")
     
     def verify_database_setup(self):
         """Check database configuration."""
@@ -211,7 +189,7 @@ class SetupVerifier:
         self.verify_python_environment()
         self.verify_configuration()
         self.verify_logging()
-        self.verify_mcp_prerequisites()
+        self.verify_npm_installation()
         self.verify_database_setup()
         
         # Summary
@@ -226,14 +204,15 @@ class SetupVerifier:
                 logger.warning(f"  - {warning}")
         
         if self.checks_failed == 0:
-            logger.info("\n🎉 All checks passed! Your setup is ready.")
-            logger.info("🚀 Next step: Run 'python src/hello_mcp.py' to test MCP concepts")
+            logger.info("\n🎉 All checks passed! Phase 1 (Foundation) setup is complete.")
+            logger.info("📋 Your basic infrastructure is ready.")
+            logger.info("🚀 Next step: Proceed to Phase 2 for Tool Ecosystem setup")
         else:
             logger.error("\n⚠️  Some checks failed. Please fix the issues above.")
             logger.info("💡 Most issues can be fixed by:")
             logger.info("  1. Installing missing packages: pip install -r requirements.txt")
             logger.info("  2. Creating missing directories: mkdir -p [directory]")
-            logger.info("  3. Installing MCP servers: npm install -g @modelcontextprotocol/server-[name]")
+            logger.info("  3. Verifying Python version >= 3.8")
         
         return self.checks_failed == 0
 
