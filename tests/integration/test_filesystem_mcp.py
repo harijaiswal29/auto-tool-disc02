@@ -78,7 +78,7 @@ async def test_direct_filesystem_client():
         
         # Test 5: List directory contents
         logger.info("\n[TEST] Listing directory...")
-        list_result = await client.list_directory(".")
+        list_result = await client.list_directory("")
         logger.info(f"Directory listing: {list_result}")
         
         # Test 6: Check file existence
@@ -115,7 +115,7 @@ async def test_mcp_integration():
     
     # Create registry and integration
     registry = ToolRegistry("data/test_fs_integration_registry.db")
-    integration = MCPIntegration(registry)
+    integration = MCPIntegration(config=None, registry=registry)
     
     try:
         # Add filesystem server
@@ -199,7 +199,7 @@ async def test_mcp_integration():
         list_result = await integration.execute_tool(
             "filesystem.list_directory",
             {
-                "path": "."
+                "path": ""
             }
         )
         logger.info(f"Root directory listing: {list_result}")
@@ -231,7 +231,7 @@ async def test_combined_operations():
     
     # Create registry and integration
     registry = ToolRegistry("data/test_combined_registry.db")
-    integration = MCPIntegration(registry)
+    integration = MCPIntegration(config=None, registry=registry)
     
     try:
         # Add filesystem server

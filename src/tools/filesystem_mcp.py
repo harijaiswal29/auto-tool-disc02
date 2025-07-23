@@ -199,11 +199,15 @@ class FileSystemMCPClient:
         Read contents of a file.
         
         Args:
-            file_path: Path to the file to read
+            file_path: Path to the file to read (relative to base path or absolute)
             
         Returns:
             File contents or error information
         """
+        # Convert to absolute path within base directory if relative
+        if not Path(file_path).is_absolute():
+            file_path = str(self.base_path / file_path)
+        
         logger.info(f"[READ] Reading file: {file_path}")
         
         return await self.call_tool("read_file", {"path": file_path})
@@ -213,12 +217,16 @@ class FileSystemMCPClient:
         Write content to a file.
         
         Args:
-            file_path: Path to the file to write
+            file_path: Path to the file to write (relative to base path or absolute)
             content: Content to write
             
         Returns:
             Success status or error information
         """
+        # Convert to absolute path within base directory if relative
+        if not Path(file_path).is_absolute():
+            file_path = str(self.base_path / file_path)
+            
         logger.info(f"[WRITE] Writing to file: {file_path}")
         
         return await self.call_tool("write_file", {"path": file_path, "content": content})
@@ -228,11 +236,17 @@ class FileSystemMCPClient:
         List contents of a directory.
         
         Args:
-            dir_path: Path to the directory (default: current directory)
+            dir_path: Path to the directory (relative to base path or absolute, default: base directory)
             
         Returns:
             Directory contents or error information
         """
+        # Convert to absolute path within base directory if relative
+        if dir_path == "" or dir_path == ".":
+            dir_path = str(self.base_path)
+        elif not Path(dir_path).is_absolute():
+            dir_path = str(self.base_path / dir_path)
+            
         logger.info(f"[LIST] Listing directory: {dir_path}")
         
         return await self.call_tool("list_directory", {"path": dir_path})
@@ -242,11 +256,15 @@ class FileSystemMCPClient:
         Create a directory.
         
         Args:
-            dir_path: Path to the directory to create
+            dir_path: Path to the directory to create (relative to base path or absolute)
             
         Returns:
             Success status or error information
         """
+        # Convert to absolute path within base directory if relative
+        if not Path(dir_path).is_absolute():
+            dir_path = str(self.base_path / dir_path)
+            
         logger.info(f"[CREATE] Creating directory: {dir_path}")
         
         # Some MCP servers might have this as a separate tool
