@@ -94,7 +94,14 @@ tests/
   - May require external dependencies
 
 **Key Integration Tests:**
-- MCP tool integrations (SQLite, PostgreSQL, GitHub, etc.)
+- MCP tool integrations:
+  - **SQLite MCP** (`test_sqlite_mcp.py`)
+  - **PostgreSQL MCP** (`test_postgres_mcp.py`)
+  - **GitHub MCP** (`test_github_mcp.py`)
+  - **Search MCP** (`test_search_mcp.py` - unit tests with mock)
+  - **Brave Search Direct** (`test_brave_search_direct.py` - real API integration)
+  - **Filesystem MCP** (`test_filesystem_mcp.py`)
+  - **Weather MCP** (`test_weather_mcp.py`)
 - Intent recognition pipeline integration
 - State machine workflow integration
 - `test_pipeline_workflow.py` - Complete end-to-end pipeline testing
@@ -185,6 +192,12 @@ pytest -k "test_retry" -v
 
 # Run Q-Learning tests
 pytest tests/unit/test_q_learning_engine.py -v
+
+# Run Search MCP tests
+pytest tests/unit/test_search_mcp.py -v  # Unit tests with mock (18 tests)
+# For real API testing:
+export BRAVE_API_KEY='your-api-key'
+python tests/integration/test_brave_search_direct.py  # Direct Brave Search API test
 ```
 
 ### Coverage Reports
@@ -364,6 +377,9 @@ export POSTGRES_TEST_URL=postgresql://user:pass@localhost/testdb
 
 # Weather API tests
 export WEATHER_API_KEY=your_api_key
+
+# Brave Search API tests (for real API testing)
+export BRAVE_API_KEY=your_brave_api_key
 ```
 
 ### Optional Configuration

@@ -221,13 +221,15 @@ class IntentRecognitionAgent:
         
         # Create result
         return IntentResult(
-            query=query,
-            normalized_query=normalized_query,
             primary_intent=primary_intent,
             all_intents=all_intents,
-            features=features,
-            processing_time_ms=0,  # Will be set by caller
-            confidence_passed=confidence_passed
+            raw_query=query,
+            processed_query=normalized_query,
+            confidence_threshold_met=confidence_passed,
+            metadata={
+                'features': features,
+                'processing_time_ms': 0  # Will be set by caller
+            }
         )
     
     async def _handle_multi_intent_query(self, query: str, context: Dict[str, Any]) -> IntentResult:
@@ -268,13 +270,15 @@ class IntentRecognitionAgent:
         
         # Create combined result
         return IntentResult(
-            query=query,
-            normalized_query=query.lower(),  # Simple normalization for multi-intent
             primary_intent=primary_intent,
             all_intents=all_intents,
-            features=all_features,
-            processing_time_ms=0,  # Will be set by caller
-            confidence_passed=primary_intent.confidence >= self.confidence_threshold
+            raw_query=query,
+            processed_query=query.lower(),  # Simple normalization for multi-intent
+            confidence_threshold_met=primary_intent.confidence >= self.confidence_threshold,
+            metadata={
+                'features': all_features,
+                'processing_time_ms': 0  # Will be set by caller
+            }
         )
     
     async def get_intent_details(self, intent_type: str) -> Dict[str, Any]:

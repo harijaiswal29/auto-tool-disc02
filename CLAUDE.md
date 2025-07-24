@@ -320,6 +320,13 @@ pytest tests/unit/test_notion_mcp.py -v
 python demos/demo_notion_mcp.py  # Run Notion demo
 python src/tools/notion_mcp.py  # Run basic Notion test
 
+# Test Search MCP
+pytest tests/unit/test_search_mcp.py -v  # Unit tests (18 tests with mock)
+# For real Brave Search API testing:
+export BRAVE_API_KEY='your-api-key'
+python tests/integration/test_brave_search_direct.py  # Test with real API
+# Note: test_search_mcp_integration.py removed as redundant
+
 # Monitor Performance
 python -c "from src.agents.intent_recognition_agent import IntentRecognitionAgent; agent = IntentRecognitionAgent(); print(agent.get_metrics_summary())"
 

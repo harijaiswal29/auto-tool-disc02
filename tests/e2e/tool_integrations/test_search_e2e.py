@@ -28,7 +28,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.agents.orchestrator_agent import OrchestratorAgent
 from src.core.mcp_integration import MCPIntegration
 from src.core.tool_registry import ToolRegistry
-from src.tools.search_mcp import SearchMCP
 
 
 class TestSearchE2E:
@@ -46,7 +45,7 @@ class TestSearchE2E:
         await registry.initialize()
         
         # Initialize MCP integration
-        mcp = MCPIntegration(registry)
+        mcp = MCPIntegration(config=None, registry=registry)
         await mcp.initialize()
         
         # Add Search MCP server (use mock for testing)

@@ -167,8 +167,8 @@ class MessageQueue:
       "command": ["mcp-server-sqlite", "--db-path", "./data/test.db"],
       "timeout": 30
     },
-    "search": {
-      "command": ["mcp-server-brave-search"],
+    "brave_search": {
+      "command": ["brave-search-mcp"],
       "env": {"BRAVE_API_KEY": "YOUR_API_KEY"},
       "timeout": 30
     }

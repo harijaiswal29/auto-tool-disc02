@@ -44,9 +44,9 @@ class SearchMCPClient:
         self.config = config or {}
         self.server_name = "search"
         
-        # Default to using npx to run a search MCP server
+        # Default to using the brave-search-mcp server
         self.server_command = server_command or [
-            "npx", "@modelcontextprotocol/server-search"
+            "./node_modules/.bin/brave-search-mcp"
         ]
         
         self.process: Optional[subprocess.Popen] = None
@@ -128,13 +128,15 @@ class SearchMCPClient:
                             "name": "SearchMCPClient",
                             "version": "0.1.0"
                         },
+                        "capabilities": {},  # Required by brave-search-mcp
                         "config": self.config
                     },
                     "id": self._next_message_id()
                 }
                 
                 await self._send_message(init_request)
-                response = await self._receive_message()
+                # Skip notifications during initialization to get the actual response
+                response = await self._receive_message(skip_notifications=True, timeout=10.0)
                 
                 if response and "result" in response:
                     self.capabilities = response["result"].get("capabilities", {})
@@ -162,7 +164,7 @@ class SearchMCPClient:
         }
         
         await self._send_message(list_request)
-        response = await self._receive_message()
+        response = await self._receive_message(skip_notifications=True)
         
         if response and "result" in response:
             self.tools = response["result"].get("tools", [])
@@ -321,7 +323,7 @@ class SearchMCPClient:
             response = await self.mock_server.handle_request(call_request)
         else:
             await self._send_message(call_request)
-            response = await self._receive_message()
+            response = await self._receive_message(skip_notifications=True)
         
         execution_time = (datetime.now() - start_time).total_seconds()
         
@@ -349,18 +351,51 @@ class SearchMCPClient:
             self.process.stdin.flush()
             logger.debug(f"→ Sent: {message.get('method', 'response')} (id: {message.get('id')})")
     
-    async def _receive_message(self) -> Optional[Dict[str, Any]]:
-        """Receive a JSON-RPC message from the MCP server."""
+    async def _receive_message(self, skip_notifications: bool = False, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
+        """
+        Receive a JSON-RPC message from the MCP server.
+        
+        Args:
+            skip_notifications: If True, skip notification messages (messages without 'id')
+            timeout: Maximum time to wait for a message in seconds
+            
+        Returns:
+            The received message, or None if timeout or error
+        """
         if self.process and self.process.stdout:
-            try:
-                line = self.process.stdout.readline()
-                if line:
-                    response = json.loads(line.strip())
-                    logger.debug(f"← Received: {response.get('id', 'notification')}")
-                    return response
-            except json.JSONDecodeError as e:
-                logger.error(f"[ERROR] JSON decode error: {e}")
-                logger.debug(f"Raw line: {line}")
+            while True:
+                try:
+                    # Use async I/O with timeout
+                    line = await asyncio.wait_for(
+                        asyncio.to_thread(self.process.stdout.readline),
+                        timeout=timeout
+                    )
+                    if line:
+                        response = json.loads(line.strip())
+                        
+                        # Check if this is a notification (no 'id' field)
+                        is_notification = 'id' not in response
+                        
+                        if is_notification:
+                            logger.debug(f"← Received notification: {response.get('method', 'unknown')}")
+                            if skip_notifications:
+                                # Continue reading to get the actual response
+                                continue
+                        else:
+                            logger.debug(f"← Received response: id={response.get('id')}")
+                        
+                        return response
+                    else:
+                        logger.warning("[WARNING] Received empty line from server")
+                        return None
+                        
+                except asyncio.TimeoutError:
+                    logger.warning(f"[TIMEOUT] No response received within {timeout}s")
+                    return None
+                except json.JSONDecodeError as e:
+                    logger.error(f"[ERROR] JSON decode error: {e}")
+                    logger.debug(f"Raw line: {line}")
+                    return None
         return None
     
     async def disconnect(self) -> None:
@@ -421,40 +456,59 @@ async def test_search_mcp():
                 logger.error("[ERROR] Could not connect to mock server either")
                 return
         
-        # Test web search
-        web_result = await client.web_search(
-            "Model Context Protocol MCP",
-            {"num_results": 5, "language": "en"}
-        )
-        logger.info(f"[WEB_SEARCH] Result: {web_result}")
+        # Test brave web search (note: tool names have changed with brave-search-mcp)
+        if any(tool.get("name") == "brave_web_search" for tool in client.tools):
+            web_result = await client.call_tool(
+                "brave_web_search",
+                {"query": "Model Context Protocol MCP", "count": 5}
+            )
+            logger.info(f"[BRAVE_WEB_SEARCH] Result: {web_result}")
+        else:
+            # Fall back to old tool names for mock server
+            web_result = await client.web_search(
+                "Model Context Protocol MCP",
+                {"num_results": 5, "language": "en"}
+            )
+            logger.info(f"[WEB_SEARCH] Result: {web_result}")
         
-        # Test code search
-        code_result = await client.code_search(
-            "async def connect",
-            language="python"
-        )
-        logger.info(f"[CODE_SEARCH] Result: {code_result}")
+        # Test brave news search
+        if any(tool.get("name") == "brave_news_search" for tool in client.tools):
+            news_result = await client.call_tool(
+                "brave_news_search",
+                {"query": "artificial intelligence", "count": 5}
+            )
+            logger.info(f"[BRAVE_NEWS_SEARCH] Result: {news_result}")
+        else:
+            # Fall back to old tool names for mock server
+            news_result = await client.news_search(
+                "artificial intelligence",
+                {"from": "2024-01-01", "to": "2024-12-31"}
+            )
+            logger.info(f"[NEWS_SEARCH] Result: {news_result}")
         
-        # Test documentation search
-        doc_result = await client.documentation_search(
-            "asyncio python",
-            source="python"
-        )
-        logger.info(f"[DOC_SEARCH] Result: {doc_result}")
-        
-        # Test news search
-        news_result = await client.news_search(
-            "artificial intelligence",
-            {"from": "2024-01-01", "to": "2024-12-31"}
-        )
-        logger.info(f"[NEWS_SEARCH] Result: {news_result}")
-        
-        # Test scholarly search
-        scholar_result = await client.scholarly_search(
-            "machine learning",
-            fields=["computer science", "artificial intelligence"]
-        )
-        logger.info(f"[SCHOLARLY_SEARCH] Result: {scholar_result}")
+        # Note: brave-search-mcp doesn't have code_search, doc_search, or scholarly_search
+        # These are only available in mock mode
+        if client.use_mock:
+            # Test code search
+            code_result = await client.code_search(
+                "async def connect",
+                language="python"
+            )
+            logger.info(f"[CODE_SEARCH] Result: {code_result}")
+            
+            # Test documentation search
+            doc_result = await client.documentation_search(
+                "asyncio python",
+                source="python"
+            )
+            logger.info(f"[DOC_SEARCH] Result: {doc_result}")
+            
+            # Test scholarly search
+            scholar_result = await client.scholarly_search(
+                "machine learning",
+                fields=["computer science", "artificial intelligence"]
+            )
+            logger.info(f"[SCHOLARLY_SEARCH] Result: {scholar_result}")
         
         # Test with tool registry
         registry = ToolRegistry("data/test_search_registry.db")

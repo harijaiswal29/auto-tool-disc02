@@ -25,7 +25,7 @@
       "enabled": true
     },
     "brave_search": {
-      "command": ["./node_modules/.bin/mcp-server-brave-search"],
+      "command": ["./node_modules/.bin/brave-search-mcp"],
       "args": [],
       "enabled": true,
       "env": {
