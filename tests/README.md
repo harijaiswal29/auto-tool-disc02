@@ -14,6 +14,7 @@ tests/
 │   ├── test_intent_pipeline_stages.py
 │   ├── test_conversation_state_machine.py
 │   ├── test_search_mcp.py
+│   ├── test_github_mcp.py                  # GitHub MCP unit tests
 │   ├── test_state_machine_base.py
 │   ├── test_retry.py
 │   ├── test_retry_extended.py              # Extended retry tests (connection pool, registry)
@@ -198,6 +199,13 @@ pytest tests/unit/test_search_mcp.py -v  # Unit tests with mock (18 tests)
 # For real API testing:
 export BRAVE_API_KEY='your-api-key'
 python tests/integration/test_brave_search_direct.py  # Direct Brave Search API test
+
+# Run GitHub MCP tests
+pytest tests/unit/test_github_mcp.py -v  # Unit tests with mock (23 tests)
+pytest tests/integration/test_github_mcp.py -v  # Integration tests
+# For real GitHub API testing:
+export GITHUB_TOKEN='your-github-token'
+python tests/integration/test_github_mcp.py  # Tests with real GitHub API
 ```
 
 ### Coverage Reports
@@ -364,6 +372,164 @@ tests/data/
 - Main entry points (`if __name__ == "__main__"`)
 - Abstract base classes
 - Type checking blocks (`if TYPE_CHECKING:`)
+
+## GitHub MCP Testing
+
+### Overview
+The GitHub MCP tests are organized into unit tests and integration tests:
+
+**Unit Tests** (`tests/unit/test_github_mcp.py`):
+- 23 test cases covering GitHubMCPClient functionality
+- Tests connection handling (mock/real server fallback)
+- Tests tool discovery and execution
+- Tests error handling and edge cases
+- Mock server tests (MockGitHubMCPServer)
+- All tests use mock server by default (no GitHub token required)
+
+**Integration Tests** (`tests/integration/`):
+- `test_github_mcp.py` - Main comprehensive integration test
+- `test_github_direct.py` - Direct protocol testing
+- `test_github_simple.py` - Basic server startup test
+- `test_github_real_direct.py` - Real server testing with debugging
+- `test_all_mcp_tools.py` - Tests GitHub MCP with other tools in the system
+
+### Mock vs Real Server Testing
+- **Mock Server**: Default for all tests, provides comprehensive GitHub API simulation
+- **Real Server**: Requires `GITHUB_TOKEN` environment variable
+- The system automatically falls back to mock server if real server connection fails
+
+### Integration Test Results
+
+**Real GitHub Server Test Results:**
+- Successfully connects to real GitHub MCP server with valid token
+- Discovers 26 tools from the real server (vs 8 in mock)
+- Real server tools include: `create_or_update_file`, `search_repositories`, `get_file_contents`, `push_files`, `create_issue`, `create_pull_request`, etc.
+- Tool names differ between real and mock servers (e.g., `create_pull_request` vs `create_pull`)
+
+**Mock Server Test Results:**
+- All 8 mock tools execute successfully
+- Provides fast, reliable testing without external dependencies
+- Simulates: `list_repos`, `search_repos`, `get_repo`, `create_issue`, `list_issues`, `create_pull`, `list_pulls`, `search_code`
+
+### Running GitHub MCP Integration Tests
+
+```bash
+# Unit tests (always uses mock server)
+pytest tests/unit/test_github_mcp.py -v
+
+# Integration tests with mock server (default)
+python tests/integration/test_github_mcp.py
+
+# Integration tests with real GitHub server
+export GITHUB_TOKEN='your-github-token'
+python tests/integration/test_github_mcp.py
+
+# Test GitHub MCP with all other tools
+python tests/integration/test_all_mcp_tools.py
+
+# Run all GitHub-related tests
+pytest tests -k "github" -v
+```
+
+### Manual Testing Instructions
+
+1. **Test with Mock Server (No Token Required)**:
+   ```python
+   from src.tools.github_mcp import GitHubMCPClient
+   
+   client = GitHubMCPClient()
+   await client.connect(use_mock=True)
+   repos = await client.execute_tool("list_repos", {"username": "test"})
+   await client.disconnect()
+   ```
+
+2. **Test with Real Server**:
+   ```python
+   import os
+   from src.tools.github_mcp import GitHubMCPClient
+   
+   # Set token
+   os.environ['GITHUB_TOKEN'] = 'your-github-token'
+   
+   client = GitHubMCPClient()
+   await client.connect(use_mock=False)
+   
+   # Use real tool names from server
+   result = await client.execute_tool("search_repositories", {
+       "query": "language:python",
+       "max_results": 5
+   })
+   await client.disconnect()
+   ```
+
+### Mock Server Capabilities
+The mock server (`src/tools/mock_github_mcp.py`) simulates:
+- Repository operations (list, search, get details, get content)
+- Issue management (create, list)
+- Pull request operations (create, list)
+- Code search functionality
+- File operations (create/update, get contents, push multiple files)
+- User information retrieval
+- Proper JSON-RPC protocol handling
+
+### Mock Server Tools (13 tools)
+1. **list_repositories** - List repositories for a user or organization
+2. **search_repositories** - Search for repositories
+3. **get_repository** - Get repository details
+4. **create_issue** - Create a new issue
+5. **list_issues** - List issues for a repository
+6. **create_pull_request** - Create a pull request
+7. **list_pull_requests** - List pull requests
+8. **search_code** - Search for code across GitHub
+9. **create_or_update_file** - Create or update a file in a repository
+10. **get_file_contents** - Get the contents of a file
+11. **push_files** - Push multiple files to a repository
+12. **get_user** - Get user information
+13. **get_repository_content** - Get repository content at a specific path
+
+### Key Differences: Mock vs Real Server
+| Feature | Mock Server | Real Server |
+|---------|-------------|-------------|
+| Tools Count | 13 (core tools) | 26 (full feature set) |
+| Authentication | Not required | GitHub token required |
+| Tool Names | Matches real server | Full names |
+| Response Time | Instant | Network dependent |
+| Data | Simulated | Real GitHub data |
+| Rate Limits | None | GitHub API limits apply |
+| Backward Compatibility | Yes (old names work) | No |
+
+### Mock-Only Tools
+The mock server includes 4 essential tools not available in the real server:
+
+| Tool | Purpose | Why Included |
+|------|---------|--------------|
+| `list_repositories` | List user/org repos | Fundamental GitHub operation |
+| `get_repository` | Get repo details | Essential for testing |
+| `get_user` | Get user info | Common requirement |
+| `get_repository_content` | Browse repo contents | Basic navigation need |
+
+These tools exist to make the mock server more useful for testing and development. See [Migration Guide](../docs/migration/github-mcp-tool-names.md#mock-only-tools) for real server alternatives.
+
+### Tool Name Mapping (Backward Compatibility)
+The mock server supports both old and new tool names:
+- `list_repos` → `list_repositories`
+- `search_repos` → `search_repositories`
+- `get_repo` → `get_repository`
+- `create_pull` → `create_pull_request`
+- `list_pulls` → `list_pull_requests`
+
+### Unimplemented Tools in Mock Server
+The following tools are available only in the real GitHub MCP server:
+- `create_branch`, `merge_pull_request`, `create_release`
+- `list_commits`, `get_commit`, `list_branches`, `delete_branch`
+- `list_releases`, `get_release`, `update_issue`, `close_issue`
+- `add_labels`, `remove_labels`, `create_comment`, `update_comment`
+- And several others
+
+When attempting to use these tools with the mock server, you'll receive an error message:
+```
+Tool '{tool_name}' is not implemented in mock server. Available in real GitHub MCP server only.
+```
 
 ## Environment Variables
 

@@ -9,7 +9,13 @@ import os
 
 # Set environment
 env = os.environ.copy()
-env['GITHUB_TOKEN'] = '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'
+# Use environment variable for token - do not hardcode
+github_token = os.environ.get('GITHUB_TOKEN', '')
+if not github_token:
+    print("ERROR: GITHUB_TOKEN environment variable not set")
+    print("Please set GITHUB_TOKEN before running this test")
+    exit(1)
+env['GITHUB_TOKEN'] = github_token
 
 # Start the server
 proc = subprocess.Popen(

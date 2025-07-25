@@ -11,14 +11,24 @@ from datetime import datetime
 import random
 
 class MockGitHubMCPServer:
-    """Mock GitHub MCP server that simulates GitHub API operations."""
+    """Mock GitHub MCP server that simulates GitHub API operations.
+    
+    Note: This mock server includes 4 tools not available in the real GitHub MCP server:
+    - list_repositories: Essential for listing user/org repos
+    - get_repository: Fundamental for getting repo details
+    - get_user: Common requirement for user information
+    - get_repository_content: Basic need for browsing repo contents
+    
+    These tools exist because they represent fundamental GitHub operations that
+    developers expect, making the mock server more useful for testing and development.
+    """
     
     def __init__(self):
         self.name = "github-mock"
         self.description = "Mock GitHub operations"
         self.tools = [
             {
-                "name": "list_repos",
+                "name": "list_repositories",
                 "description": "List repositories for a user or organization",
                 "inputSchema": {
                     "type": "object",
@@ -30,7 +40,7 @@ class MockGitHubMCPServer:
                 }
             },
             {
-                "name": "search_repos",
+                "name": "search_repositories",
                 "description": "Search for repositories",
                 "inputSchema": {
                     "type": "object",
@@ -43,7 +53,7 @@ class MockGitHubMCPServer:
                 }
             },
             {
-                "name": "get_repo",
+                "name": "get_repository",
                 "description": "Get repository details",
                 "inputSchema": {
                     "type": "object",
@@ -85,7 +95,7 @@ class MockGitHubMCPServer:
                 }
             },
             {
-                "name": "create_pull",
+                "name": "create_pull_request",
                 "description": "Create a pull request",
                 "inputSchema": {
                     "type": "object",
@@ -101,7 +111,7 @@ class MockGitHubMCPServer:
                 }
             },
             {
-                "name": "list_pulls",
+                "name": "list_pull_requests",
                 "description": "List pull requests",
                 "inputSchema": {
                     "type": "object",
@@ -123,6 +133,88 @@ class MockGitHubMCPServer:
                         "language": {"type": "string", "description": "Programming language filter"}
                     },
                     "required": ["q"]
+                }
+            },
+            {
+                "name": "create_or_update_file",
+                "description": "Create or update a file in a repository",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "owner": {"type": "string", "description": "Repository owner"},
+                        "repo": {"type": "string", "description": "Repository name"},
+                        "path": {"type": "string", "description": "File path in the repository"},
+                        "content": {"type": "string", "description": "File content (base64 encoded)"},
+                        "message": {"type": "string", "description": "Commit message"},
+                        "branch": {"type": "string", "description": "Branch name", "default": "main"},
+                        "sha": {"type": "string", "description": "SHA of the file being replaced (for updates)"}
+                    },
+                    "required": ["owner", "repo", "path", "content", "message"]
+                }
+            },
+            {
+                "name": "get_file_contents",
+                "description": "Get the contents of a file from a repository",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "owner": {"type": "string", "description": "Repository owner"},
+                        "repo": {"type": "string", "description": "Repository name"},
+                        "path": {"type": "string", "description": "File path in the repository"},
+                        "ref": {"type": "string", "description": "Branch, tag, or commit to get file from"}
+                    },
+                    "required": ["owner", "repo", "path"]
+                }
+            },
+            {
+                "name": "push_files",
+                "description": "Push multiple files to a repository",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "owner": {"type": "string", "description": "Repository owner"},
+                        "repo": {"type": "string", "description": "Repository name"},
+                        "branch": {"type": "string", "description": "Branch name"},
+                        "files": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "path": {"type": "string"},
+                                    "content": {"type": "string"}
+                                },
+                                "required": ["path", "content"]
+                            },
+                            "description": "Array of files to push"
+                        },
+                        "message": {"type": "string", "description": "Commit message"}
+                    },
+                    "required": ["owner", "repo", "branch", "files", "message"]
+                }
+            },
+            {
+                "name": "get_user",
+                "description": "Get user information",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "username": {"type": "string", "description": "GitHub username"}
+                    },
+                    "required": ["username"]
+                }
+            },
+            {
+                "name": "get_repository_content",
+                "description": "Get repository content at a specific path",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "owner": {"type": "string", "description": "Repository owner"},
+                        "repo": {"type": "string", "description": "Repository name"},
+                        "path": {"type": "string", "description": "Path in repository", "default": ""},
+                        "ref": {"type": "string", "description": "Branch or commit ref"}
+                    },
+                    "required": ["owner", "repo"]
                 }
             }
         ]
@@ -215,14 +307,27 @@ class MockGitHubMCPServer:
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
         
+        # Map old tool names to new ones for backward compatibility
+        tool_name_mapping = {
+            "list_repos": "list_repositories",
+            "search_repos": "search_repositories",
+            "get_repo": "get_repository",
+            "create_pull": "create_pull_request",
+            "list_pulls": "list_pull_requests"
+        }
+        
+        # Apply mapping if old name is used
+        if tool_name in tool_name_mapping:
+            tool_name = tool_name_mapping[tool_name]
+        
         try:
-            if tool_name == "list_repos":
+            if tool_name == "list_repositories":
                 result = self._list_repos(arguments.get("username"))
             
-            elif tool_name == "search_repos":
+            elif tool_name == "search_repositories":
                 result = self._search_repos(arguments["q"])
             
-            elif tool_name == "get_repo":
+            elif tool_name == "get_repository":
                 result = self._get_repo(arguments["owner"], arguments["repo"])
             
             elif tool_name == "create_issue":
@@ -240,7 +345,7 @@ class MockGitHubMCPServer:
                     arguments.get("state", "open")
                 )
             
-            elif tool_name == "create_pull":
+            elif tool_name == "create_pull_request":
                 result = self._create_pull(
                     arguments["owner"],
                     arguments["repo"],
@@ -250,7 +355,7 @@ class MockGitHubMCPServer:
                     arguments.get("body", "")
                 )
             
-            elif tool_name == "list_pulls":
+            elif tool_name == "list_pull_requests":
                 result = self._list_pulls(
                     arguments["owner"],
                     arguments["repo"],
@@ -260,7 +365,61 @@ class MockGitHubMCPServer:
             elif tool_name == "search_code":
                 result = self._search_code(arguments["q"], arguments.get("language"))
             
+            elif tool_name == "create_or_update_file":
+                result = self._create_or_update_file(
+                    arguments["owner"],
+                    arguments["repo"],
+                    arguments["path"],
+                    arguments["content"],
+                    arguments["message"],
+                    arguments.get("branch", "main"),
+                    arguments.get("sha")
+                )
+            
+            elif tool_name == "get_file_contents":
+                result = self._get_file_contents(
+                    arguments["owner"],
+                    arguments["repo"],
+                    arguments["path"],
+                    arguments.get("ref")
+                )
+            
+            elif tool_name == "push_files":
+                result = self._push_files(
+                    arguments["owner"],
+                    arguments["repo"],
+                    arguments["branch"],
+                    arguments["files"],
+                    arguments["message"]
+                )
+            
+            elif tool_name == "get_user":
+                result = self._get_user(arguments["username"])
+            
+            elif tool_name == "get_repository_content":
+                result = self._get_repository_content(
+                    arguments["owner"],
+                    arguments["repo"],
+                    arguments.get("path", ""),
+                    arguments.get("ref")
+                )
+            
             else:
+                # Check if it's an unimplemented real server tool
+                unimplemented_tools = [
+                    "create_branch", "merge_pull_request", "create_release",
+                    "list_commits", "get_commit", "list_branches", "delete_branch",
+                    "list_releases", "get_release", "update_issue", "close_issue",
+                    "add_labels", "remove_labels", "create_comment", "update_comment"
+                ]
+                
+                if tool_name in unimplemented_tools:
+                    return self.error_response(
+                        request_id, 
+                        -32602, 
+                        f"Tool '{tool_name}' is not implemented in mock server. Available in real GitHub MCP server only."
+                    )
+                
                 return self.error_response(request_id, -32602, f"Unknown tool: {tool_name}")
             
             return {
@@ -406,3 +565,156 @@ class MockGitHubMCPServer:
             "incomplete_results": False,
             "items": mock_results
         }
+    
+    def _create_or_update_file(self, owner: str, repo: str, path: str, 
+                              content: str, message: str, branch: str = "main", 
+                              sha: str = None) -> Dict[str, Any]:
+        """Mock create or update file."""
+        import base64
+        
+        # Mock response
+        return {
+            "content": {
+                "name": path.split("/")[-1],
+                "path": path,
+                "sha": sha or f"mock-sha-{random.randint(1000, 9999)}",
+                "size": len(content),
+                "url": f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
+                "type": "file",
+                "encoding": "base64"
+            },
+            "commit": {
+                "sha": f"mock-commit-{random.randint(1000, 9999)}",
+                "message": message,
+                "url": f"https://api.github.com/repos/{owner}/{repo}/commits/mock-sha",
+                "author": {
+                    "name": "Mock User",
+                    "email": "mock@example.com",
+                    "date": datetime.utcnow().isoformat() + "Z"
+                }
+            }
+        }
+    
+    def _get_file_contents(self, owner: str, repo: str, path: str, ref: str = None) -> Dict[str, Any]:
+        """Mock get file contents."""
+        import base64
+        
+        # Mock file content
+        mock_content = f"# Mock file content for {path}\n\nThis is mock data."
+        encoded_content = base64.b64encode(mock_content.encode()).decode()
+        
+        return {
+            "type": "file",
+            "encoding": "base64",
+            "size": len(mock_content),
+            "name": path.split("/")[-1],
+            "path": path,
+            "content": encoded_content,
+            "sha": f"mock-sha-{random.randint(1000, 9999)}",
+            "url": f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
+            "git_url": f"https://api.github.com/repos/{owner}/{repo}/git/blobs/mock-sha",
+            "download_url": f"https://raw.githubusercontent.com/{owner}/{repo}/{ref or 'main'}/{path}"
+        }
+    
+    def _push_files(self, owner: str, repo: str, branch: str, 
+                   files: List[Dict[str, str]], message: str) -> Dict[str, Any]:
+        """Mock push multiple files."""
+        # Mock response
+        commit_sha = f"mock-commit-{random.randint(1000, 9999)}"
+        
+        return {
+            "commit": {
+                "sha": commit_sha,
+                "message": message,
+                "url": f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}",
+                "author": {
+                    "name": "Mock User",
+                    "email": "mock@example.com",
+                    "date": datetime.utcnow().isoformat() + "Z"
+                }
+            },
+            "files_changed": len(files),
+            "files": [
+                {
+                    "path": f["path"],
+                    "status": "added",
+                    "sha": f"mock-sha-{random.randint(1000, 9999)}"
+                }
+                for f in files
+            ]
+        }
+    
+    def _get_user(self, username: str) -> Dict[str, Any]:
+        """Mock get user information."""
+        return {
+            "login": username,
+            "id": random.randint(1000000, 9999999),
+            "avatar_url": f"https://avatars.githubusercontent.com/u/{random.randint(1000, 9999)}",
+            "type": "User",
+            "name": f"Mock {username}",
+            "company": "Mock Company",
+            "blog": f"https://{username}.example.com",
+            "location": "Mock City",
+            "email": f"{username}@example.com",
+            "bio": f"Mock bio for {username}",
+            "public_repos": random.randint(10, 100),
+            "public_gists": random.randint(0, 50),
+            "followers": random.randint(0, 1000),
+            "following": random.randint(0, 500),
+            "created_at": "2020-01-01T00:00:00Z",
+            "updated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    def _get_repository_content(self, owner: str, repo: str, path: str = "", ref: str = None) -> List[Dict[str, Any]]:
+        """Mock get repository content."""
+        if not path:
+            # Return root directory listing
+            return [
+                {
+                    "type": "file",
+                    "name": "README.md",
+                    "path": "README.md",
+                    "sha": f"mock-sha-{random.randint(1000, 9999)}",
+                    "size": 1234,
+                    "url": f"https://api.github.com/repos/{owner}/{repo}/contents/README.md"
+                },
+                {
+                    "type": "dir",
+                    "name": "src",
+                    "path": "src",
+                    "sha": f"mock-sha-{random.randint(1000, 9999)}",
+                    "url": f"https://api.github.com/repos/{owner}/{repo}/contents/src"
+                },
+                {
+                    "type": "file",
+                    "name": ".gitignore",
+                    "path": ".gitignore",
+                    "sha": f"mock-sha-{random.randint(1000, 9999)}",
+                    "size": 150,
+                    "url": f"https://api.github.com/repos/{owner}/{repo}/contents/.gitignore"
+                }
+            ]
+        else:
+            # Return specific path content
+            if path == "src":
+                return [
+                    {
+                        "type": "file",
+                        "name": "main.py",
+                        "path": "src/main.py",
+                        "sha": f"mock-sha-{random.randint(1000, 9999)}",
+                        "size": 2500,
+                        "url": f"https://api.github.com/repos/{owner}/{repo}/contents/src/main.py"
+                    },
+                    {
+                        "type": "file",
+                        "name": "utils.py",
+                        "path": "src/utils.py",
+                        "sha": f"mock-sha-{random.randint(1000, 9999)}",
+                        "size": 1800,
+                        "url": f"https://api.github.com/repos/{owner}/{repo}/contents/src/utils.py"
+                    }
+                ]
+            else:
+                # Single file
+                return self._get_file_contents(owner, repo, path, ref)
