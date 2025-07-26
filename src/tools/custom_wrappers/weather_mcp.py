@@ -307,6 +307,12 @@ class WeatherMCPClient:
                     "id": self._next_message_id()
                 }
                 response = await self.mock_server.handle_request(call_request)
+                
+                # Check if mock server returned an error
+                if "error" in response:
+                    error_msg = response["error"].get("message", "Unknown mock server error")
+                    raise Exception(error_msg)
+                
                 result = response.get("result", {})
             else:
                 # Make real API call

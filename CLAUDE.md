@@ -315,10 +315,13 @@ pytest tests/integration/test_zerodha_mcp.py -v
 python src/tools/zerodha_mcp.py  # Run Zerodha demo
 
 # Test Notion MCP
-pytest tests/integration/test_notion_mcp.py -v
-pytest tests/unit/test_notion_mcp.py -v
-python demos/demo_notion_mcp.py  # Run Notion demo
+pytest tests/unit/test_notion_mcp.py -v  # Unit tests (32 tests - 25 passing with mock)
+pytest tests/integration/test_notion_mcp.py -v  # Integration tests
+python demos/demo_notion_mcp.py  # Comprehensive demo with mock/real server
 python src/tools/notion_mcp.py  # Run basic Notion test
+# For real Notion API testing:
+export NOTION_INTEGRATION_TOKEN='your-notion-integration-token'
+python tests/integration/test_notion_mcp.py  # Integration tests with real API
 
 # Test Search MCP
 pytest tests/unit/test_search_mcp.py -v  # Unit tests (18 tests with mock)

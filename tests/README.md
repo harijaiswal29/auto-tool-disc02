@@ -15,6 +15,8 @@ tests/
 │   ├── test_conversation_state_machine.py
 │   ├── test_search_mcp.py
 │   ├── test_github_mcp.py                  # GitHub MCP unit tests
+│   ├── test_notion_mcp.py                  # Notion MCP unit tests (32 tests)
+│   ├── test_weather_mcp.py                 # Weather MCP unit tests (29 tests)
 │   ├── test_state_machine_base.py
 │   ├── test_retry.py
 │   ├── test_retry_extended.py              # Extended retry tests (connection pool, registry)
@@ -25,12 +27,13 @@ tests/
 ├── integration/              # Integration tests
 │   ├── test_filesystem_mcp.py
 │   ├── test_github_mcp.py
+│   ├── test_notion_mcp.py                  # Notion MCP integration tests
 │   ├── test_intent_recognition_integration.py
 │   ├── test_postgres_mcp.py
 │   ├── test_search_mcp_integration.py
 │   ├── test_sqlite_mcp.py
 │   ├── test_state_machine_integration.py
-│   ├── test_weather_mcp.py
+│   ├── test_weather_mcp.py                 # Weather MCP integration tests
 │   ├── test_pipeline_workflow.py           # Full pipeline workflow
 │   ├── test_retry_integration.py           # Retry scenarios with MCP
 │   ├── test_context_persistence.py         # Context persistence integration
@@ -47,6 +50,7 @@ tests/
 │   ├── test_integration_demo.py
 │   ├── demo_github_mcp.py
 │   ├── demo_github_real.py
+│   ├── demo_notion_mcp.py                   # Notion MCP comprehensive demo
 │   └── README.md
 ├── utilities/              # Test utilities and helpers
 │   ├── check_encoding.py
@@ -85,6 +89,9 @@ tests/
 - `test_intent_recognition_metrics.py` - Intent recognition performance monitoring
 - `test_retry_metrics.py` - Retry attempt and circuit breaker metrics
 - `test_q_learning_engine.py` - Q-Learning engine with state representation, action space, and experience replay
+- `test_sqlite_mcp.py` - SQLite MCP client unit tests with mocking
+- `test_notion_mcp.py` - Notion MCP client unit tests (32 tests covering all operations)
+- `test_weather_mcp.py` - Weather MCP client unit tests (29 tests covering all operations)
 
 ### Integration Tests (`tests/integration/`)
 - **Purpose**: Test multiple components working together
@@ -103,6 +110,7 @@ tests/
   - **Brave Search Direct** (`test_brave_search_direct.py` - real API integration)
   - **Filesystem MCP** (`test_filesystem_mcp.py`)
   - **Weather MCP** (`test_weather_mcp.py`)
+  - **Notion MCP** (`test_notion_mcp.py` - comprehensive integration testing)
 - Intent recognition pipeline integration
 - State machine workflow integration
 - `test_pipeline_workflow.py` - Complete end-to-end pipeline testing
@@ -194,6 +202,12 @@ pytest -k "test_retry" -v
 # Run Q-Learning tests
 pytest tests/unit/test_q_learning_engine.py -v
 
+# Run SQLite MCP tests
+pytest tests/unit/test_sqlite_mcp.py -v  # Unit tests with mock (18 tests)
+pytest tests/integration/test_sqlite_mcp.py -v  # Integration tests (13 tests)
+# Both test files support testing with real and mock SQLite MCP servers
+# The tests automatically fall back to mock server if real server is not available
+
 # Run Search MCP tests
 pytest tests/unit/test_search_mcp.py -v  # Unit tests with mock (18 tests)
 # For real API testing:
@@ -206,6 +220,20 @@ pytest tests/integration/test_github_mcp.py -v  # Integration tests
 # For real GitHub API testing:
 export GITHUB_TOKEN='your-github-token'
 python tests/integration/test_github_mcp.py  # Tests with real GitHub API
+
+# Run Notion MCP tests
+pytest tests/unit/test_notion_mcp.py -v  # Unit tests (32 tests - 25 passing with mock)
+python demos/demo_notion_mcp.py  # Comprehensive demo with mock/real server
+# For real Notion API testing:
+export NOTION_INTEGRATION_TOKEN='your-notion-integration-token'
+python tests/integration/test_notion_mcp.py  # Integration tests
+
+# Run Weather MCP tests
+pytest tests/unit/test_weather_mcp.py -v  # Unit tests (29 tests - all passing with mock)
+pytest tests/integration/test_weather_mcp.py -v  # Integration tests
+# For real OpenWeather API testing:
+export OPENWEATHER_API_KEY='your-openweather-api-key'
+python src/tools/custom_wrappers/weather_mcp.py  # Run basic Weather test
 ```
 
 ### Coverage Reports

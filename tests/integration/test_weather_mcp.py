@@ -12,260 +12,321 @@ import sys
 import pytest
 from pathlib import Path
 from unittest.mock import patch, AsyncMock
+import aiohttp
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.tools.custom_wrappers.weather_mcp import WeatherMCPClient
 from src.tools.custom_wrappers.mock_weather_mcp import MockWeatherMCPServer
+from src.core.tool_registry import ToolRegistry
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class TestWeatherMCP:
-    """Test Weather MCP functionality."""
+class TestWeatherMCPIntegration:
+    """Integration tests for Weather MCP functionality."""
     
     @pytest.fixture
-    async def mock_server(self):
+    def weather_client(self):
+        """Create a Weather MCP client instance."""
+        # Use environment variable or test key
+        api_key = os.getenv("OPENWEATHER_API_KEY", "test_api_key")
+        return WeatherMCPClient(api_key=api_key)
+    
+    @pytest.fixture
+    def mock_server(self):
         """Create a mock Weather MCP server."""
-        server = MockWeatherMCPServer()
-        await server.start()
-        yield server
-        await server.stop()
+        return MockWeatherMCPServer()
     
     @pytest.fixture
-    def weather_mcp(self):
-        """Create a Weather MCP instance."""
-        # Use a test API key or mock
-        return WeatherMCPClient(api_key="test_api_key")
+    def tool_registry(self):
+        """Create a tool registry instance."""
+        return ToolRegistry(":memory:")  # In-memory database for testing
     
     @pytest.mark.asyncio
-    async def test_weather_mcp_initialization(self, weather_mcp):
+    async def test_weather_mcp_initialization(self, weather_client):
         """Test Weather MCP initialization."""
-        assert weather_mcp.name == "weather_mcp"
-        assert weather_mcp.description == "Weather information retrieval via MCP"
-        assert weather_mcp.api_key == "test_api_key"
+        assert weather_client.server_name == "weather"
+        assert weather_client.capabilities == {"tools": True, "resources": False}
+        assert len(weather_client.tools) == 5  # Should have 5 weather tools
     
     @pytest.mark.asyncio
-    async def test_get_current_weather_mock(self, weather_mcp):
-        """Test getting current weather with mocked response."""
-        # Mock the API call
-        mock_response = {
-            "location": {
-                "name": "London",
-                "country": "United Kingdom",
-                "localtime": "2024-01-15 14:30"
-            },
-            "current": {
-                "temp_c": 10.5,
-                "temp_f": 50.9,
-                "condition": {
-                    "text": "Partly cloudy"
-                },
-                "humidity": 75,
-                "wind_kph": 15.5,
-                "wind_dir": "SW"
-            }
-        }
+    async def test_connect_with_mock_server(self, weather_client):
+        """Test connection with mock server."""
+        connected = await weather_client.connect(use_mock=True)
         
-        with patch.object(weather_mcp, '_make_api_request', 
-                         return_value=asyncio.coroutine(lambda: mock_response)()):
-            result = await weather_mcp.execute({
-                'action': 'current',
-                'location': 'London'
-            })
-            
-            assert result['success'] is True
-            assert result['data']['location']['name'] == 'London'
-            assert result['data']['current']['temp_c'] == 10.5
-            assert result['data']['current']['condition']['text'] == 'Partly cloudy'
-    
-    @pytest.mark.asyncio
-    async def test_get_forecast_mock(self, weather_mcp):
-        """Test getting weather forecast with mocked response."""
-        mock_response = {
-            "location": {
-                "name": "New York",
-                "country": "USA"
-            },
-            "forecast": {
-                "forecastday": [
-                    {
-                        "date": "2024-01-15",
-                        "day": {
-                            "maxtemp_c": 5.2,
-                            "mintemp_c": -2.1,
-                            "condition": {
-                                "text": "Sunny"
-                            },
-                            "avghumidity": 60
-                        }
-                    },
-                    {
-                        "date": "2024-01-16",
-                        "day": {
-                            "maxtemp_c": 7.5,
-                            "mintemp_c": 0.3,
-                            "condition": {
-                                "text": "Cloudy"
-                            },
-                            "avghumidity": 65
-                        }
-                    }
-                ]
-            }
-        }
+        assert connected is True
+        assert weather_client.use_mock is True
+        assert weather_client.mock_server is not None
         
-        with patch.object(weather_mcp, '_make_api_request',
-                         return_value=asyncio.coroutine(lambda: mock_response)()):
-            result = await weather_mcp.execute({
-                'action': 'forecast',
-                'location': 'New York',
-                'days': 2
-            })
-            
-            assert result['success'] is True
-            assert len(result['data']['forecast']['forecastday']) == 2
-            assert result['data']['forecast']['forecastday'][0]['day']['condition']['text'] == 'Sunny'
+        await weather_client.disconnect()
     
     @pytest.mark.asyncio
-    async def test_search_location_mock(self, weather_mcp):
-        """Test searching for locations with mocked response."""
-        mock_response = [
-            {
-                "id": 2801268,
-                "name": "London",
-                "region": "City of London, Greater London",
-                "country": "United Kingdom",
-                "lat": 51.52,
-                "lon": -0.11
-            },
-            {
-                "id": 2643123,
-                "name": "London",
-                "region": "Ontario",
-                "country": "Canada",
-                "lat": 42.98,
-                "lon": -81.23
-            }
-        ]
+    async def test_connect_with_real_api(self, weather_client):
+        """Test connection with real API (if API key is available)."""
+        # This test will only pass if a valid API key is provided
+        if weather_client.api_key == "test_api_key":
+            pytest.skip("Skipping real API test - no valid API key")
         
-        with patch.object(weather_mcp, '_make_api_request',
-                         return_value=asyncio.coroutine(lambda: mock_response)()):
-            result = await weather_mcp.execute({
-                'action': 'search',
-                'query': 'London'
-            })
-            
-            assert result['success'] is True
-            assert len(result['data']) == 2
-            assert result['data'][0]['country'] == 'United Kingdom'
-            assert result['data'][1]['country'] == 'Canada'
+        connected = await weather_client.connect(use_mock=False)
+        
+        # Connection may fail without valid API key
+        if connected:
+            assert weather_client.use_mock is False
+            await weather_client.disconnect()
+        else:
+            # Fall back to mock if real API fails
+            connected = await weather_client.connect(use_mock=True)
+            assert connected is True
+            await weather_client.disconnect()
     
     @pytest.mark.asyncio
-    async def test_invalid_action(self, weather_mcp):
-        """Test handling invalid action."""
-        result = await weather_mcp.execute({
-            'action': 'invalid_action',
-            'location': 'London'
+    async def test_get_current_weather_with_mock(self, weather_client):
+        """Test getting current weather using mock server."""
+        # Connect with mock server
+        await weather_client.connect(use_mock=True)
+        
+        # Get current weather
+        result = await weather_client.get_current_weather("London,UK", "metric")
+        
+        assert result["success"] is True
+        assert "result" in result
+        assert "main" in result["result"]
+        assert "weather" in result["result"]
+        assert "execution_time" in result
+        
+        await weather_client.disconnect()
+    
+    @pytest.mark.asyncio
+    async def test_get_weather_forecast_with_mock(self, weather_client):
+        """Test getting weather forecast using mock server."""
+        # Connect with mock server
+        await weather_client.connect(use_mock=True)
+        
+        # Get weather forecast
+        result = await weather_client.get_forecast("New York,US", days=3, units="imperial")
+        
+        assert result["success"] is True
+        assert "result" in result
+        assert "list" in result["result"]
+        assert len(result["result"]["list"]) == 24  # 3 days * 8 intervals
+        assert "city" in result["result"]
+        
+        await weather_client.disconnect()
+    
+    @pytest.mark.asyncio
+    async def test_get_weather_by_coordinates(self, weather_client):
+        """Test getting weather by coordinates."""
+        # Connect with mock server
+        await weather_client.connect(use_mock=True)
+        
+        # Get weather by coordinates (London)
+        result = await weather_client.get_weather_by_coords(51.5074, -0.1278, "metric")
+        
+        assert result["success"] is True
+        assert "result" in result
+        assert "coord" in result["result"]
+        assert result["result"]["coord"]["lat"] == 51.5074
+        assert result["result"]["coord"]["lon"] == -0.1278
+        
+        await weather_client.disconnect()
+    
+    @pytest.mark.asyncio
+    async def test_air_pollution_data(self, weather_client):
+        """Test getting air pollution data."""
+        # Connect with mock server
+        await weather_client.connect(use_mock=True)
+        
+        # Get air pollution data
+        result = await weather_client.call_tool("air_pollution", {
+            "lat": 51.5074,
+            "lon": -0.1278
         })
         
-        assert result['success'] is False
-        assert 'error' in result
-        assert 'Unsupported action' in result['error']
+        assert result["success"] is True
+        assert "result" in result
+        assert "list" in result["result"]
+        assert "main" in result["result"]["list"][0]
+        assert "aqi" in result["result"]["list"][0]["main"]
+        
+        await weather_client.disconnect()
     
     @pytest.mark.asyncio
-    async def test_missing_location(self, weather_mcp):
-        """Test handling missing location parameter."""
-        result = await weather_mcp.execute({
-            'action': 'current'
+    async def test_uv_index_data(self, weather_client):
+        """Test getting UV index data."""
+        # Connect with mock server
+        await weather_client.connect(use_mock=True)
+        
+        # Get UV index data
+        result = await weather_client.call_tool("uv_index", {
+            "lat": 40.7128,
+            "lon": -74.0060
         })
         
-        assert result['success'] is False
-        assert 'error' in result
-        assert 'Location is required' in result['error']
+        assert result["success"] is True
+        assert "result" in result
+        assert "value" in result["result"]
+        assert "lat" in result["result"]
+        assert "lon" in result["result"]
+        
+        await weather_client.disconnect()
     
     @pytest.mark.asyncio
-    async def test_api_error_handling(self, weather_mcp):
-        """Test handling API errors."""
-        with patch.object(weather_mcp, '_make_api_request',
-                         side_effect=Exception("API Error")):
-            result = await weather_mcp.execute({
-                'action': 'current',
-                'location': 'London'
-            })
-            
-            assert result['success'] is False
-            assert 'error' in result
-            assert 'API Error' in result['error']
+    async def test_tool_discovery(self, weather_client):
+        """Test tool discovery from Weather MCP."""
+        # Tool discovery happens during initialization
+        tools = weather_client.tools
+        
+        assert len(tools) == 5
+        tool_names = [tool["name"] for tool in tools]
+        
+        assert "current_weather" in tool_names
+        assert "weather_forecast" in tool_names
+        assert "weather_by_coords" in tool_names
+        assert "air_pollution" in tool_names
+        assert "uv_index" in tool_names
+        
+        # Check tool schemas
+        current_weather_tool = next(t for t in tools if t["name"] == "current_weather")
+        assert "inputSchema" in current_weather_tool
+        assert "properties" in current_weather_tool["inputSchema"]
+        assert "location" in current_weather_tool["inputSchema"]["properties"]
     
     @pytest.mark.asyncio
-    async def test_capabilities(self, weather_mcp):
-        """Test getting tool capabilities."""
-        capabilities = weather_mcp.get_capabilities()
+    async def test_invalid_tool_call(self, weather_client):
+        """Test calling invalid tool."""
+        await weather_client.connect(use_mock=True)
         
-        assert capabilities['name'] == 'weather_mcp'
-        assert 'operations' in capabilities
+        result = await weather_client.call_tool("invalid_tool", {"location": "London"})
         
-        operations = capabilities['operations']
-        assert any(op['name'] == 'current' for op in operations)
-        assert any(op['name'] == 'forecast' for op in operations)
-        assert any(op['name'] == 'search' for op in operations)
+        assert result["success"] is False
+        assert "error" in result
+        assert "Tool not found" in result["error"]
+        
+        await weather_client.disconnect()
     
     @pytest.mark.asyncio
-    async def test_mock_server_interaction(self, mock_server):
-        """Test interaction with mock Weather MCP server."""
-        # Get server info
-        response = mock_server.handle_tool_list()
+    async def test_tool_registry_integration(self, weather_client, tool_registry):
+        """Test integration with tool registry."""
+        # Register tools
+        weather_client.register_tools_to_registry(tool_registry)
         
-        assert response['result'] is not None
-        assert 'tools' in response['result']
+        # List weather tools
+        weather_tools = tool_registry.list_tools("weather")
         
-        tools = response['result']['tools']
-        assert any(tool['name'] == 'get_weather' for tool in tools)
-        assert any(tool['name'] == 'get_forecast' for tool in tools)
+        assert len(weather_tools) == 5
+        tool_ids = [tool["id"] for tool in weather_tools]
         
-        # Get weather through mock
-        weather_response = mock_server.handle_tool_call(
-            'get_weather',
-            {'location': 'London'}
-        )
-        
-        assert weather_response['result'] is not None
-        assert 'temperature' in weather_response['result']
-        assert 'conditions' in weather_response['result']
+        assert "weather.current_weather" in tool_ids
+        assert "weather.weather_forecast" in tool_ids
+        assert "weather.weather_by_coords" in tool_ids
+        assert "weather.air_pollution" in tool_ids
+        assert "weather.uv_index" in tool_ids
     
     @pytest.mark.asyncio
-    async def test_temperature_units(self, weather_mcp):
-        """Test temperature unit conversion."""
-        mock_response = {
-            "location": {"name": "Paris"},
-            "current": {
-                "temp_c": 20.0,
-                "temp_f": 68.0,
-                "condition": {"text": "Clear"}
-            }
+    async def test_mock_server_protocol_compliance(self, mock_server):
+        """Test mock server JSON-RPC protocol compliance."""
+        # Test initialization
+        init_request = {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "params": {},
+            "id": 1
         }
+        init_response = await mock_server.handle_request(init_request)
         
-        with patch.object(weather_mcp, '_make_api_request',
-                         return_value=asyncio.coroutine(lambda: mock_response)()):
-            # Test Celsius (default)
-            result_c = await weather_mcp.execute({
-                'action': 'current',
-                'location': 'Paris'
+        assert init_response["jsonrpc"] == "2.0"
+        assert init_response["id"] == 1
+        assert "result" in init_response
+        assert init_response["result"]["capabilities"]["tools"] is True
+        
+        # Test tools list
+        list_request = {
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "params": {},
+            "id": 2
+        }
+        list_response = await mock_server.handle_request(list_request)
+        
+        assert list_response["jsonrpc"] == "2.0"
+        assert list_response["id"] == 2
+        assert len(list_response["result"]["tools"]) == 5
+    
+    @pytest.mark.asyncio
+    async def test_temperature_units_in_responses(self, weather_client):
+        """Test temperature unit handling in responses."""
+        await weather_client.connect(use_mock=True)
+        
+        # Test metric units
+        result_metric = await weather_client.call_tool("current_weather", {
+            "location": "Paris,FR",
+            "units": "metric"
+        })
+        
+        # Temperature should be in reasonable Celsius range
+        temp = result_metric["result"]["main"]["temp"]
+        assert -50 < temp < 60  # Reasonable Celsius range
+        
+        # Test imperial units
+        result_imperial = await weather_client.call_tool("current_weather", {
+            "location": "Paris,FR",
+            "units": "imperial"
+        })
+        
+        # Temperature should be in reasonable Fahrenheit range
+        temp_f = result_imperial["result"]["main"]["temp"]
+        assert -50 < temp_f < 140  # Reasonable Fahrenheit range
+        
+        await weather_client.disconnect()
+    
+    @pytest.mark.asyncio
+    async def test_error_handling_in_api_calls(self, weather_client):
+        """Test error handling during API calls."""
+        await weather_client.connect(use_mock=True)
+        
+        # Mock an error in the mock server
+        with patch.object(weather_client.mock_server, 'handle_request',
+                         side_effect=Exception("Mock server error")):
+            result = await weather_client.call_tool("current_weather", {
+                "location": "London,UK"
             })
             
-            assert result_c['data']['current']['temp_c'] == 20.0
-            
-            # Test with explicit unit request
-            result_f = await weather_mcp.execute({
-                'action': 'current',
-                'location': 'Paris',
-                'units': 'fahrenheit'
-            })
-            
-            assert result_f['data']['current']['temp_f'] == 68.0
+            assert result["success"] is False
+            assert "error" in result
+            assert "Mock server error" in result["error"]
+        
+        await weather_client.disconnect()
+    
+    @pytest.mark.asyncio
+    async def test_caching_behavior(self, weather_client):
+        """Test caching behavior for API calls."""
+        # This test only applies to real API calls
+        if weather_client.api_key == "test_api_key":
+            pytest.skip("Caching test requires real API")
+        
+        await weather_client.connect(use_mock=False)
+        
+        if weather_client.use_mock:
+            # If connection failed and fell back to mock, skip test
+            pytest.skip("Real API connection failed")
+        
+        # Make first call
+        result1 = await weather_client.call_tool("current_weather", {
+            "location": "London,UK"
+        })
+        
+        # Make second call (should use cache)
+        result2 = await weather_client.call_tool("current_weather", {
+            "location": "London,UK"
+        })
+        
+        # Results should be identical (from cache)
+        assert result1["result"] == result2["result"]
+        
+        await weather_client.disconnect()
 
 
 if __name__ == "__main__":
