@@ -64,7 +64,7 @@ The system consists of 5 core layers:
   - Filesystem MCP (`src/tools/filesystem_mcp.py`)
   - PostgreSQL MCP (`src/tools/postgres_mcp.py`)
   - GitHub MCP (`src/tools/github_mcp.py`)
-  - Financial Datasets MCP (`src/tools/financial_datasets_mcp.py`) - Remote API for financial data
+  - Financial Datasets MCP (`src/tools/financial_datasets_mcp.py`) - Remote API for financial data (requires OAuth 2.1 for real server)
   - Zerodha MCP (`src/tools/zerodha_mcp.py`) - Trading and portfolio management API
   - Notion MCP (`src/tools/notion_mcp.py`) - Notion workspace integration with pages, databases, and blocks
   - Mock MCP Server Infrastructure for all services
@@ -307,8 +307,26 @@ python demos/demo_realtime_monitoring.py  # Run real-time monitoring demo
 # - Performance baseline tracking
 
 # Test Financial Datasets MCP
-pytest tests/integration/test_financial_datasets_mcp.py -v
-python src/tools/financial_datasets_mcp.py  # Run Financial Datasets demo
+
+## Unit Tests
+pytest tests/unit/test_financial_datasets_mcp.py -v  # Unit tests (30 tests)
+python src/tools/financial_datasets_mcp.py  # Run standalone demo
+
+## Integration Tests
+pytest tests/integration/test_financial_datasets_mcp.py -v  # Full integration tests (27 tests)
+
+# Run specific integration test scenarios:
+pytest tests/integration/test_financial_datasets_mcp.py::TestFinancialDatasetsMCPIntegration::test_concurrent_operations -v
+pytest tests/integration/test_financial_datasets_mcp.py::test_financial_datasets_load_testing -v
+pytest tests/integration/test_financial_datasets_mcp.py::test_financial_datasets_with_mcp_integration -v
+
+# For real Financial Datasets API testing:
+# IMPORTANT: The real Financial Datasets MCP server requires OAuth 2.1 authentication
+# The current implementation uses API keys with Bearer tokens which is not supported
+# Real server integration requires implementing OAuth flow (see https://docs.financialdatasets.ai/mcp-server)
+# The mock server provides full functionality for testing all features
+export FINANCIAL_DATASETS_API_KEY='your-api-key'  # This won't work with real server
+python tests/integration/test_financial_datasets_mcp.py  # Tests with real API (will fail - OAuth required)
 
 # Test Zerodha MCP
 pytest tests/integration/test_zerodha_mcp.py -v

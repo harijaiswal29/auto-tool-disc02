@@ -179,6 +179,33 @@ class MCPToolIntegrationTester:
         
         client = FinancialDatasetsMCPClient(api_key="test_key")
         logger.info("  ✓ Financial Datasets MCP client initialized")
+        
+        # Test connection with mock server
+        connected = await client.connect(use_mock=True)
+        assert connected, "Failed to connect to mock Financial Datasets server"
+        logger.info("  ✓ Connected to mock Financial Datasets server")
+        
+        # Test tool discovery
+        tools = await client.discover_tools()
+        assert len(tools) == 7, f"Expected 7 tools, found {len(tools)}"
+        logger.info(f"  ✓ Discovered {len(tools)} financial tools")
+        
+        # Test getting stock price
+        stock_price = await client.get_stock_price("AAPL")
+        assert "symbol" in stock_price, "Stock price missing symbol"
+        assert "price" in stock_price, "Stock price missing price"
+        assert stock_price["symbol"] == "AAPL", "Incorrect symbol returned"
+        logger.info(f"  ✓ Retrieved stock price: ${stock_price['price']}")
+        
+        # Test getting company news
+        news = await client.get_company_news("TSLA", limit=3)
+        assert isinstance(news, list), "News should be a list"
+        assert len(news) == 3, "Should return 3 news items"
+        logger.info(f"  ✓ Retrieved {len(news)} news items")
+        
+        # Disconnect
+        await client.disconnect()
+        logger.info("  ✓ Disconnected from Financial Datasets server")
     
     async def test_zerodha_mcp(self):
         """Test Zerodha MCP functionality."""

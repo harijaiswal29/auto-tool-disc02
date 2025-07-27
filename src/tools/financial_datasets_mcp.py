@@ -3,6 +3,18 @@ Financial Datasets MCP Client Wrapper
 
 This module provides a client wrapper for the remote Financial Datasets MCP server,
 enabling financial data operations through the Model Context Protocol.
+
+IMPORTANT: The real Financial Datasets MCP server uses OAuth 2.1 authentication,
+not API keys. The current implementation attempts Bearer token authentication
+which is not supported by the real server. Use the mock server for testing.
+
+For real server integration, OAuth 2.1 flow needs to be implemented:
+1. Redirect to authorization URL
+2. Handle OAuth callback
+3. Exchange authorization code for access token
+4. Use access token for API requests
+
+See: https://docs.financialdatasets.ai/mcp-server
 """
 
 import asyncio
@@ -42,8 +54,20 @@ class FinancialDatasetsMCPClient:
         Initialize Financial Datasets MCP client.
         
         Args:
-            api_key: Financial Datasets API key
+            api_key: Financial Datasets API key (Note: Real server requires OAuth, not API keys)
             endpoint: Remote MCP server endpoint
+            
+        OAuth Implementation Guide:
+        To implement OAuth 2.1 for real server:
+        1. Add oauth_client_id and oauth_client_secret parameters
+        2. Add methods:
+           - get_authorization_url() -> str: Generate OAuth authorization URL
+           - handle_oauth_callback(code: str) -> dict: Exchange code for token
+           - refresh_access_token() -> str: Refresh expired tokens
+        3. Store access_token and refresh_token
+        4. Update session headers to use OAuth access token:
+           headers["Authorization"] = f"Bearer {self.access_token}"
+        5. Implement token refresh logic when token expires
         """
         self.api_key = api_key or os.environ.get('FINANCIAL_DATASETS_API_KEY')
         self.endpoint = endpoint or "https://mcp.financialdatasets.ai/sse"
@@ -130,6 +154,9 @@ class FinancialDatasetsMCPClient:
                 logger.info(f"[CONNECTING] Connecting to remote Financial Datasets MCP server at {self.endpoint}")
                 
                 # Create aiohttp session
+                # NOTE: This Bearer token approach doesn't work with the real server
+                # Real server requires OAuth 2.1 authentication flow
+                # Current implementation will result in 401 "Invalid token format" errors
                 self.session = aiohttp.ClientSession(
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
@@ -372,11 +399,12 @@ class FinancialDatasetsMCPClient:
                         "domain": "financial_data"
                     },
                     "server_id": self.server_name,
+                    "server_type": "financial_datasets",
                     "client": self
                 }
                 
-                # Use synchronous add_tool method
-                registry.add_tool(tool_data)
+                # Use synchronous register_tool method
+                registry.register_tool(tool_data)
                 logger.info(f"[REGISTER] Registered tool: {tool_data['id']}")
                 
         except Exception as e:

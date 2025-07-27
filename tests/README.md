@@ -92,6 +92,7 @@ tests/
 - `test_sqlite_mcp.py` - SQLite MCP client unit tests with mocking
 - `test_notion_mcp.py` - Notion MCP client unit tests (32 tests covering all operations)
 - `test_weather_mcp.py` - Weather MCP client unit tests (29 tests covering all operations)
+- `test_financial_datasets_mcp.py` - Financial Datasets MCP client unit tests (30 tests covering all operations)
 
 ### Integration Tests (`tests/integration/`)
 - **Purpose**: Test multiple components working together
@@ -111,6 +112,14 @@ tests/
   - **Filesystem MCP** (`test_filesystem_mcp.py`)
   - **Weather MCP** (`test_weather_mcp.py`)
   - **Notion MCP** (`test_notion_mcp.py` - comprehensive integration testing)
+  - **Financial Datasets MCP** (`test_financial_datasets_mcp.py` - Comprehensive integration testing with 27 test cases)
+    - Mock server testing (default mode)
+    - Real API simulation with mocked HTTP responses
+    - Concurrent operations and load testing
+    - Caching and performance optimization testing
+    - Error recovery and reconnection scenarios
+    - Integration with MCP Integration framework
+    - Multi-tool workflow integration (with Filesystem MCP)
 - Intent recognition pipeline integration
 - State machine workflow integration
 - `test_pipeline_workflow.py` - Complete end-to-end pipeline testing
@@ -234,6 +243,33 @@ pytest tests/integration/test_weather_mcp.py -v  # Integration tests
 # For real OpenWeather API testing:
 export OPENWEATHER_API_KEY='your-openweather-api-key'
 python src/tools/custom_wrappers/weather_mcp.py  # Run basic Weather test
+
+# Run Financial Datasets MCP tests
+pytest tests/unit/test_financial_datasets_mcp.py -v  # Unit tests (30 tests - all passing with mock)
+pytest tests/integration/test_financial_datasets_mcp.py -v  # Integration tests (27 tests)
+
+# Integration test scenarios include:
+# - Connection testing with mock and real servers
+# - Tool discovery and registration
+# - Concurrent operations testing
+# - Performance testing with caching
+# - Load testing with multiple users
+# - Error recovery and reconnection scenarios
+# - Integration with MCP Integration framework
+# - Multi-tool workflow testing
+
+# Run specific integration tests:
+pytest tests/integration/test_financial_datasets_mcp.py -k "concurrent" -v  # Concurrent operations
+pytest tests/integration/test_financial_datasets_mcp.py -k "performance" -v  # Performance tests
+pytest tests/integration/test_financial_datasets_mcp.py -k "load" -v  # Load testing
+
+# For real Financial Datasets API testing:
+# IMPORTANT: Real Financial Datasets MCP server requires OAuth 2.1 authentication
+# Current implementation uses API keys which is not supported by the real server
+# To use real server, OAuth 2.1 flow must be implemented (see https://docs.financialdatasets.ai/mcp-server)
+# The mock server provides full functionality for testing all features
+export FINANCIAL_DATASETS_API_KEY='your-api-key'  # Won't work - OAuth required
+python tests/integration/test_financial_datasets_mcp.py  # Tests with real API (will fail)
 ```
 
 ### Coverage Reports
@@ -574,6 +610,9 @@ export WEATHER_API_KEY=your_api_key
 
 # Brave Search API tests (for real API testing)
 export BRAVE_API_KEY=your_brave_api_key
+
+# Financial Datasets API tests (for real API testing)
+export FINANCIAL_DATASETS_API_KEY=your_api_key
 ```
 
 ### Optional Configuration

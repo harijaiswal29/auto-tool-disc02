@@ -479,7 +479,12 @@ class MCPIntegration:
             return {"error": f"No active connection for server: {server_id}"}
         
         # Extract tool name (remove prefix)
-        tool_name = tool_id.split('.', 1)[1] if '.' in tool_id else tool_id
+        if '.' in tool_id:
+            tool_name = tool_id.split('.', 1)[1]
+        elif tool_id.startswith('financial_datasets_'):
+            tool_name = tool_id.replace('financial_datasets_', '')
+        else:
+            tool_name = tool_id
         
         # Get retry policy and circuit breaker for this server
         server_type_lower = server_type.lower()
