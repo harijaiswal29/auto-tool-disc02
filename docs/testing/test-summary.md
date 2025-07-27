@@ -140,47 +140,7 @@ The following components now have comprehensive unit tests:
 
 ## Test Execution Commands
 
-### Run All Tests
-```bash
-# Run all tests with verbose output
-pytest tests/ -v
-
-# Run with coverage report
-pytest tests/ --cov=src --cov-report=html --cov-report=term
-
-# Run specific test categories
-pytest tests/unit/ -v          # Unit tests only
-pytest tests/integration/ -v   # Integration tests only
-pytest tests/e2e/ -v          # End-to-end tests only
-pytest tests/performance/ -v   # Performance tests only
-```
-
-### Run Specific Test Files
-```bash
-# Core components
-pytest tests/unit/test_mcp_integration.py -v
-pytest tests/unit/test_connection_pool.py -v
-
-# Agents
-pytest tests/unit/test_orchestrator_agent.py -v
-pytest tests/unit/test_tool_discovery_agent.py -v
-
-# Intent recognition
-pytest tests/test_intent_recognition.py -v
-pytest tests/unit/test_intent_pipeline_stages.py -v
-```
-
-### Run Demo Scripts
-```bash
-# Pipeline demonstration
-python tests/demos/demo_pipeline_refactor.py
-
-# Retry logic demonstration
-python tests/demos/demo_retry_logic.py
-
-# Integration demonstration
-python tests/demos/test_integration_demo.py
-```
+For comprehensive test execution commands and examples, please refer to `tests/README.md`.
 
 ## Test Results Summary
 

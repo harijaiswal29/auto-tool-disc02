@@ -16,9 +16,13 @@ The system consists of 5 core layers:
 4. **Execution & Monitoring Layer**: Manages MCP connections, executes tools in parallel (asyncio), monitors performance, handles errors, and tracks resource usage
 5. **Learning & Adaptation Layer**: Improves over time using enhanced Q-learning engine with failure differentiation, pattern mining, feedback processing, and model adaptation
 
+## System Behavior
+
+For detailed examples of how the system processes queries and workflows, see `docs/architecture/workflows.md`
+
 ## Technology Stack
 
-- **Language**: Python 3.8+
+- **Language**: Python 3.8+ (tested with 3.12.3)
 - **Database**: SQLite (with aiosqlite for async operations)
 - **ML Libraries**: scikit-learn, sentence-transformers (all-MiniLM-L6-v2), numpy/pandas
 - **Async**: asyncio
@@ -26,25 +30,14 @@ The system consists of 5 core layers:
 - **Web Framework**: FastAPI
 - **MCP Integration**: Official Model Context Protocol SDK, JSON-RPC 2.0
 
-## Current Implementation Status
+### Version Requirements
 
-**Phase**: Phase 4 - Learning System (Weeks 9-11)
+- **Python**: 3.8 or higher (tested with 3.12.3)
+- **Dependencies**: See `requirements.txt` for all required packages and versions
 
-### Key Implementations
-- ✅ **Core Infrastructure**: MCP Integration, Tool Registry, Configuration System
-- ✅ **MCP Clients**: SQLite, Search, Weather, Filesystem, PostgreSQL, GitHub, Financial Datasets, Zerodha, Notion
-- ✅ **AI Agents**: Intent Recognition (7-stage pipeline), Tool Discovery, Orchestrator
-- ✅ **Learning System**: Q-Learning Engine, Pattern Miner, Context-Aware Patterns, Deep Q-Learning, Advanced Rewards
-- ✅ **Evaluation**: Baseline Comparisons, A/B Testing, Real-time Performance Monitoring
-- ✅ **Testing**: >80% coverage target, comprehensive test suite across unit/integration/e2e/performance
+## Implementation Status
 
-### Not Yet Implemented
-- Real-time monitoring dashboard UI
-- Production deployment configurations
-- Advanced tool relationship graph visualization
-- API rate limiting and throttling
-- Multi-tenant support
-- Distributed execution support
+For detailed implementation status and progress tracking, see `docs/implementation/implementation-status.md`
 
 ## Quick Start Commands
 
@@ -66,19 +59,57 @@ flake8 src/ tests/
 mypy src/
 ```
 
+## Environment Setup
+
+```bash
+# 1. Copy the example environment file
+cp .env.example .env
+
+# 2. Edit .env with your API keys
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Verify setup
+python verify_setup.py
+```
+
+See `.env.example` for required API keys and configuration options.
+
+### Testing Without API Keys
+
+The system includes mock servers for all MCP tools, allowing full functionality testing without API keys:
+
+```bash
+# Tests will automatically use mock servers if API keys are not set
+pytest tests/unit/ -v
+```
+
 ## Important Conventions
 
 - **MCP Communication**: Follow JSON-RPC 2.0 spec strictly
 - **Logging**: All modules must integrate with existing logging system
 - **Imports**: Python scripts often modify sys.path - maintain this pattern
 - **Mock Servers**: Temporary until official MCP servers available
+  - Located in `src/tools/mock_*.py` files
+  - Used by default when real servers unavailable or API keys missing
+  - System automatically falls back to mock if real server connection fails
+  - Mock servers provide full functionality for testing without external dependencies
 - **Configuration**: Q-learning parameters (α=0.1, γ=0.9, ε=0.2) in config.json
 - **Pipeline Architecture**: All stages must implement PipelineStage interface
 - **Testing**: Follow test organization in tests/README.md, maintain >80% overall coverage (>90% for core components)
 - **Performance**: Intent recognition must complete within 100ms (p95)
 - **Security**: Zero Trust principles, validate all inputs, sandbox executions
 
+## Troubleshooting
+
+For troubleshooting common issues and solutions, see `docs/troubleshooting.md`
+
 ## Documentation Map
+
+### Setup Guides
+- `docs/zerodha-mcp-setup.md` - Zerodha trading platform MCP setup
+- `docs/notion-mcp-setup.md` - Notion integration MCP setup
 
 ### Architecture & Design
 - `docs/architecture/system-architecture.md` - Component architecture and design principles
@@ -95,6 +126,8 @@ mypy src/
 - `docs/implementation/intent-recognition.md` - NLP pipeline and classification
 - `docs/implementation/tool-discovery.md` - Discovery algorithms and caching
 - `docs/implementation/execution-engine.md` - Task management and monitoring
+- `docs/implementation/learning-system-updates.md` - Summary of learning system enhancements
+- `docs/implementation/advanced-reward-strategies.md` - Advanced reward calculation strategies
 
 ### API & Data Models
 - `docs/api/rest-api.md` - RESTful endpoints and specifications
@@ -116,6 +149,7 @@ mypy src/
 ### Testing & Deployment
 - `tests/README.md` - **Comprehensive test suite documentation and ALL test commands**
 - `docs/testing/test-summary.md` - Test coverage summary and metrics
+- `docs/testing/coverage_summary.md` - Detailed test coverage report
 - `docs/deployment/requirements.md` - Non-functional requirements and SLOs
 - `docs/deployment/infrastructure.md` - Container specs and CI/CD pipelines
 - `docs/deployment/security.md` - Security architecture and best practices
@@ -123,19 +157,21 @@ mypy src/
 
 ## Development Timeline
 
-- **Phase 1**: Foundation (Weeks 1-3) ✅
-- **Phase 2**: Tool Ecosystem (Weeks 4-5) ✅
-- **Phase 3**: Core Intelligence (Weeks 6-8) ✅
-- **Phase 4**: Learning System (Weeks 9-11) - Current
-- **Phase 5**: Optimization & Testing (Weeks 12-13)
-- **Phase 6**: Documentation & Submission (Weeks 14-16)
+For project phases and timeline, see `docs/project/phase-completion.md`
 
 ## Performance Targets
 
-- **Intent Recognition Accuracy**: >90%
-- **Processing Time**: <100ms (p95) for intent recognition
-- **Cache Hit Rate**: >70% for embedding cache
-- **Tool Selection Accuracy**: >80% (improvement from baseline)
-- **Task Completion Rate**: >85%
-- **Learning Convergence**: Within 1000 episodes
-- **System Availability**: 99.9% uptime
+For detailed performance targets and evaluation metrics, see `docs/evaluation/evaluation-targets.md`
+
+## Demo Scripts
+
+The project includes comprehensive demonstration scripts in the `demos/` directory:
+- **A/B Testing Framework**: `demos/demo_ab_testing_framework.py` - Complete A/B testing with 6 scenarios
+- **Advanced Rewards**: `demos/demo_advanced_rewards.py` - Advanced reward strategies demonstration
+- **Pattern Mining**: `demos/demo_pattern_mining.py` - Pattern discovery and mining
+- **Q-Learning**: `demos/demo_q_learning_orchestration.py` - Q-learning with orchestrator
+- **Deep Q-Learning**: `demos/demo_dqn_learning.py` - Neural network-based learning
+- **Baseline Evaluation**: `demos/demo_baseline_evaluation.py` - Strategy comparisons
+- **Real-time Monitoring**: `demos/demo_realtime_monitoring.py` - Live performance tracking
+
+See `demos/README.md` for detailed documentation of all available demos.
