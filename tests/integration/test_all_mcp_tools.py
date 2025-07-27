@@ -211,8 +211,38 @@ class MCPToolIntegrationTester:
         """Test Zerodha MCP functionality."""
         from src.tools.zerodha_mcp import ZerodhaMCPClient
         
-        client = ZerodhaMCPClient(api_key="test_key", api_secret="test_secret")
+        client = ZerodhaMCPClient(api_key="test_key", api_secret="test_secret", access_token="test_token")
         logger.info("  ✓ Zerodha MCP client initialized")
+        
+        # Test connection with mock server
+        connected = await client.connect(use_mock=True)
+        assert connected, "Failed to connect to mock Zerodha server"
+        logger.info("  ✓ Connected to mock Zerodha server")
+        
+        # Test tool discovery
+        tools = await client.discover_tools()
+        assert len(tools) > 0, f"Expected tools, found {len(tools)}"
+        logger.info(f"  ✓ Discovered {len(tools)} trading tools")
+        
+        # Test getting holdings
+        holdings = await client.get_holdings()
+        assert isinstance(holdings, list), "Holdings should be a list"
+        logger.info(f"  ✓ Retrieved {len(holdings)} holdings")
+        
+        # Test getting market quote
+        quote = await client.get_quote("NSE", "RELIANCE")
+        assert "last_price" in quote, "Quote missing last_price"
+        assert quote["last_price"] > 0, "Invalid price"
+        logger.info(f"  ✓ Retrieved quote: ₹{quote['last_price']}")
+        
+        # Test getting margins
+        margins = await client.get_margins()
+        assert isinstance(margins, dict), "Margins should be a dict"
+        logger.info("  ✓ Retrieved account margins")
+        
+        # Disconnect
+        await client.disconnect()
+        logger.info("  ✓ Disconnected from Zerodha server")
     
     async def test_notion_mcp(self):
         """Test Notion MCP functionality."""

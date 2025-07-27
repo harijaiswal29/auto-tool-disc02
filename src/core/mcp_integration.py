@@ -27,6 +27,7 @@ from src.tools.filesystem_mcp import FileSystemMCPClient
 from src.tools.postgres_mcp import PostgresMCPClient
 from src.tools.github_mcp import GitHubMCPClient
 from src.tools.financial_datasets_mcp import FinancialDatasetsMCPClient
+from src.tools.zerodha_mcp import ZerodhaMCPClient
 
 logger = get_logger(__name__)
 
@@ -440,6 +441,58 @@ class MCPIntegration:
             logger.error(f"[ERROR] Failed to add Financial Datasets server: {e}")
             return False
     
+    async def add_zerodha_server(self, api_key: Optional[str] = None, api_secret: Optional[str] = None,
+                                 access_token: Optional[str] = None, endpoint: Optional[str] = None,
+                                 server_id: str = "zerodha_default", use_mock: bool = False) -> bool:
+        """
+        Add a Zerodha MCP server for trading operations.
+        
+        Args:
+            api_key: Zerodha API key (if not provided, uses ZERODHA_API_KEY env var)
+            api_secret: Zerodha API secret (if not provided, uses ZERODHA_API_SECRET env var)
+            access_token: User's access token (if not provided, uses ZERODHA_ACCESS_TOKEN env var)
+            endpoint: Remote MCP server endpoint (optional, uses default if not provided)
+            server_id: Unique identifier for this server instance
+            use_mock: If True, use mock server implementation
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.info(f"[ADD] Adding Zerodha server: {server_id}")
+            
+            # Create Zerodha client
+            client = ZerodhaMCPClient(api_key, api_secret, access_token, endpoint)
+            
+            # Connect to server (try real first, then mock)
+            if await client.connect(use_mock=use_mock):
+                # Store connection
+                self.active_connections[server_id] = client
+                
+                # Register tools
+                client.register_tools_to_registry(self.registry)
+                
+                # Store server info
+                self.servers[server_id] = {
+                    'type': 'zerodha',
+                    'api_key': api_key if not use_mock else None,
+                    'endpoint': endpoint,
+                    'client': client,
+                    'status': 'active',
+                    'is_mock': client.use_mock
+                }
+                
+                mode = "mock" if client.use_mock else "remote"
+                logger.info(f"[SUCCESS] Zerodha server {server_id} added successfully ({mode} mode)")
+                return True
+            else:
+                logger.error(f"[FAILED] Could not connect to Zerodha server {server_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to add Zerodha server: {e}")
+            return False
+    
     async def execute_tool(self, tool_id: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a tool by its ID with retry logic and circuit breaker.
@@ -483,6 +536,8 @@ class MCPIntegration:
             tool_name = tool_id.split('.', 1)[1]
         elif tool_id.startswith('financial_datasets_'):
             tool_name = tool_id.replace('financial_datasets_', '')
+        elif tool_id.startswith('zerodha_'):
+            tool_name = tool_id.replace('zerodha_', '')
         else:
             tool_name = tool_id
         

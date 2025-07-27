@@ -17,6 +17,7 @@ tests/
 │   ├── test_github_mcp.py                  # GitHub MCP unit tests
 │   ├── test_notion_mcp.py                  # Notion MCP unit tests (32 tests)
 │   ├── test_weather_mcp.py                 # Weather MCP unit tests (29 tests)
+│   ├── test_zerodha_mcp.py                 # Zerodha MCP unit tests (33 tests)
 │   ├── test_state_machine_base.py
 │   ├── test_retry.py
 │   ├── test_retry_extended.py              # Extended retry tests (connection pool, registry)
@@ -34,6 +35,7 @@ tests/
 │   ├── test_sqlite_mcp.py
 │   ├── test_state_machine_integration.py
 │   ├── test_weather_mcp.py                 # Weather MCP integration tests
+│   ├── test_zerodha_mcp.py                 # Zerodha MCP integration tests
 │   ├── test_pipeline_workflow.py           # Full pipeline workflow
 │   ├── test_retry_integration.py           # Retry scenarios with MCP
 │   ├── test_context_persistence.py         # Context persistence integration
@@ -248,15 +250,34 @@ python src/tools/custom_wrappers/weather_mcp.py  # Run basic Weather test
 pytest tests/unit/test_financial_datasets_mcp.py -v  # Unit tests (30 tests - all passing with mock)
 pytest tests/integration/test_financial_datasets_mcp.py -v  # Integration tests (27 tests)
 
-# Integration test scenarios include:
-# - Connection testing with mock and real servers
-# - Tool discovery and registration
+# Run Zerodha MCP tests
+pytest tests/unit/test_zerodha_mcp.py -v  # Unit tests (33 tests - all passing with mock)
+pytest tests/integration/test_zerodha_mcp.py -v  # Integration tests (24 tests)
+
+# Zerodha MCP Integration test scenarios include:
+# - Connection testing with mock Zerodha MCP server
+# - Tool discovery and registration (12 trading tools)
+# - Trading operations (holdings, positions, orders, quotes)
+# - Order management (place, modify, cancel orders)
+# - Market data operations (quotes, LTP, historical data)
+# - Account operations (margins, instruments)
+# - Caching functionality for market data
+# - Error handling and order validation
 # - Concurrent operations testing
-# - Performance testing with caching
-# - Load testing with multiple users
-# - Error recovery and reconnection scenarios
+# - Load testing (50+ concurrent requests)
+# - Reconnection scenarios
+# - Real API simulation with delays
 # - Integration with MCP Integration framework
-# - Multi-tool workflow testing
+# - Multi-tool workflow with Filesystem MCP
+# - Error recovery testing
+
+# For real Zerodha API testing:
+# IMPORTANT: Real Zerodha MCP server requires valid API credentials
+# The mock server provides full trading functionality for testing
+export ZERODHA_API_KEY='your-api-key'
+export ZERODHA_API_SECRET='your-api-secret'
+export ZERODHA_ACCESS_TOKEN='your-access-token'
+python tests/integration/test_zerodha_mcp.py  # Tests with real API (requires valid credentials)
 
 # Run specific integration tests:
 pytest tests/integration/test_financial_datasets_mcp.py -k "concurrent" -v  # Concurrent operations

@@ -418,11 +418,12 @@ class ZerodhaMCPClient:
                         "domain": "finance"
                     },
                     "server_id": self.server_name,
+                    "server_type": "zerodha",
                     "client": self
                 }
                 
-                # Use synchronous add_tool method
-                registry.add_tool(tool_data)
+                # Use synchronous register_tool method
+                registry.register_tool(tool_data)
                 logger.info(f"[REGISTER] Registered tool: {tool_data['id']}")
                 
         except Exception as e:
