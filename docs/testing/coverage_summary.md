@@ -1,5 +1,7 @@
 # Test Coverage Summary Report
 
+This document tracks recently completed testing tasks and achievements. For test execution commands and structure, see `tests/README.md`.
+
 ## Completed Testing Tasks
 
 ### 1. Unit Tests Created
@@ -87,40 +89,6 @@
   - Performance test queries (simple/medium/complex)
   - Validation queries for accuracy testing
 
-## Test Coverage Analysis
-
-### Current State
-- **Existing Tests**: The project has comprehensive test coverage in many areas
-- **New Tests Added**: All requested test files have been created
-- **Test Organization**: Well-structured with unit/, integration/, performance/, and e2e/ directories
-
-### Coverage Highlights
-
-#### Unit Tests
-- ✅ Retry logic: 98% coverage (src/utils/retry.py)
-- ✅ Connection pooling: Tests exist and functional
-- ✅ MCP integration: Comprehensive test suite
-- ✅ Orchestrator agent: Full test coverage
-- ✅ Tool discovery agent: Complete tests
-- ✅ State machine: Base and conversation tests
-- ✅ Intent pipeline stages: Detailed stage testing
-- ✅ Monitoring components: Now fully tested
-
-#### Integration Tests
-- ✅ File system MCP integration
-- ✅ SQLite MCP integration
-- ✅ PostgreSQL MCP integration
-- ✅ GitHub MCP integration
-- ✅ Intent recognition integration
-- ✅ State machine integration
-- ✅ Pipeline workflow: Now fully tested
-- ✅ Retry scenarios: Now fully tested
-
-#### Performance Tests
-- ✅ Intent recognition performance
-- ✅ Tool discovery performance
-- ✅ Pipeline performance
-- Benchmarking and scalability tests included
 
 ## Key Achievements
 
@@ -130,32 +98,9 @@
 4. **Realistic Test Data**: Fixtures provide comprehensive test scenarios
 5. **Retry Resilience**: Integration tests validate retry and circuit breaker functionality
 
-## Running the Tests
+## Running Tests
 
-### All Tests
-```bash
-python -m pytest tests/ -v
-```
-
-### With Coverage
-```bash
-python -m pytest tests/ --cov=src --cov-report=html --cov-report=term
-```
-
-### Specific Test Categories
-```bash
-# Unit tests
-python -m pytest tests/unit/ -v
-
-# Integration tests
-python -m pytest tests/integration/ -v
-
-# Performance tests
-python -m pytest tests/performance/ -v
-
-# New monitoring tests
-python -m pytest tests/unit/test_intent_recognition_metrics.py tests/unit/test_retry_metrics.py -v
-```
+For comprehensive test execution commands, see `tests/README.md`.
 
 ## Notes
 
@@ -164,10 +109,3 @@ python -m pytest tests/unit/test_intent_recognition_metrics.py tests/unit/test_r
 3. Integration tests may require external dependencies (databases, MCP servers)
 4. The test data fixtures provide a solid foundation for both manual and automated testing
 
-## Next Steps
-
-1. Fix any import issues in the new test files
-2. Run full test suite with coverage reporting
-3. Address any failing tests
-4. Update documentation with final coverage percentages
-5. Consider adding more edge case tests based on coverage gaps

@@ -2,122 +2,25 @@
 
 ## Overview
 
-This document provides a comprehensive summary of the testing infrastructure for the Auto Tool Discovery system, including test coverage, test organization, and remaining work.
+This document provides a high-level summary of testing status. For comprehensive testing documentation, commands, and detailed structure, see `tests/README.md`.
 
-## Test Organization Structure
+## Recently Added Tests
 
-The test suite is organized following best practices with clear separation of concerns:
+### New Test Files (✅ indicates recently added)
+- **Unit Tests**:
+  - `test_intent_recognition_metrics.py` ✅ NEW
+  - `test_retry_metrics.py` ✅ NEW
+- **Integration Tests**:
+  - `test_pipeline_workflow.py` ✅ NEW
+  - `test_retry_integration.py` ✅ NEW
+- **Performance Tests** ✅ NEW directory:
+  - `test_intent_recognition_performance.py`
+  - `test_tool_discovery_performance.py`
+- **Test Data Fixtures** ✅ NEW:
+  - `tests/data/fixtures/tools.json`
+  - `tests/data/fixtures/intents.json`
+  - `tests/data/fixtures/queries.json`
 
-```
-tests/
-├── unit/                      # Unit tests for individual components
-│   ├── test_mcp_integration.py
-│   ├── test_connection_pool.py
-│   ├── test_orchestrator_agent.py
-│   ├── test_tool_discovery_agent.py
-│   ├── test_intent_pipeline_stages.py
-│   ├── test_conversation_state_machine.py
-│   ├── test_search_mcp.py
-│   ├── test_state_machine_base.py
-│   ├── test_retry.py
-│   ├── test_intent_recognition_metrics.py  # ✅ NEW
-│   └── test_retry_metrics.py               # ✅ NEW
-├── integration/              # Integration tests
-│   ├── test_filesystem_mcp.py
-│   ├── test_github_mcp.py
-│   ├── test_intent_recognition_integration.py
-│   ├── test_postgres_mcp.py
-│   ├── test_search_mcp_integration.py
-│   ├── test_sqlite_mcp.py
-│   ├── test_state_machine_integration.py
-│   ├── test_weather_mcp.py
-│   ├── test_pipeline_workflow.py           # ✅ NEW
-│   └── test_retry_integration.py           # ✅ NEW
-├── performance/             # Performance tests ✅ NEW
-│   ├── test_intent_recognition_performance.py
-│   └── test_tool_discovery_performance.py
-├── e2e/                     # End-to-end tests
-│   └── test_filesystem_e2e.py
-├── demos/                   # Demonstration scripts
-│   ├── demo_pipeline_refactor.py
-│   ├── demo_retry_logic.py
-│   ├── test_integration_demo.py
-│   ├── demo_github_mcp.py
-│   ├── demo_github_real.py
-│   └── README.md
-├── data/                    # Test data
-│   ├── fixtures/           # ✅ NEW test data fixtures
-│   │   ├── tools.json
-│   │   ├── intents.json
-│   │   └── queries.json
-├── conftest.py             # Pytest configuration
-├── test_context_persistence.py
-├── test_intent_recognition.py
-├── test_integration.py
-├── test_pipeline_architecture.py
-├── test_retry_logic.py
-└── README.md
-
-```
-
-## Test Coverage Summary
-
-### Completed Unit Tests
-
-#### 1. Core Components (100% test files created)
-- **MCP Integration** (`test_mcp_integration.py`)
-  - Server lifecycle management
-  - Tool discovery and registration
-  - Tool execution with retry logic
-  - Circuit breaker integration
-  - Intent-based tool finding
-  - Error handling
-
-- **Connection Pool** (`test_connection_pool.py`)
-  - Connection lifecycle
-  - Health checking
-  - Connection reuse
-  - Idle cleanup
-  - Concurrent access
-  - Statistics tracking
-
-#### 2. Agent Components (60% test files created)
-- **Orchestrator Agent** (`test_orchestrator_agent.py`)
-  - End-to-end query processing
-  - Intent recognition integration
-  - Tool discovery and selection
-  - Parallel/sequential execution
-  - State machine transitions
-  - Error handling
-
-- **Tool Discovery Agent** (`test_tool_discovery_agent.py`)
-  - Semantic search
-  - Capability matching
-  - Graph exploration
-  - Scoring algorithms
-  - Complementary tool discovery
-  - Pattern-based search
-
-- **Intent Recognition Agent** (`test_intent_recognition.py`)
-  - Query processing
-  - Intent classification
-  - Context handling
-  - Multi-intent support
-
-#### 3. State Machine Components
-- **Conversation State Machine** (`test_conversation_state_machine.py`)
-  - State transitions
-  - Handler execution
-  - Error recovery
-  - Context persistence
-
-#### 4. MCP Tool Integrations
-- **SQLite MCP** (`test_sqlite_mcp.py`)
-- **Search MCP** (`test_search_mcp.py`, `test_search_mcp_integration.py`)
-- **Filesystem MCP** (`test_filesystem_mcp.py`, `test_filesystem_e2e.py`)
-- **PostgreSQL MCP** (`test_postgres_mcp.py`)
-- **GitHub MCP** (`test_github_mcp.py`)
-- **Weather MCP** (`test_weather_mcp.py`)
 
 ### Recently Completed Unit Tests
 
@@ -138,9 +41,6 @@ The following components now have comprehensive unit tests:
    - `test_intent_recognition_performance.py` - Intent recognition benchmarking
    - `test_tool_discovery_performance.py` - Tool discovery and pipeline performance
 
-## Test Execution Commands
-
-For comprehensive test execution commands and examples, please refer to `tests/README.md`.
 
 ## Test Results Summary
 
@@ -208,69 +108,12 @@ New test data fixtures have been created in `tests/data/fixtures/`:
 - **intents.json**: 8 intent types with keywords, entities, and patterns
 - **queries.json**: Test queries including edge cases and performance benchmarks
 
-## Continuous Integration Recommendations
 
-### GitHub Actions Workflow
-```yaml
-name: Tests
 
-on: [push, pull_request]
+## For Detailed Information
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.8, 3.9]
-    
-    steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-        pip install pytest pytest-cov pytest-asyncio
-    - name: Run tests
-      run: |
-        pytest tests/ --cov=src --cov-report=xml
-    - name: Upload coverage
-      uses: codecov/codecov-action@v1
-```
-
-## Best Practices Implemented
-
-1. **Test Naming**: Clear, descriptive test names following `test_<functionality>` pattern
-2. **Test Organization**: Logical grouping of related tests in classes
-3. **Setup/Teardown**: Proper use of fixtures for setup and cleanup
-4. **Async Testing**: Correct handling of async code with `pytest-asyncio`
-5. **Mock Management**: Systematic mocking of external dependencies
-6. **Documentation**: Each test file includes docstring explaining what is tested
-
-## Next Steps
-
-1. **Complete Remaining Unit Tests**
-   - Focus on high-priority components first
-   - Ensure critical paths have >90% coverage
-
-2. **Run Coverage Analysis**
-   - Generate detailed coverage report
-   - Identify gaps in test coverage
-   - Create tests for uncovered code paths
-
-3. **Integration Testing**
-   - Create comprehensive integration tests
-   - Test complete workflows end-to-end
-   - Verify component interactions
-
-4. **Performance Testing**
-   - Add performance benchmarks
-   - Set performance baselines
-   - Monitor for regressions
-
-5. **Documentation**
-   - Update test documentation
-   - Create testing guidelines
-   - Document test data requirements
+- **Test Commands**: See `tests/README.md`
+- **Directory Structure**: See `tests/README.md`
+- **Running Tests**: See `tests/README.md`
+- **CI/CD Configuration**: See `tests/README.md`
+- **Best Practices**: See `tests/README.md`

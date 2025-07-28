@@ -35,7 +35,7 @@ This document describes the Deep Q-Learning (DQN) implementation that enhances t
 
 ### Standard DQN
 ```python
-Input (439 dims) → FC(512) → ReLU → Dropout(0.2) → 
+Input (447 dims) → FC(512) → ReLU → Dropout(0.2) → 
 FC(256) → ReLU → Dropout(0.2) → 
 FC(128) → ReLU → Dropout(0.2) → 
 Output (action_dim)
@@ -43,7 +43,7 @@ Output (action_dim)
 
 ### Dueling DQN
 ```python
-Input (439 dims) → Shared Features → 
+Input (447 dims) → Shared Features → 
 ├─ Value Stream → FC(128) → ReLU → FC(1)
 └─ Advantage Stream → FC(128) → ReLU → FC(action_dim)
 Output = V(s) + A(s,a) - mean(A(s,·))
@@ -149,7 +149,7 @@ trainer.plot_training_curves('training_curves.png')
 
 ### 2. State Space Handling
 - **Tabular**: Limited to discrete, small state spaces
-- **DQN**: Handles continuous, high-dimensional states (439 dims)
+- **DQN**: Handles continuous, high-dimensional states (447 dims)
 
 ### 3. Memory Efficiency
 - **Tabular**: O(|S| × |A|) memory requirement
@@ -166,7 +166,7 @@ trainer.plot_training_curves('training_curves.png')
 ## Implementation Details
 
 ### State Encoding
-The 439-dimensional state vector includes:
+The 447-dimensional state vector includes:
 - Intent embeddings from sentence transformers
 - Context features (domain, session info)
 - Tool usage history

@@ -108,8 +108,9 @@ For troubleshooting common issues and solutions, see `docs/troubleshooting.md`
 ## Documentation Map
 
 ### Setup Guides
-- `docs/zerodha-mcp-setup.md` - Zerodha trading platform MCP setup
-- `docs/notion-mcp-setup.md` - Notion integration MCP setup
+- `docs/setup/zerodha-mcp-setup.md` - Zerodha trading platform MCP setup
+- `docs/setup/notion-mcp-setup.md` - Notion integration MCP setup
+- `docs/setup/postgresql-setup-guide.md` - PostgreSQL database setup for MCP testing
 
 ### Architecture & Design
 - `docs/architecture/system-architecture.md` - Component architecture and design principles

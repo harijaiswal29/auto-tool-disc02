@@ -279,8 +279,10 @@ auto-tool-disc02/
 │   ├── development/            # Development guides
 │   │   └── commands-reference.md
 │   │
-│   ├── notion-mcp-setup.md
-│   └── zerodha-mcp-setup.md
+│   ├── setup/                  # Setup guides
+│   │   ├── notion-mcp-setup.md
+│   │   ├── postgresql-setup-guide.md
+│   │   └── zerodha-mcp-setup.md
 │
 ├── notebooks/                  # Jupyter notebooks
 │   └── experiments/            # Experimental notebooks
