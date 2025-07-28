@@ -15,44 +15,76 @@ tests/
 │   ├── test_conversation_state_machine.py
 │   ├── test_search_mcp.py
 │   ├── test_github_mcp.py                  # GitHub MCP unit tests
-│   ├── test_notion_mcp.py                  # Notion MCP unit tests (32 tests)
-│   ├── test_weather_mcp.py                 # Weather MCP unit tests (29 tests)
-│   ├── test_zerodha_mcp.py                 # Zerodha MCP unit tests (33 tests)
+│   ├── test_notion_mcp.py                  # Notion MCP unit tests
+│   ├── test_weather_mcp.py                 # Weather MCP unit tests
+│   ├── test_financial_datasets_mcp.py      # Financial Datasets MCP unit tests
+│   ├── test_zerodha_mcp.py                 # Zerodha MCP unit tests
+│   ├── test_postgres_mcp.py                # PostgreSQL MCP unit tests
+│   ├── test_postgres_real_server_unit.py   # PostgreSQL real server unit tests
+│   ├── test_sqlite_mcp.py                  # SQLite MCP unit tests
 │   ├── test_state_machine_base.py
 │   ├── test_retry.py
 │   ├── test_retry_extended.py              # Extended retry tests (connection pool, registry)
 │   ├── test_intent_recognition.py          # Intent recognition unit tests
 │   ├── test_intent_recognition_metrics.py  # Intent recognition metrics
 │   ├── test_retry_metrics.py               # Retry metrics monitoring
-│   └── test_q_learning_engine.py           # Q-Learning engine tests
+│   ├── test_q_learning_engine.py           # Q-Learning engine tests
+│   ├── test_pattern_miner.py               # Pattern mining tests
+│   ├── test_context_extractor.py           # Context extraction tests
+│   ├── test_reward_calculator.py           # Reward calculation tests
+│   ├── test_enhanced_state_representation.py  # Enhanced state representation tests
+│   ├── test_incremental_pattern_mining.py    # Incremental pattern mining tests
+│   ├── test_dqn.py                         # Deep Q-Network tests
+│   ├── test_advanced_rewards.py            # Advanced reward strategies tests
+│   ├── test_baseline_strategies.py         # Baseline strategy tests
+│   ├── test_evaluation_engine.py           # Evaluation engine tests
+│   ├── test_metrics_collector.py           # Metrics collection tests
+│   ├── test_ab_testing_framework.py        # A/B testing framework tests
+│   ├── test_ab_test_manager.py             # A/B test manager tests
+│   └── WEATHER_MCP_TEST_SUMMARY.md         # Weather MCP test documentation
 ├── integration/              # Integration tests
 │   ├── test_filesystem_mcp.py
 │   ├── test_github_mcp.py
+│   ├── test_github_direct.py               # GitHub direct protocol testing
+│   ├── test_github_real_direct.py          # GitHub real server testing
+│   ├── test_github_simple.py               # GitHub basic server startup test
 │   ├── test_notion_mcp.py                  # Notion MCP integration tests
 │   ├── test_intent_recognition_integration.py
 │   ├── test_postgres_mcp.py
-│   ├── test_search_mcp_integration.py
+│   ├── test_postgres_real_server.py        # PostgreSQL real server tests
+│   ├── test_brave_search_direct.py         # Brave Search API integration
 │   ├── test_sqlite_mcp.py
 │   ├── test_state_machine_integration.py
 │   ├── test_weather_mcp.py                 # Weather MCP integration tests
+│   ├── test_financial_datasets_mcp.py      # Financial Datasets MCP integration tests
+│   ├── test_financial_datasets_mcp_backup.py  # Financial Datasets backup tests
 │   ├── test_zerodha_mcp.py                 # Zerodha MCP integration tests
+│   ├── test_all_mcp_tools.py               # All MCP tools integration
 │   ├── test_pipeline_workflow.py           # Full pipeline workflow
 │   ├── test_retry_integration.py           # Retry scenarios with MCP
 │   ├── test_context_persistence.py         # Context persistence integration
+│   ├── test_context_aware_pattern_mining.py  # Context-aware pattern mining
+│   ├── test_failure_learning.py            # Failure learning mechanisms
+│   ├── test_q_learning_integration.py      # Q-Learning integration tests
+│   ├── test_baseline_evaluation.py         # Baseline evaluation tests
+│   ├── test_pipeline_architecture.py       # Pipeline architecture tests
 │   ├── test_integration.py                 # End-to-end integration tests
-│   └── test_pipeline_architecture.py       # Pipeline architecture tests
+│   ├── test_real_mcp.py                    # Real MCP server testing
+│   └── test_real_tools.py                  # Real tools integration
 ├── performance/             # Performance tests
 │   ├── test_intent_recognition_performance.py
 │   └── test_tool_discovery_performance.py
 ├── e2e/                     # End-to-end tests
 │   └── test_filesystem_e2e.py
-├── demos/                   # Demonstration scripts
+├── demos/                   # Test-specific demonstration scripts
 │   ├── demo_pipeline_refactor.py
 │   ├── demo_retry_logic.py
 │   ├── test_integration_demo.py
 │   ├── demo_github_mcp.py
 │   ├── demo_github_real.py
-│   ├── demo_notion_mcp.py                   # Notion MCP comprehensive demo
+│   ├── demo_financial_datasets.py
+│   ├── demo_financial_datasets_output.md
+│   ├── demo_postgres_mcp.py
 │   └── README.md
 ├── utilities/              # Test utilities and helpers
 │   ├── check_encoding.py
@@ -69,6 +101,16 @@ tests/
 │   └── temp/             # Temporary test files
 ├── conftest.py            # Pytest configuration
 ```
+
+**Note**: The project also has a main `demos/` directory at the project root containing comprehensive demonstration scripts for various features:
+- `demo_ab_testing_framework.py` - A/B testing demonstrations
+- `demo_advanced_rewards.py` - Advanced reward strategies
+- `demo_baseline_evaluation.py` - Baseline comparison demos
+- `demo_dqn_learning.py` - Deep Q-Learning demonstrations
+- `demo_pattern_mining.py` - Pattern mining features
+- `demo_q_learning_orchestration.py` - Q-learning with orchestrator
+- `demo_realtime_monitoring.py` - Real-time monitoring
+- And several others (see `/demos/README.md` for complete list)
 
 ## Test Categories
 
@@ -91,10 +133,25 @@ tests/
 - `test_intent_recognition_metrics.py` - Intent recognition performance monitoring
 - `test_retry_metrics.py` - Retry attempt and circuit breaker metrics
 - `test_q_learning_engine.py` - Q-Learning engine with state representation, action space, and experience replay
+- `test_pattern_miner.py` - Pattern mining algorithms for discovering tool synergies
+- `test_context_extractor.py` - Context extraction for pattern discovery
+- `test_reward_calculator.py` - Reward calculation strategies and implementations
+- `test_enhanced_state_representation.py` - Enhanced state representations for Q-learning
+- `test_incremental_pattern_mining.py` - Incremental pattern mining algorithms
+- `test_dqn.py` - Deep Q-Network implementations and architectures
+- `test_advanced_rewards.py` - Advanced reward shaping strategies
+- `test_baseline_strategies.py` - Baseline strategy implementations for comparison
+- `test_evaluation_engine.py` - Evaluation framework engine tests
+- `test_metrics_collector.py` - Performance metrics collection and aggregation
+- `test_ab_testing_framework.py` - A/B testing framework implementation
+- `test_ab_test_manager.py` - A/B test management and orchestration
 - `test_sqlite_mcp.py` - SQLite MCP client unit tests with mocking
-- `test_notion_mcp.py` - Notion MCP client unit tests (32 tests covering all operations)
-- `test_weather_mcp.py` - Weather MCP client unit tests (29 tests covering all operations)
-- `test_financial_datasets_mcp.py` - Financial Datasets MCP client unit tests (30 tests covering all operations)
+- `test_postgres_mcp.py` - PostgreSQL MCP client unit tests
+- `test_postgres_real_server_unit.py` - PostgreSQL real server unit tests
+- `test_notion_mcp.py` - Notion MCP client unit tests (covering all operations)
+- `test_weather_mcp.py` - Weather MCP client unit tests (covering all operations)
+- `test_financial_datasets_mcp.py` - Financial Datasets MCP client unit tests (covering all operations)
+- `test_zerodha_mcp.py` - Zerodha trading platform MCP client unit tests
 
 ### Integration Tests (`tests/integration/`)
 - **Purpose**: Test multiple components working together
@@ -108,13 +165,20 @@ tests/
 - MCP tool integrations:
   - **SQLite MCP** (`test_sqlite_mcp.py`)
   - **PostgreSQL MCP** (`test_postgres_mcp.py`)
+  - **PostgreSQL Real Server** (`test_postgres_real_server.py` - tests with actual PostgreSQL)
   - **GitHub MCP** (`test_github_mcp.py`)
-  - **Search MCP** (`test_search_mcp.py` - unit tests with mock)
+  - **GitHub Direct** (`test_github_direct.py`, `test_github_real_direct.py`, `test_github_simple.py`)
+  - **Search MCP** - unit tests with mock (see `test_search_mcp.py` in unit tests)
   - **Brave Search Direct** (`test_brave_search_direct.py` - real API integration)
   - **Filesystem MCP** (`test_filesystem_mcp.py`)
   - **Weather MCP** (`test_weather_mcp.py`)
   - **Notion MCP** (`test_notion_mcp.py` - comprehensive integration testing)
   - **Financial Datasets MCP** (`test_financial_datasets_mcp.py` - Comprehensive integration testing with 27 test cases)
+  - **Financial Datasets Backup** (`test_financial_datasets_mcp_backup.py` - backup/recovery testing)
+  - **Zerodha MCP** (`test_zerodha_mcp.py` - trading platform integration)
+  - **All MCP Tools** (`test_all_mcp_tools.py` - comprehensive multi-tool testing)
+  - **Real MCP** (`test_real_mcp.py` - real MCP server testing)
+  - **Real Tools** (`test_real_tools.py` - real tool implementations)
     - Mock server testing (default mode)
     - Real API simulation with mocked HTTP responses
     - Concurrent operations and load testing
@@ -122,13 +186,19 @@ tests/
     - Error recovery and reconnection scenarios
     - Integration with MCP Integration framework
     - Multi-tool workflow integration (with Filesystem MCP)
-- Intent recognition pipeline integration
-- State machine workflow integration
-- `test_pipeline_workflow.py` - Complete end-to-end pipeline testing
-- `test_retry_integration.py` - Retry mechanisms with real MCP connections
-- `test_context_persistence.py` - Context and conversation persistence
-- `test_integration.py` - Full system integration tests
-- `test_pipeline_architecture.py` - Pipeline architecture and stage interactions
+- Learning and pattern discovery:
+  - `test_context_aware_pattern_mining.py` - Context-aware pattern discovery
+  - `test_failure_learning.py` - Learning from failures and errors
+  - `test_q_learning_integration.py` - Q-learning integration with real tools
+  - `test_baseline_evaluation.py` - Baseline strategy evaluation
+- System integration:
+  - `test_intent_recognition_integration.py` - Intent recognition pipeline integration
+  - `test_state_machine_integration.py` - State machine workflow integration
+  - `test_pipeline_workflow.py` - Complete end-to-end pipeline testing
+  - `test_retry_integration.py` - Retry mechanisms with real MCP connections
+  - `test_context_persistence.py` - Context and conversation persistence
+  - `test_integration.py` - Full system integration tests
+  - `test_pipeline_architecture.py` - Pipeline architecture and stage interactions
 
 ### End-to-End Tests (`tests/e2e/`)
 - **Purpose**: Test complete user workflows
@@ -214,45 +284,45 @@ pytest -k "test_retry" -v
 pytest tests/unit/test_q_learning_engine.py -v
 
 # Run SQLite MCP tests
-pytest tests/unit/test_sqlite_mcp.py -v  # Unit tests with mock (18 tests)
-pytest tests/integration/test_sqlite_mcp.py -v  # Integration tests (13 tests)
+pytest tests/unit/test_sqlite_mcp.py -v  # Unit tests with mock server
+pytest tests/integration/test_sqlite_mcp.py -v  # Integration tests
 # Both test files support testing with real and mock SQLite MCP servers
 # The tests automatically fall back to mock server if real server is not available
 
 # Run Search MCP tests
-pytest tests/unit/test_search_mcp.py -v  # Unit tests with mock (18 tests)
+pytest tests/unit/test_search_mcp.py -v  # Unit tests with mock server
 # For real API testing:
 export BRAVE_API_KEY='your-api-key'
 python tests/integration/test_brave_search_direct.py  # Direct Brave Search API test
 
 # Run GitHub MCP tests
-pytest tests/unit/test_github_mcp.py -v  # Unit tests with mock (23 tests)
+pytest tests/unit/test_github_mcp.py -v  # Unit tests with mock server
 pytest tests/integration/test_github_mcp.py -v  # Integration tests
 # For real GitHub API testing:
 export GITHUB_TOKEN='your-github-token'
 python tests/integration/test_github_mcp.py  # Tests with real GitHub API
 
 # Run Notion MCP tests
-pytest tests/unit/test_notion_mcp.py -v  # Unit tests (32 tests - 25 passing with mock)
+pytest tests/unit/test_notion_mcp.py -v  # Unit tests with mock server
 python demos/demo_notion_mcp.py  # Comprehensive demo with mock/real server
 # For real Notion API testing:
 export NOTION_INTEGRATION_TOKEN='your-notion-integration-token'
 python tests/integration/test_notion_mcp.py  # Integration tests
 
 # Run Weather MCP tests
-pytest tests/unit/test_weather_mcp.py -v  # Unit tests (29 tests - all passing with mock)
+pytest tests/unit/test_weather_mcp.py -v  # Unit tests with mock server
 pytest tests/integration/test_weather_mcp.py -v  # Integration tests
 # For real OpenWeather API testing:
 export OPENWEATHER_API_KEY='your-openweather-api-key'
 python src/tools/custom_wrappers/weather_mcp.py  # Run basic Weather test
 
 # Run Financial Datasets MCP tests
-pytest tests/unit/test_financial_datasets_mcp.py -v  # Unit tests (30 tests - all passing with mock)
-pytest tests/integration/test_financial_datasets_mcp.py -v  # Integration tests (27 tests)
+pytest tests/unit/test_financial_datasets_mcp.py -v  # Unit tests with mock server
+pytest tests/integration/test_financial_datasets_mcp.py -v  # Integration tests
 
 # Run Zerodha MCP tests
-pytest tests/unit/test_zerodha_mcp.py -v  # Unit tests (33 tests - all passing with mock)
-pytest tests/integration/test_zerodha_mcp.py -v  # Integration tests (24 tests)
+pytest tests/unit/test_zerodha_mcp.py -v  # Unit tests with mock server
+pytest tests/integration/test_zerodha_mcp.py -v  # Integration tests
 
 # Zerodha MCP Integration test scenarios include:
 # - Connection testing with mock Zerodha MCP server
@@ -464,7 +534,7 @@ tests/data/
 The GitHub MCP tests are organized into unit tests and integration tests:
 
 **Unit Tests** (`tests/unit/test_github_mcp.py`):
-- 23 test cases covering GitHubMCPClient functionality
+- Comprehensive test cases covering GitHubMCPClient functionality
 - Tests connection handling (mock/real server fallback)
 - Tests tool discovery and execution
 - Tests error handling and edge cases
@@ -514,6 +584,41 @@ python tests/integration/test_all_mcp_tools.py
 
 # Run all GitHub-related tests
 pytest tests -k "github" -v
+
+# Run PostgreSQL tests
+pytest tests/unit/test_postgres_mcp.py -v  # Unit tests
+pytest tests/unit/test_postgres_real_server_unit.py -v  # Real server unit tests
+pytest tests/integration/test_postgres_mcp.py -v  # Integration tests
+pytest tests/integration/test_postgres_real_server.py -v  # Real server integration
+# For real PostgreSQL testing:
+export POSTGRES_TEST_URL='postgresql://user:pass@localhost/testdb'
+
+# Run learning and pattern mining tests
+pytest tests/unit/test_pattern_miner.py -v  # Pattern mining algorithms
+pytest tests/unit/test_context_extractor.py -v  # Context extraction
+pytest tests/unit/test_incremental_pattern_mining.py -v  # Incremental mining
+pytest tests/integration/test_context_aware_pattern_mining.py -v  # Context-aware patterns
+pytest tests/integration/test_failure_learning.py -v  # Failure learning
+
+# Run reward and evaluation tests
+pytest tests/unit/test_reward_calculator.py -v  # Reward calculation
+pytest tests/unit/test_enhanced_state_representation.py -v  # Enhanced states
+pytest tests/unit/test_advanced_rewards.py -v  # Advanced reward strategies
+pytest tests/unit/test_baseline_strategies.py -v  # Baseline strategies
+pytest tests/unit/test_evaluation_engine.py -v  # Evaluation engine
+pytest tests/integration/test_baseline_evaluation.py -v  # Baseline evaluation
+
+# Run A/B testing framework tests
+pytest tests/unit/test_ab_testing_framework.py -v  # A/B testing framework
+pytest tests/unit/test_ab_test_manager.py -v  # A/B test management
+
+# Run Deep Q-Learning tests
+pytest tests/unit/test_dqn.py -v  # Deep Q-Network tests
+pytest tests/integration/test_q_learning_integration.py -v  # Q-learning integration
+
+# Run real MCP server tests
+python tests/integration/test_real_mcp.py  # Test with real MCP servers
+python tests/integration/test_real_tools.py  # Test with real tool implementations
 ```
 
 ### Manual Testing Instructions

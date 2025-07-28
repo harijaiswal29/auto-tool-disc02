@@ -17,12 +17,16 @@ auto-tool-disc02/
 │   ├── core/                   # Core MCP integration
 │   │   ├── __init__.py
 │   │   ├── mcp_integration.py             # MCP protocol implementation
-│   │   └── connection_pool.py             # Connection management
+│   │   ├── connection_pool.py             # Connection management
+│   │   ├── tool_registry.py               # Tool registry implementation
+│   │   └── data/                          # Core data directory
 │   │
 │   ├── database/               # Data models and persistence
 │   │   ├── __init__.py
 │   │   ├── context_models.py              # Context storage models
-│   │   └── tool_registry.py               # Tool registry implementation
+│   │   ├── database.py                    # Database module
+│   │   └── migrations/                    # Database migrations
+│   │       └── add_context_columns.py     # Context columns migration
 │   │
 │   ├── evaluation/             # Evaluation framework
 │   │   ├── __init__.py
@@ -103,13 +107,21 @@ auto-tool-disc02/
 │   │   ├── logger.py                      # Logging configuration
 │   │   └── retry.py                       # Retry logic utilities
 │   │
+│   ├── models/                 # Data models
+│   │   ├── __init__.py
+│   │   └── intent.py                      # Intent model
+│   │
+│   ├── data/                   # Application data
+│   │   └── test_combined/                 # Test data
+│   │       └── products.csv               # Sample products data
+│   │
 │   ├── api/                    # API endpoints
 │   │   ├── __init__.py
-│   │   └── monitoring_api.py              # Monitoring API endpoints
+│   │   ├── monitoring_api.py              # Monitoring API endpoints
+│   │   └── ab_testing_api.py              # A/B testing API endpoints
 │   │
 │   ├── __init__.py
-│   ├── main.py                 # Main application entry point
-│   └── hello_mcp.py            # MCP test script
+│   └── main.py                 # Main application entry point
 │
 ├── tests/                      # Test suite
 │   ├── unit/                   # Unit tests
@@ -125,6 +137,10 @@ auto-tool-disc02/
 │   │   ├── test_notion_mcp.py
 │   │   ├── test_weather_mcp.py
 │   │   ├── test_financial_datasets_mcp.py
+│   │   ├── test_zerodha_mcp.py
+│   │   ├── test_postgres_mcp.py
+│   │   ├── test_postgres_real_server_unit.py
+│   │   ├── test_sqlite_mcp.py
 │   │   ├── test_state_machine_base.py
 │   │   ├── test_retry.py
 │   │   ├── test_retry_extended.py
@@ -133,32 +149,49 @@ auto-tool-disc02/
 │   │   ├── test_retry_metrics.py
 │   │   ├── test_q_learning_engine.py
 │   │   ├── test_pattern_miner.py
+│   │   ├── test_context_extractor.py
+│   │   ├── test_reward_calculator.py
+│   │   ├── test_enhanced_state_representation.py
+│   │   ├── test_incremental_pattern_mining.py
 │   │   ├── test_dqn.py
 │   │   ├── test_advanced_rewards.py
 │   │   ├── test_baseline_strategies.py
 │   │   ├── test_evaluation_engine.py
 │   │   ├── test_metrics_collector.py
 │   │   ├── test_ab_testing_framework.py
-│   │   └── test_ab_test_manager.py
+│   │   ├── test_ab_test_manager.py
+│   │   └── WEATHER_MCP_TEST_SUMMARY.md
 │   │
 │   ├── integration/            # Integration tests
 │   │   ├── __init__.py
 │   │   ├── test_filesystem_mcp.py
 │   │   ├── test_github_mcp.py
+│   │   ├── test_github_direct.py
+│   │   ├── test_github_real_direct.py
+│   │   ├── test_github_simple.py
 │   │   ├── test_notion_mcp.py
 │   │   ├── test_intent_recognition_integration.py
 │   │   ├── test_postgres_mcp.py
-│   │   ├── test_search_mcp_integration.py
+│   │   ├── test_postgres_real_server.py
+│   │   ├── test_brave_search_direct.py
 │   │   ├── test_sqlite_mcp.py
 │   │   ├── test_state_machine_integration.py
 │   │   ├── test_weather_mcp.py
 │   │   ├── test_financial_datasets_mcp.py
+│   │   ├── test_financial_datasets_mcp_backup.py
+│   │   ├── test_zerodha_mcp.py
 │   │   ├── test_all_mcp_tools.py
 │   │   ├── test_pipeline_workflow.py
 │   │   ├── test_retry_integration.py
 │   │   ├── test_context_persistence.py
+│   │   ├── test_context_aware_pattern_mining.py
+│   │   ├── test_failure_learning.py
+│   │   ├── test_q_learning_integration.py
 │   │   ├── test_baseline_evaluation.py
-│   │   └── test_pipeline_architecture.py
+│   │   ├── test_pipeline_architecture.py
+│   │   ├── test_integration.py
+│   │   ├── test_real_mcp.py
+│   │   └── test_real_tools.py
 │   │
 │   ├── performance/            # Performance tests
 │   │   ├── __init__.py
@@ -169,21 +202,15 @@ auto-tool-disc02/
 │   │   ├── __init__.py
 │   │   └── test_filesystem_e2e.py
 │   │
-│   ├── demos/                  # Demonstration scripts
-│   │   ├── __init__.py
+│   ├── demos/                  # Test demonstration scripts
 │   │   ├── demo_pipeline_refactor.py
 │   │   ├── demo_retry_logic.py
 │   │   ├── test_integration_demo.py
 │   │   ├── demo_github_mcp.py
 │   │   ├── demo_github_real.py
-│   │   ├── demo_notion_mcp.py
-│   │   ├── demo_q_learning_orchestration.py
-│   │   ├── demo_pattern_mining.py
-│   │   ├── demo_dqn_learning.py
-│   │   ├── demo_advanced_rewards.py
-│   │   ├── demo_ab_testing_framework.py
-│   │   ├── demo_baseline_evaluation.py
-│   │   ├── demo_realtime_monitoring.py
+│   │   ├── demo_financial_datasets.py
+│   │   ├── demo_financial_datasets_output.md
+│   │   ├── demo_postgres_mcp.py
 │   │   └── README.md
 │   │
 │   ├── utilities/              # Test utilities
@@ -204,22 +231,40 @@ auto-tool-disc02/
 │   │
 │   ├── __init__.py
 │   ├── conftest.py             # Pytest configuration
-│   ├── test_context_persistence.py
-│   ├── test_integration.py
-│   ├── test_intent_recognition.py
-│   ├── test_pipeline_architecture.py
-│   ├── test_retry_logic.py
 │   └── README.md               # Test suite documentation
 │
 ├── data/                       # Runtime data
-│   ├── logs/                   # Application logs
-│   ├── metrics/                # Performance metrics
-│   ├── patterns/               # Discovered patterns
-│   └── registry/               # Tool registry database
+│   ├── logs/                   # Application logs (contains numerous log files)
+│   ├── databases/              # Database files
+│   ├── context.db              # Context database
+│   ├── learning.db             # Learning database
+│   ├── sqlite_mcp_verification_report.json  # SQLite verification report
+│   ├── test_combined_registry.db            # Combined test registry
+│   ├── test_fs_integration_registry.db      # Filesystem integration test registry
+│   ├── test_integration_registry.db         # Integration test registry
+│   └── test_search_registry.db              # Search test registry
 │
 ├── config/                     # Configuration files
-│   ├── __init__.py
 │   └── config.json             # Main configuration
+│
+├── demos/                      # Main demonstration scripts
+│   ├── README.md
+│   ├── demo_ab_testing_framework.py
+│   ├── demo_ab_testing_rewards.py
+│   ├── demo_advanced_rewards.py
+│   ├── demo_baseline_evaluation.py
+│   ├── demo_dqn_learning.py
+│   ├── demo_dqn_learning_fixed.py
+│   ├── demo_dqn_simple.py
+│   ├── demo_incremental_pattern_mining.py
+│   ├── demo_notion_mcp.py
+│   ├── demo_pattern_mining.py
+│   ├── demo_q_learning_orchestration.py
+│   ├── demo_realtime_monitoring.py
+│   ├── hello_mcp.py
+│   ├── pattern_qlearning_integration.py
+│   ├── run_demo5_only.py
+│   └── simple_pattern_demo.py
 │
 ├── docs/                       # Documentation
 │   ├── api/                    # API documentation
@@ -284,28 +329,35 @@ auto-tool-disc02/
 │   │   ├── postgresql-setup-guide.md
 │   │   └── zerodha-mcp-setup.md
 │
-├── notebooks/                  # Jupyter notebooks
-│   └── experiments/            # Experimental notebooks
-│
-├── experiments/                # Experimental code
-│   └── prototypes/             # Prototype implementations
+├── experiments/                # Experimental code (currently empty)
 │
 ├── scripts/                    # Utility scripts
-│   ├── setup/                  # Setup scripts
-│   └── deployment/             # Deployment scripts
+│   ├── check_postgres_status.sh
+│   ├── init-db.sql
+│   ├── quick_postgres_setup.sh
+│   └── setup_postgres.sh
 │
-├── .github/                    # GitHub configuration
-│   └── workflows/              # GitHub Actions
+├── infrastructure/             # Infrastructure configuration
+│   ├── README.md
+│   └── docker-compose.yml
+│
+├── setup/                      # Setup related files
+│
+├── htmlcov/                    # HTML coverage reports (generated)
+│
+├── node_modules/               # Node.js dependencies (generated)
 │
 ├── .gitignore                  # Git ignore rules
 ├── requirements.txt            # Python dependencies
-├── requirements-dev.txt        # Development dependencies
-├── setup.py                    # Package setup
 ├── pytest.ini                  # Pytest configuration
 ├── README.md                   # Project overview
 ├── CLAUDE.md                   # AI assistant guidance
-├── LICENSE                     # License file
-└── run_demo5_only.py          # Demo script
+├── setup.md                    # Setup documentation
+├── coverage.xml                # Test coverage report
+├── docker-compose.postgres.yml # PostgreSQL Docker compose configuration
+├── financial_datasets_integration_test_results.md  # Integration test results
+├── package.json                # Node.js package configuration
+└── package-lock.json           # Node.js package lock file
 
 ```
 
@@ -374,12 +426,13 @@ Helper scripts for setup, deployment, and maintenance
 - **CLAUDE.md**: Guidance for AI assistants
 - **requirements.txt**: Python package dependencies
 - **pytest.ini**: Pytest configuration
-- **setup.py**: Package installation configuration
+- **setup.md**: Setup documentation and instructions
+- **package.json**: Node.js dependencies for MCP tools
+- **docker-compose.postgres.yml**: PostgreSQL Docker setup
 
 ### Entry Points
 - **src/main.py**: Main application entry point
-- **src/hello_mcp.py**: Simple MCP test script
-- **tests/test_integration.py**: Main integration test
+- **demos/hello_mcp.py**: Simple MCP test script
 
 ### Configuration
 - **config/config.json**: Central configuration file
