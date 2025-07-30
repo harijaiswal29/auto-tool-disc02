@@ -14,7 +14,7 @@ import json
 import os
 
 from src.utils.logger import get_logger
-from src.agents.intent_models import IntentResult
+from src.models.intent import IntentResult
 
 
 class IntentRecognitionMetrics:

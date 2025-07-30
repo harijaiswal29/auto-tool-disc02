@@ -15,6 +15,7 @@ from unittest.mock import Mock, AsyncMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.pipeline import PipelineData
+from src.pipeline.base import PipelineStage
 from src.pipeline.stages import (
     TextPreprocessorStage,
     TokenizerModule,
@@ -37,13 +38,12 @@ class TestTextPreprocessorStage:
     @pytest.mark.asyncio
     async def test_basic_preprocessing(self, stage):
         """Test basic text preprocessing functionality."""
-        data = PipelineData()
-        data.raw_data = "Hello WORLD! Don't you think?"
+        data = PipelineData(raw_input="Hello WORLD! Don't you think?")
         
         result = await stage.process(data)
         
         assert result.get_stage_result('TextPreprocessor', 'normalized_text') == "hello world! do not you think?"
-        assert result.raw_data == "Hello WORLD! Don't you think?"  # Original preserved
+        assert result.raw_input == "Hello WORLD! Don't you think?"  # Original preserved
     
     @pytest.mark.asyncio
     async def test_contraction_expansion(self, stage):
@@ -59,8 +59,7 @@ class TestTextPreprocessorStage:
         }
         
         for contraction, expected in contractions_test.items():
-            data = PipelineData()
-            data.raw_data = contraction
+            data = PipelineData(raw_input=question)
             result = await stage.process(data)
             normalized = result.get_stage_result('TextPreprocessor', 'normalized_text')
             assert normalized == expected
@@ -68,8 +67,7 @@ class TestTextPreprocessorStage:
     @pytest.mark.asyncio
     async def test_special_character_handling(self, stage):
         """Test special character removal."""
-        data = PipelineData()
-        data.raw_data = "Hello@World#123!Test$%^"
+        data = PipelineData(raw_input="Hello@World#123!Test$%^")
         
         result = await stage.process(data)
         normalized = result.get_stage_result('TextPreprocessor', 'normalized_text')
@@ -84,8 +82,7 @@ class TestTextPreprocessorStage:
     @pytest.mark.asyncio
     async def test_whitespace_normalization(self, stage):
         """Test whitespace normalization."""
-        data = PipelineData()
-        data.raw_data = "Hello    World\t\nTest   Multiple     Spaces"
+        data = PipelineData(raw_input="Hello    World\t\nTest   Multiple     Spaces")
         
         result = await stage.process(data)
         normalized = result.get_stage_result('TextPreprocessor', 'normalized_text')
@@ -105,8 +102,8 @@ class TestTokenizerModule:
     @pytest.mark.asyncio
     async def test_basic_tokenization(self, stage):
         """Test basic tokenization."""
-        data = PipelineData()
-        data.set_stage_result('TextPreprocessor', 'normalized_text', 'hello world test')
+        data = PipelineData(raw_input="test query")
+        data.add_stage_result('TextPreprocessor', 'normalized_text', 'hello world test')
         
         result = await stage.process(data)
         
@@ -127,8 +124,8 @@ class TestTokenizerModule:
         ]
         
         for question in questions:
-            data = PipelineData()
-            data.set_stage_result('TextPreprocessor', 'normalized_text', question)
+            data = PipelineData(raw_input=question)
+            data.add_stage_result('TextPreprocessor', 'normalized_text', question)
             result = await stage.process(data)
             assert result.get_stage_result('Tokenizer', 'has_question') is True
     
@@ -142,8 +139,8 @@ class TestTokenizerModule:
         ]
         
         for statement in statements:
-            data = PipelineData()
-            data.set_stage_result('TextPreprocessor', 'normalized_text', statement)
+            data = PipelineData(raw_input=statement)
+            data.add_stage_result('TextPreprocessor', 'normalized_text', statement)
             result = await stage.process(data)
             assert result.get_stage_result('Tokenizer', 'has_question') is False
 
@@ -162,8 +159,8 @@ class TestFeatureExtractorStage:
     @pytest.mark.asyncio
     async def test_semantic_embedding_generation(self, stage):
         """Test semantic embedding generation."""
-        data = PipelineData()
-        data.set_stage_result('TextPreprocessor', 'normalized_text', 'find all python files')
+        data = PipelineData(raw_input="test query")
+        data.add_stage_result('TextPreprocessor', 'normalized_text', 'find all python files')
         
         result = await stage.process(data)
         
@@ -175,8 +172,8 @@ class TestFeatureExtractorStage:
     @pytest.mark.asyncio
     async def test_intent_pattern_matching(self, stage):
         """Test intent pattern semantic matching."""
-        data = PipelineData()
-        data.set_stage_result('TextPreprocessor', 'normalized_text', 'search for documentation files')
+        data = PipelineData(raw_input="test query")
+        data.add_stage_result('TextPreprocessor', 'normalized_text', 'search for documentation files')
         
         result = await stage.process(data)
         
@@ -188,14 +185,14 @@ class TestFeatureExtractorStage:
     async def test_embedding_cache(self, stage):
         """Test that embeddings are cached."""
         data1 = PipelineData()
-        data1.set_stage_result('TextPreprocessor', 'normalized_text', 'test query')
+        data1.add_stage_result('TextPreprocessor', 'normalized_text', 'test query')
         
         # First call
         result1 = await stage.process(data1)
         
         # Second call with same text
         data2 = PipelineData()
-        data2.set_stage_result('TextPreprocessor', 'normalized_text', 'test query')
+        data2.add_stage_result('TextPreprocessor', 'normalized_text', 'test query')
         result2 = await stage.process(data2)
         
         # Embeddings should be identical (from cache)
@@ -223,9 +220,9 @@ class TestIntentClassifierStage:
         ]
         
         for query, expected_intent in test_cases:
-            data = PipelineData()
-            data.set_stage_result('Tokenizer', 'tokens', query.split())
-            data.set_stage_result('FeatureExtractor', 'semantic_scores', {})
+            data = PipelineData(raw_input=query)
+            data.add_stage_result('Tokenizer', 'tokens', query.split())
+            data.add_stage_result('FeatureExtractor', 'semantic_scores', {})
             
             result = await stage.process(data)
             
@@ -236,9 +233,9 @@ class TestIntentClassifierStage:
     @pytest.mark.asyncio
     async def test_combined_scoring(self, stage):
         """Test combined semantic and keyword scoring."""
-        data = PipelineData()
-        data.set_stage_result('Tokenizer', 'tokens', ['search', 'for', 'files'])
-        data.set_stage_result('FeatureExtractor', 'semantic_scores', {
+        data = PipelineData(raw_input="test query")
+        data.add_stage_result('Tokenizer', 'tokens', ['search', 'for', 'files'])
+        data.add_stage_result('FeatureExtractor', 'semantic_scores', {
             'query.search': 0.8,
             'query.retrieve': 0.3
         })
@@ -260,12 +257,15 @@ class TestContextEnricherStage:
     @pytest.mark.asyncio
     async def test_context_enrichment(self, stage):
         """Test basic context enrichment."""
-        data = PipelineData()
+        data = PipelineData(raw_input="test query")
         data.context = {
             'session_id': 'test_session',
             'domain': 'engineering'
         }
-        data.set_stage_result('IntentClassifier', 'all_intents', [
+        data.add_stage_result('IntentClassifier', 'all_intents', [
+            {'type': 'query.search', 'score': 0.8}
+        ])
+        data.add_stage_result('IntentClassifier', 'classified_intents', [
             {'type': 'query.search', 'score': 0.8}
         ])
         
@@ -286,9 +286,10 @@ class TestContextEnricherStage:
             'timestamp': '2024-01-01T00:00:00'
         })
         
-        data = PipelineData()
+        data = PipelineData(raw_input="test query")
         data.context = {'session_id': 'test'}
-        data.set_stage_result('IntentClassifier', 'all_intents', [])
+        data.add_stage_result('IntentClassifier', 'all_intents', [])
+        data.add_stage_result('IntentClassifier', 'classified_intents', [])
         
         result = await stage.process(data)
         
@@ -309,15 +310,15 @@ class TestConfidenceScorerStage:
     @pytest.mark.asyncio
     async def test_confidence_calculation(self, stage):
         """Test confidence score calculation."""
-        data = PipelineData()
-        data.set_stage_result('IntentClassifier', 'all_intents', [
+        data = PipelineData(raw_input="test query")
+        data.add_stage_result('IntentClassifier', 'all_intents', [
             {'type': 'query.search', 'score': 0.8},
             {'type': 'query.retrieve', 'score': 0.3}
         ])
-        data.set_stage_result('FeatureExtractor', 'semantic_scores', {
+        data.add_stage_result('FeatureExtractor', 'semantic_scores', {
             'query.search': 0.85
         })
-        data.set_stage_result('ContextEnricher', 'context_score', 0.6)
+        data.add_stage_result('ContextEnricher', 'context_score', 0.6)
         
         result = await stage.process(data)
         
@@ -330,13 +331,13 @@ class TestConfidenceScorerStage:
     @pytest.mark.asyncio
     async def test_low_confidence_handling(self, stage):
         """Test handling of low confidence scenarios."""
-        data = PipelineData()
-        data.set_stage_result('IntentClassifier', 'all_intents', [
+        data = PipelineData(raw_input="test query")
+        data.add_stage_result('IntentClassifier', 'all_intents', [
             {'type': 'query.search', 'score': 0.3},
             {'type': 'query.retrieve', 'score': 0.2}
         ])
-        data.set_stage_result('FeatureExtractor', 'semantic_scores', {})
-        data.set_stage_result('ContextEnricher', 'context_score', 0.5)
+        data.add_stage_result('FeatureExtractor', 'semantic_scores', {})
+        data.add_stage_result('ContextEnricher', 'context_score', 0.5)
         
         result = await stage.process(data)
         
@@ -358,7 +359,7 @@ class TestStateManagerStage:
         assert stage.get_current_state_name() == 'IDLE'
         
         # Process query - should transition to QUERY_RECEIVED
-        data = PipelineData()
+        data = PipelineData(raw_input="test query")
         data.raw_data = "test query"
         result = await stage.process(data)
         
@@ -440,8 +441,13 @@ class TestPipelineIntegration:
         from src.pipeline import Pipeline
         
         # Create a failing stage
-        class FailingStage:
-            name = "FailingStage"
+        class FailingStage(PipelineStage):
+            def __init__(self):
+                super().__init__(name="FailingStage")
+                
+            async def _initialize(self):
+                pass
+                
             async def process(self, data):
                 raise ValueError("Test error")
         
