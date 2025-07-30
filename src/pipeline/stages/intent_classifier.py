@@ -198,17 +198,27 @@ class IntentClassifierStage(PipelineStage):
             semantic_score = semantic_scores.get(intent_type, 0.0)
             keyword_score = keyword_scores.get(intent_type, 0.0)
             
+            # Ensure weights sum to 1.0 for proper normalization
+            total_weight = self.semantic_weight + self.keyword_weight
+            if total_weight > 0:
+                norm_semantic_weight = self.semantic_weight / total_weight
+                norm_keyword_weight = self.keyword_weight / total_weight
+            else:
+                norm_semantic_weight = 0.5
+                norm_keyword_weight = 0.5
+            
             # Weighted combination
             combined_score = (
-                self.semantic_weight * semantic_score +
-                self.keyword_weight * keyword_score
+                norm_semantic_weight * semantic_score +
+                norm_keyword_weight * keyword_score
             )
             
             # Boost score if both methods agree
             if semantic_score > 0.5 and keyword_score > 0.5:
                 combined_score *= 1.2  # 20% boost
             
-            combined_scores[intent_type] = min(combined_score, 1.0)  # Cap at 1.0
+            # Ensure score is between 0 and 1
+            combined_scores[intent_type] = max(0.0, min(combined_score, 1.0))
         
         return combined_scores
     

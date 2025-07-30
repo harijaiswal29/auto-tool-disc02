@@ -18,6 +18,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.pipeline.base import PipelineStage, PipelineData
+from src.utils.model_manager import get_model_manager
 
 
 class FeatureExtractorStage(PipelineStage):
@@ -103,10 +104,14 @@ class FeatureExtractorStage(PipelineStage):
     
     async def _initialize(self):
         """Initialize the sentence transformer model and precompute embeddings."""
-        self.logger.info(f"Loading sentence transformer model: {self.model_name}")
+        self.logger.info(f"Getting sentence transformer model: {self.model_name}")
         
-        # Force CPU usage to avoid CUDA issues
-        self.model = SentenceTransformer(self.model_name, device='cpu')
+        # Get shared model instance from model manager
+        model_manager = get_model_manager()
+        self.model = model_manager.get_sentence_transformer(self.model_name, device='cpu')
+        
+        # Warmup the model if not already done
+        model_manager.warmup_model(self.model_name)
         
         # Precompute embeddings for intent patterns
         self.logger.debug("Precomputing pattern embeddings")

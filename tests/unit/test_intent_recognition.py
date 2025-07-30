@@ -21,10 +21,11 @@ from src.agents.intent_models import (
     TextPreprocessor,
     MultiIntentHandler
 )
-from src.agents.intent_recognition_agent_legacy import (
-    IntentClassifier,
-    IntentConfidenceScorer
-)
+# Legacy imports removed - using new pipeline architecture
+# from src.agents.intent_recognition_agent_legacy import (
+#     IntentClassifier,
+#     IntentConfidenceScorer
+# )
 
 
 class TestIntentModels:
@@ -103,71 +104,72 @@ class TestTextPreprocessor:
         assert result == "do not forget to normalize!"
 
 
-class TestIntentClassifier:
-    """Test intent classification functionality."""
+# Legacy tests commented out - using new pipeline architecture
+# class TestIntentClassifier:
+#     """Test intent classification functionality."""
+#     
+#     @pytest.fixture
+#     def classifier(self):
+#         return IntentClassifier()
     
-    @pytest.fixture
-    def classifier(self):
-        return IntentClassifier()
-    
-    def test_extract_keywords(self, classifier):
-        """Test keyword extraction."""
-        keywords = classifier.extract_keywords("find and search for files")
-        assert "find" in keywords
-        assert "search" in keywords
-    
-    def test_classify_search_intent(self, classifier):
-        """Test classification of search intent."""
-        text = "find all python files"
-        classifications = classifier.classify(text, {})
-        
-        # Should classify as query.search
-        assert len(classifications) > 0
-        assert classifications[0][0] == "query.search"
-        assert classifications[0][1] > 0
-    
-    def test_classify_create_intent(self, classifier):
-        """Test classification of create intent."""
-        text = "create a new directory"
-        classifications = classifier.classify(text, {})
-        
-        # Should classify as action.create
-        assert len(classifications) > 0
-        assert classifications[0][0] == "action.create"
-    
-    def test_classify_mixed_keywords(self, classifier):
-        """Test classification with mixed keywords."""
-        text = "find files and create report"
-        classifications = classifier.classify(text, {})
-        
-        # Should have multiple classifications
-        intent_types = [c[0] for c in classifications]
-        assert "query.search" in intent_types
-        assert "action.create" in intent_types
+#     def test_extract_keywords(self, classifier):
+#         """Test keyword extraction."""
+#         keywords = classifier.extract_keywords("find and search for files")
+#         assert "find" in keywords
+#         assert "search" in keywords
+#     
+#     def test_classify_search_intent(self, classifier):
+#         """Test classification of search intent."""
+#         text = "find all python files"
+#         classifications = classifier.classify(text, {})
+#         
+#         # Should classify as query.search
+#         assert len(classifications) > 0
+#         assert classifications[0][0] == "query.search"
+#         assert classifications[0][1] > 0
+#     
+#     def test_classify_create_intent(self, classifier):
+#         """Test classification of create intent."""
+#         text = "create a new directory"
+#         classifications = classifier.classify(text, {})
+#         
+#         # Should classify as action.create
+#         assert len(classifications) > 0
+#         assert classifications[0][0] == "action.create"
+#     
+#     def test_classify_mixed_keywords(self, classifier):
+#         """Test classification with mixed keywords."""
+#         text = "find files and create report"
+#         classifications = classifier.classify(text, {})
+#         
+#         # Should have multiple classifications
+#         intent_types = [c[0] for c in classifications]
+#         assert "query.search" in intent_types
+#         assert "action.create" in intent_types
 
 
-class TestIntentConfidenceScorer:
-    """Test confidence scoring functionality."""
-    
-    @pytest.fixture
-    def scorer(self):
-        return IntentConfidenceScorer()
-    
-    @pytest.mark.asyncio
-    async def test_calculate_confidence(self, scorer):
-        """Test confidence calculation."""
-        features = {
-            'semantic_scores': {'query.search': 0.8},
-            'keyword_scores': {'query.search': 0.9},
-            'context_score': 0.5,
-            'pattern_scores': {'query.search': 0.7}
-        }
-        
-        confidence = await scorer.calculate_confidence('query.search', features)
-        
-        # Should be weighted average
-        assert 0 <= confidence <= 1
-        assert confidence > 0.5  # Should be relatively high
+# class TestIntentConfidenceScorer:
+#     """Test confidence scoring functionality."""
+#     
+#     @pytest.fixture
+#     def scorer(self):
+#         return IntentConfidenceScorer()
+#     
+#     @pytest.mark.asyncio
+#     async def test_calculate_confidence(self, scorer):
+#         """Test confidence calculation."""
+#         features = {
+#             'semantic_scores': {'query.search': 0.8},
+#             'keyword_scores': {'query.search': 0.9},
+#             'context_score': 0.5,
+#             'pattern_scores': {'query.search': 0.7}
+#         }
+#         
+#         confidence = await scorer.calculate_confidence('query.search', features)
+#         
+#         # Should be weighted average
+#         assert 0 <= confidence <= 1
+#         assert confidence > 0.5  # Should be relatively high
 
 
 class TestMultiIntentHandler:

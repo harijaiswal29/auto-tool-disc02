@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.agents import OrchestratorAgent
 from src.core.mcp_integration import MCPIntegration
 from src.utils.logger import get_logger
+from src.utils.model_manager import preload_models
 
 
 class AutonomousToolDiscoveryApp:
@@ -36,6 +37,16 @@ class AutonomousToolDiscoveryApp:
         self.logger.info("Initializing components...")
         
         try:
+            # Preload ML models for better performance
+            self.logger.info("Preloading ML models...")
+            preload_models({
+                'sentence_transformer': {
+                    'model_name': 'all-MiniLM-L6-v2',
+                    'device': 'cpu'
+                }
+            })
+            self.logger.info("Models preloaded successfully")
+            
             # Initialize Orchestrator Agent
             self.orchestrator = OrchestratorAgent()
             await self.orchestrator.initialize()

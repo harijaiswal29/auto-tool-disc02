@@ -52,14 +52,14 @@ class TestOrchestratorAgent:
             type='query.search',
             keywords=['find', 'python', 'files'],
             confidence=0.85,
-            entities={'file_type': 'python'}
+            entities=[{'type': 'file_type', 'value': 'python'}]
         )
         return IntentResult(
             raw_query="Find all Python files",
             primary_intent=primary_intent,
-            alternative_intents=[],
-            context={'domain': 'development'},
-            processing_time_ms=50.0
+            all_intents=[primary_intent],
+            processed_query="find all python files",
+            metadata={'domain': 'development', 'processing_time_ms': 50.0}
         )
     
     @pytest.fixture
@@ -517,6 +517,348 @@ class TestOrchestratorAgent:
         await orchestrator.shutdown()
         
         orchestrator.mcp_integration.shutdown.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_select_tools_with_q_learning(self, orchestrator, mock_intent_result, mock_tools):
+        """Test tool selection using Q-learning engine."""
+        # Enable Q-learning
+        orchestrator.config['q_learning']['enable_learning'] = True
+        
+        # Mock Q-learning engine
+        mock_q_engine = Mock()
+        orchestrator.q_learning_engine = mock_q_engine
+        
+        # Mock state encoder
+        mock_state_encoder = Mock()
+        mock_state = MagicMock()
+        mock_state.__len__ = Mock(return_value=447)
+        mock_state_encoder.encode_state.return_value = mock_state
+        mock_q_engine.state_encoder = mock_state_encoder
+        
+        # Mock Q-learning action selection
+        selected_action = ('filesystem.search', 'sqlite.query')
+        mock_q_engine.select_action = AsyncMock(return_value=selected_action)
+        
+        # Add mock tools with scores
+        for tool in mock_tools:
+            tool['relevance_score'] = 0.8
+        
+        # Mock tool registry methods
+        orchestrator.tool_registry.get_tool_relationships = AsyncMock(return_value=[])
+        
+        # Select tools with Q-learning
+        selected = await orchestrator.select_tools(mock_tools, mock_intent_result)
+        
+        # Verify Q-learning was used
+        mock_state_encoder.encode_state.assert_called_once()
+        mock_q_engine.select_action.assert_called_once()
+        
+        # Should return tools based on Q-learning selection
+        assert len(selected) == len(selected_action)
+        selected_ids = [t['id'] for t in selected]
+        assert all(tool_id in selected_ids for tool_id in selected_action)
+    
+    def test_classify_error_types(self, orchestrator):
+        """Test error classification for different error types."""
+        # Test timeout errors
+        assert orchestrator._classify_error(Exception("Connection timeout")) == 'network_timeout'
+        assert orchestrator._classify_error(Exception("Request timed out")) == 'network_timeout'
+        
+        # Test connection errors
+        assert orchestrator._classify_error(Exception("Connection refused")) == 'connection_error'
+        assert orchestrator._classify_error(Exception("Network unreachable")) == 'connection_error'
+        
+        # Test permission errors
+        assert orchestrator._classify_error(Exception("Permission denied")) == 'permission_error'
+        assert orchestrator._classify_error(Exception("Access denied")) == 'permission_error'
+        assert orchestrator._classify_error(Exception("Unauthorized")) == 'permission_error'
+        
+        # Test rate limit errors
+        assert orchestrator._classify_error(Exception("Rate limit exceeded")) == 'rate_limit'
+        assert orchestrator._classify_error(Exception("Too many requests")) == 'rate_limit'
+        
+        # Test other errors
+        assert orchestrator._classify_error(Exception("Unknown error")) == 'other'
+        assert orchestrator._classify_error(ValueError("Invalid value")) == 'other'
+    
+    def test_evaluate_result_quality(self, orchestrator):
+        """Test result quality evaluation."""
+        # Test dict results
+        quality = orchestrator._evaluate_result_quality({'data': 'value', 'count': 5}, 'database')
+        assert 0.6 <= quality <= 1.0  # Good quality for non-empty dict
+        
+        quality = orchestrator._evaluate_result_quality({}, 'database')
+        assert quality < 0.6  # Lower quality for empty dict
+        
+        # Test list results
+        quality = orchestrator._evaluate_result_quality(['item1', 'item2', 'item3'], 'search')
+        assert quality > 0.7  # Good quality for non-empty list
+        
+        quality = orchestrator._evaluate_result_quality([], 'search')
+        assert quality < 0.5  # Poor quality for empty list
+        
+        # Test string results
+        quality = orchestrator._evaluate_result_quality('This is a meaningful response with content', 'text')
+        assert quality > 0.6  # Good quality for substantial string
+        
+        quality = orchestrator._evaluate_result_quality('Short', 'text')
+        assert quality < 0.7  # Lower quality for short string
+        
+        # Test None result
+        quality = orchestrator._evaluate_result_quality(None)
+        assert quality == 0.0  # No quality for None
+        
+        # Test tool-specific quality
+        search_result = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6']
+        quality = orchestrator._evaluate_result_quality(search_result, 'search')
+        assert quality > 0.8  # High quality for many search results
+        
+        db_result = {'rows': [1, 2, 3], 'count': 3}
+        quality = orchestrator._evaluate_result_quality(db_result, 'database')
+        assert quality > 0.8  # High quality for proper database response
+    
+    @pytest.mark.asyncio
+    async def test_execute_single_tool_with_metrics(self, orchestrator, mock_tools):
+        """Test single tool execution with enhanced metrics tracking."""
+        tool = mock_tools[0]
+        
+        # Mock successful execution
+        orchestrator.mcp_integration.execute_tool.return_value = {
+            'results': ['result1', 'result2'],
+            'success': True
+        }
+        
+        # Mock retry count getter
+        orchestrator.mcp_integration.get_last_retry_count = Mock(return_value=2)
+        
+        result = await orchestrator._execute_single_tool(tool, "Test query", {})
+        
+        # Verify enhanced metrics
+        assert isinstance(result, ToolExecutionResult)
+        assert result.success is True
+        assert result.execution_time_ms > 0
+        assert result.retry_count == 2
+        assert result.partial_success is False
+        assert result.completion_percentage == 1.0
+        assert result.resource_usage is not None
+        assert 'memory_mb' in result.resource_usage
+        assert 'cpu_percent' in result.resource_usage
+        assert result.result_quality > 0
+    
+    @pytest.mark.asyncio
+    async def test_execute_single_tool_partial_failure(self, orchestrator, mock_tools):
+        """Test tool execution with partial failure."""
+        tool = mock_tools[0]
+        
+        # Create error with partial result
+        error = Exception("Partial completion error")
+        error.partial_result = {'data': 'partial', 'complete': False}
+        error.completion_percentage = 0.7
+        
+        orchestrator.mcp_integration.execute_tool.side_effect = error
+        
+        # Mock partial success check
+        orchestrator._check_partial_success = Mock(return_value={
+            'data': error.partial_result,
+            'completion': error.completion_percentage
+        })
+        
+        # Mock database manager
+        orchestrator.db_manager = Mock()
+        orchestrator.db_manager.record_failure = AsyncMock()
+        orchestrator.current_session_id = 'test-session'
+        
+        result = await orchestrator._execute_single_tool(tool, "Test query", {})
+        
+        # Verify partial failure handling
+        assert result.success is False
+        assert result.partial_success is True
+        assert result.completion_percentage == 0.7
+        assert result.result == error.partial_result
+        assert result.error_type is not None
+        
+        # Verify failure was recorded
+        orchestrator.db_manager.record_failure.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_update_failure_metrics(self, orchestrator):
+        """Test failure metrics tracking."""
+        # Create execution results with failures
+        results = [
+            ToolExecutionResult(
+                tool_id='tool1',
+                tool_name='Tool 1',
+                success=True,
+                result={'data': 'success'},
+                retry_count=0
+            ),
+            ToolExecutionResult(
+                tool_id='tool2',
+                tool_name='Tool 2',
+                success=False,
+                result=None,
+                error='Connection failed',
+                error_type='connection_error',
+                retry_count=3
+            ),
+            ToolExecutionResult(
+                tool_id='tool3',
+                tool_name='Tool 3',
+                success=False,
+                result=None,
+                error='Timeout',
+                error_type='network_timeout',
+                retry_count=2
+            )
+        ]
+        
+        # Mock database manager
+        orchestrator.db_manager = Mock()
+        orchestrator.db_manager.get_tool_failure_rates = AsyncMock(return_value={
+            'tool2': {'failure_rate': 0.4},
+            'tool3': {'failure_rate': 0.3}
+        })
+        
+        # Update failure metrics
+        await orchestrator._update_failure_metrics(results)
+        
+        # Verify failure rates updated
+        assert 'tool1' in orchestrator.failure_metrics['failure_rates']
+        assert 'tool2' in orchestrator.failure_metrics['failure_rates']
+        assert 'tool3' in orchestrator.failure_metrics['failure_rates']
+        
+        # Tool 1 should have low failure rate (success)
+        assert orchestrator.failure_metrics['failure_rates']['tool1'] < 0.1
+        
+        # Tools 2 and 3 should have higher failure rates
+        assert orchestrator.failure_metrics['failure_rates']['tool2'] > 0
+        assert orchestrator.failure_metrics['failure_rates']['tool3'] > 0
+        
+        # Verify failure types tracked
+        assert 'connection_error' in orchestrator.failure_metrics['failure_types']
+        assert 'network_timeout' in orchestrator.failure_metrics['failure_types']
+        
+        # Verify retry patterns tracked
+        assert 'avg_retry_count' in orchestrator.failure_metrics['retry_patterns']
+        assert 'retry_success_rate' in orchestrator.failure_metrics['retry_patterns']
+    
+    def test_is_query_reformulation(self, orchestrator):
+        """Test query reformulation detection."""
+        # Similar queries (reformulation)
+        assert orchestrator._is_query_reformulation(
+            "find customer data",
+            "search for customer information"
+        ) is True
+        
+        assert orchestrator._is_query_reformulation(
+            "analyze sales database",
+            "examine sales data in database"
+        ) is True
+        
+        # Different queries (not reformulation)
+        assert orchestrator._is_query_reformulation(
+            "find customer data",
+            "create new report"
+        ) is False
+        
+        # Identical queries (not reformulation)
+        assert orchestrator._is_query_reformulation(
+            "find data",
+            "find data"
+        ) is False
+        
+        # Empty or very short queries
+        assert orchestrator._is_query_reformulation("", "search") is False
+        assert orchestrator._is_query_reformulation("find", "") is False
+    
+    @pytest.mark.asyncio
+    async def test_record_user_feedback(self, orchestrator):
+        """Test recording and processing user feedback."""
+        # Mock database manager
+        orchestrator.db_manager = Mock()
+        orchestrator.db_manager.record_user_feedback = AsyncMock()
+        
+        # Create execution history entry
+        execution_id = 'test-exec-123'
+        execution_results = [
+            ToolExecutionResult(
+                tool_id='tool1',
+                tool_name='Tool 1',
+                success=True,
+                result={'data': 'result'},
+                execution_time_ms=100,
+                result_quality=0.9
+            )
+        ]
+        
+        orchestrator.execution_history = [{
+            'execution_id': execution_id,
+            'query': 'test query',
+            'tools': ['tool1'],
+            'success': True,
+            'execution_results': execution_results,
+            'reward': 0.8,
+            'timestamp': datetime.now(),
+            'context': {'mode': 'production'}
+        }]
+        
+        # Record positive feedback
+        await orchestrator.record_user_feedback(
+            execution_id=execution_id,
+            feedback_type='positive',
+            rating=5,
+            follow_up_query=None
+        )
+        
+        # Verify feedback was recorded
+        orchestrator.db_manager.record_user_feedback.assert_called_once()
+        call_args = orchestrator.db_manager.record_user_feedback.call_args[1]
+        assert call_args['execution_id'] == execution_id
+        assert call_args['feedback_type'] == 'positive'
+        assert call_args['rating'] == 5
+        assert call_args['result_used'] is True
+        
+        # Test negative feedback with reformulation
+        await orchestrator.record_user_feedback(
+            execution_id=execution_id,
+            feedback_type='negative',
+            rating=2,
+            follow_up_query='better query with more details'
+        )
+        
+        # Should detect reformulation
+        assert orchestrator.db_manager.record_user_feedback.call_count == 2
+    
+    @pytest.mark.asyncio
+    async def test_get_tool_constraints(self, orchestrator):
+        """Test retrieval of tool relationship constraints."""
+        tool_ids = ['tool1', 'tool2', 'tool3']
+        
+        # Mock tool relationships
+        orchestrator.tool_registry.get_tool_relationships = AsyncMock(side_effect=[
+            [  # tool1 relationships
+                {'type': 'conflicts', 'tool2_id': 'tool3'},
+                {'type': 'requires', 'tool2_id': 'tool2'}
+            ],
+            [],  # tool2 has no relationships
+            [  # tool3 relationships
+                {'type': 'conflicts', 'tool2_id': 'tool1'}
+            ]
+        ])
+        
+        constraints = await orchestrator._get_tool_constraints(tool_ids)
+        
+        # Verify constraints structure
+        assert 'conflicts' in constraints
+        assert 'requires' in constraints
+        assert 'max_tools' in constraints
+        
+        # Verify specific constraints
+        assert 'tool1' in constraints['conflicts']
+        assert 'tool3' in constraints['conflicts']['tool1']
+        assert 'tool1' in constraints['requires']
+        assert 'tool2' in constraints['requires']['tool1']
+        assert constraints['max_tools'] == 3
 
 
 if __name__ == '__main__':

@@ -84,13 +84,15 @@ class ConversationStateMachine(StateMachine):
                 ConversationStates.INTENT_RECOGNIZED,
                 ConversationStates.CLARIFICATION_NEEDED,
                 ConversationStates.ERROR,
-                ConversationStates.TIMEOUT
+                ConversationStates.TIMEOUT,
+                ConversationStates.USER_CANCELLED
             }),
             
             State(ConversationStates.INTENT_RECOGNIZED, StateType.TRANSIENT, {
                 ConversationStates.TOOLS_DISCOVERED,
                 ConversationStates.NO_TOOLS_FOUND,
-                ConversationStates.ERROR
+                ConversationStates.ERROR,
+                ConversationStates.USER_CANCELLED
             }),
             
             State(ConversationStates.CLARIFICATION_NEEDED, StateType.NORMAL, {
@@ -236,9 +238,15 @@ class ConversationStateMachine(StateMachine):
             self.logger.warning(f"Cannot receive query in state: {self.current_state.name}")
             return False
         
+        # Validate query is not empty
+        if not query or not query.strip():
+            self.logger.warning("Cannot process empty query")
+            return False
+        
         # Update context
         self.context.update({
             'query': query,
+            'query_timestamp': datetime.now(),
             'user_context': user_context or {},
             'start_time': datetime.now(),
             'clarification_attempts': 0,
@@ -264,6 +272,7 @@ class ConversationStateMachine(StateMachine):
         
         self.context['intent'] = intent
         self.context['intent_confidence'] = confidence
+        self.context['confidence'] = confidence
         
         # Decide next state based on confidence
         if confidence >= 0.7:  # High confidence
@@ -370,6 +379,7 @@ class ConversationStateMachine(StateMachine):
             return False
         
         self.context['user_feedback'] = feedback
+        self.context['feedback'] = feedback
         
         return await self.transition(
             ConversationStates.FEEDBACK_RECEIVED,
@@ -392,10 +402,19 @@ class ConversationStateMachine(StateMachine):
         
         self.context['clarification_attempts'] += 1
         self.context['last_clarification'] = clarification
+        self.context['clarification'] = clarification
         
         # Add clarification to query
         original_query = self.context.get('query', '')
         self.context['query'] = f"{original_query} {clarification}"
+        
+        # Check if max attempts reached
+        if self.context['clarification_attempts'] >= self.max_clarification_attempts:
+            self.logger.warning("Max clarification attempts reached")
+            return await self.transition(
+                ConversationStates.ERROR,
+                trigger="max_clarification_attempts"
+            )
         
         return await self.transition(
             ConversationStates.CLARIFICATION_RECEIVED,
@@ -419,6 +438,11 @@ class ConversationStateMachine(StateMachine):
             self.logger.warning(f"Cannot retry in state: {self.current_state.name}")
             return False
         
+        # Check if max retries reached
+        if self.context.get('retry_count', 0) >= self.max_retry_attempts:
+            self.logger.warning("Max retry attempts reached")
+            return False
+        
         self.context['retry_count'] += 1
         
         return await self.transition(
@@ -433,7 +457,10 @@ class ConversationStateMachine(StateMachine):
         Returns:
             True if transition successful
         """
+        # Allow cancellation from more states
         cancellable_states = [
+            ConversationStates.QUERY_RECEIVED,
+            ConversationStates.INTENT_RECOGNIZED,
             ConversationStates.CLARIFICATION_NEEDED,
             ConversationStates.TOOLS_DISCOVERED,
             ConversationStates.EXECUTION_STARTED
@@ -444,6 +471,7 @@ class ConversationStateMachine(StateMachine):
             return False
         
         self.context['cancelled_at'] = datetime.now()
+        self.context['cancellation_timestamp'] = datetime.now()
         self.context['cancelled_from_state'] = self.current_state.name
         
         return await self.transition(
@@ -470,6 +498,9 @@ class ConversationStateMachine(StateMachine):
             'state': self.current_state.name if self.current_state else None,
             'timestamp': datetime.now()
         })
+        self.context['error'] = str(error)
+        self.context['error_context'] = error_context
+        self.context['error_timestamp'] = datetime.now()
         
         return await self.transition(
             ConversationStates.ERROR,
@@ -492,6 +523,42 @@ class ConversationStateMachine(StateMachine):
             trigger="recovery_attempt"
         )
     
+    async def handle_timeout(self) -> bool:
+        """
+        Handle operation timeout.
+        
+        Returns:
+            True if transition successful
+        """
+        timeout_states = [
+            ConversationStates.QUERY_RECEIVED,
+            ConversationStates.CLARIFICATION_NEEDED,
+            ConversationStates.EXECUTION_STARTED
+        ]
+        
+        if not any(self.is_in_state(state) for state in timeout_states):
+            self.logger.warning(f"Cannot handle timeout in state: {self.current_state.name}")
+            return False
+        
+        self.context['timeout_timestamp'] = datetime.now()
+        
+        return await self.transition(
+            ConversationStates.TIMEOUT,
+            trigger="operation_timeout"
+        )
+    
+    async def transition_to(self, target_state: str) -> bool:
+        """
+        Alias for transition method to support legacy tests.
+        
+        Args:
+            target_state: Target state name
+            
+        Returns:
+            True if transition successful
+        """
+        return await self.transition(target_state)
+    
     async def return_to_idle(self) -> bool:
         """
         Return to idle state from various end states.
@@ -505,7 +572,9 @@ class ConversationStateMachine(StateMachine):
             ConversationStates.USER_CANCELLED,
             ConversationStates.ERROR,
             ConversationStates.ERROR_RECOVERY,
-            ConversationStates.TIMEOUT
+            ConversationStates.TIMEOUT,
+            ConversationStates.EXECUTION_COMPLETE,
+            ConversationStates.EXECUTION_FAILED
         ]
         
         if not any(self.is_in_state(state) for state in valid_states):
@@ -515,7 +584,7 @@ class ConversationStateMachine(StateMachine):
         # Clear transient context data
         self.context.update({
             'query': None,
-            'intent': None,
+            'intent': None,  
             'discovered_tools': [],
             'selected_tools': [],
             'execution_results': [],
@@ -537,10 +606,12 @@ class ConversationStateMachine(StateMachine):
             'discovered_tools_count': len(self.context.get('discovered_tools', [])),
             'selected_tools': self.context.get('selected_tools', []),
             'execution_success': self.context.get('execution_success'),
+            'execution_results': self.context.get('execution_results', []),
             'clarification_attempts': self.context.get('clarification_attempts', 0),
             'retry_count': self.context.get('retry_count', 0),
             'error_count': len(self.context.get('error_history', [])),
-            'duration': self._get_conversation_duration()
+            'duration': self._get_conversation_duration(),
+            'state_transitions': len(self.get_state_history())
         }
     
     def _get_conversation_duration(self) -> Optional[float]:

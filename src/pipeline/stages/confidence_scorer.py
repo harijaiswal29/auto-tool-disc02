@@ -8,7 +8,7 @@ as part of the intent recognition pipeline.
 from typing import Dict, Any, Optional, List
 
 from src.pipeline.base import PipelineStage, PipelineData
-from src.agents.intent_models import Intent
+from src.models.intent import Intent  # Direct import to avoid circular dependency
 
 
 class ConfidenceScorerStage(PipelineStage):

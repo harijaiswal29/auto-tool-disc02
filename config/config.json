@@ -150,7 +150,7 @@
     "model": "all-MiniLM-L6-v2",
     "similarity_threshold": 0.7,
     "confidence_threshold": 0.7,
-    "cache_size": 1000,
+    "cache_size": 5000,
     "enable_state_tracking": true,
     "enable_persistence": true,
     "text_preprocessor": {

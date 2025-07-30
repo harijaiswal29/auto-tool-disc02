@@ -39,6 +39,10 @@ class IntentRecognitionAgent:
     to determine user intents, enabling appropriate tool selection.
     """
     
+    # Class-level pipeline cache to share pipelines across instances
+    _pipeline_cache = {}
+    _cache_lock = asyncio.Lock()
+    
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """Initialize the Intent Recognition Agent with pipeline architecture."""
         self.logger = get_logger(__name__)
@@ -61,20 +65,13 @@ class IntentRecognitionAgent:
         self.enable_persistence = config.get('enable_persistence', True)
         self.persistence_service = None
         
-        # Create pipeline stages
-        self.logger.info("Creating pipeline stages...")
-        self.stages = self._create_pipeline_stages(config)
-        
-        # Create the main pipeline
-        self.pipeline = Pipeline(self.stages, name="IntentRecognitionPipeline")
+        # Create or get cached pipeline
+        self.logger.info("Setting up pipeline...")
+        self.pipeline = None  # Will be set asynchronously
+        self._pipeline_key = self._generate_pipeline_key(config)
         
         # Get reference to state manager if enabled
         self.state_manager = None
-        if self.enable_state_tracking:
-            for stage in self.stages:
-                if isinstance(stage, StateManagerStage):
-                    self.state_manager = stage
-                    break
         
         # Initialize persistence service if enabled
         if self.enable_persistence:
@@ -84,7 +81,7 @@ class IntentRecognitionAgent:
         self.metrics = get_metrics()
         self.collect_metrics = config.get('collect_metrics', True)
         
-        self.logger.info("Intent Recognition Agent initialized with pipeline architecture")
+        self.logger.info("Intent Recognition Agent initialized")
     
     def _load_default_config(self) -> Dict[str, Any]:
         """Load default configuration from config file."""
@@ -102,6 +99,54 @@ class IntentRecognitionAgent:
             'confidence_threshold': 0.7,
             'cache_size': 1000
         }
+    
+    def _generate_pipeline_key(self, config: Dict[str, Any]) -> str:
+        """Generate a unique key for pipeline caching based on config."""
+        # Create a key based on important config parameters
+        key_parts = [
+            config.get('model', 'all-MiniLM-L6-v2'),
+            str(config.get('similarity_threshold', 0.7)),
+            str(config.get('confidence_threshold', 0.7)),
+            str(config.get('enable_state_tracking', True))
+        ]
+        return "_".join(key_parts)
+    
+    async def _get_or_create_pipeline(self) -> Pipeline:
+        """Get pipeline from cache or create a new one."""
+        async with self._cache_lock:
+            if self._pipeline_key not in self._pipeline_cache:
+                self.logger.info(f"Creating new pipeline for key: {self._pipeline_key}")
+                
+                # Create pipeline stages
+                stages = self._create_pipeline_stages(self.config)
+                
+                # Create the pipeline
+                pipeline = Pipeline(stages, name="IntentRecognitionPipeline")
+                
+                # Initialize the pipeline
+                await pipeline.initialize()
+                
+                # Cache the pipeline
+                self._pipeline_cache[self._pipeline_key] = pipeline
+                
+                # Set state manager reference if needed
+                if self.enable_state_tracking:
+                    for stage in stages:
+                        if isinstance(stage, StateManagerStage):
+                            self.state_manager = stage
+                            break
+            else:
+                self.logger.info(f"Using cached pipeline for key: {self._pipeline_key}")
+                pipeline = self._pipeline_cache[self._pipeline_key]
+                
+                # Update state manager reference
+                if self.enable_state_tracking:
+                    for stage in pipeline.stages:
+                        if isinstance(stage, StateManagerStage):
+                            self.state_manager = stage
+                            break
+            
+            return pipeline
     
     def _create_pipeline_stages(self, config: Dict[str, Any]) -> List:
         """Create and configure pipeline stages."""
@@ -156,6 +201,10 @@ class IntentRecognitionAgent:
         
         if context is None:
             context = {}
+        
+        # Ensure pipeline is initialized
+        if self.pipeline is None:
+            self.pipeline = await self._get_or_create_pipeline()
         
         self.logger.info(f"Processing query: {query}")
         
@@ -330,6 +379,20 @@ class IntentRecognitionAgent:
     
     def get_pipeline_info(self) -> Dict[str, Any]:
         """Get information about the pipeline configuration."""
+        if self.pipeline is None:
+            # Return basic info if pipeline not yet initialized
+            return {
+                'pipeline_name': 'IntentRecognitionPipeline',
+                'stages': ['Not yet initialized'],
+                'config': {
+                    'similarity_threshold': self.similarity_threshold,
+                    'confidence_threshold': self.confidence_threshold,
+                    'state_tracking_enabled': self.enable_state_tracking
+                },
+                'cache_key': self._pipeline_key,
+                'cached_pipelines': len(self._pipeline_cache)
+            }
+        
         info = {
             'pipeline_name': self.pipeline.name,
             'stages': self.pipeline.get_stage_names(),
@@ -337,7 +400,9 @@ class IntentRecognitionAgent:
                 'similarity_threshold': self.similarity_threshold,
                 'confidence_threshold': self.confidence_threshold,
                 'state_tracking_enabled': self.enable_state_tracking
-            }
+            },
+            'cache_key': self._pipeline_key,
+            'cached_pipelines': len(self._pipeline_cache)
         }
         
         # Add state info if available

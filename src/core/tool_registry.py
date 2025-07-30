@@ -244,6 +244,10 @@ class ToolRegistry:
         """Get all tools from the registry."""
         return self.list_tools()
     
+    async def get_all_tools(self) -> List[Dict[str, Any]]:
+        """Async version of get_all_tools for compatibility."""
+        return self.list_tools()
+    
     async def get_tool_relationships(self) -> List[Dict[str, Any]]:
         """
         Get all tool relationships from the registry.
@@ -261,6 +265,55 @@ class ToolRegistry:
             
             relationships = [dict(row) for row in cursor.fetchall()]
             return relationships
+    
+    def _add_tool_relationship_sync(self, tool1_id: str, tool2_id: str, 
+                                   relationship_type: str, strength: float = 0.5) -> bool:
+        """
+        Add a relationship between two tools (synchronous version).
+        
+        Args:
+            tool1_id: ID of the first tool
+            tool2_id: ID of the second tool  
+            relationship_type: Type of relationship (e.g., 'complements', 'requires')
+            strength: Strength of the relationship (0.0 to 1.0)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if both tools exist
+                cursor.execute("SELECT id FROM tools WHERE id IN (?, ?)", (tool1_id, tool2_id))
+                if len(cursor.fetchall()) != 2:
+                    logger.warning(f"[RELATIONSHIP] One or both tools not found: {tool1_id}, {tool2_id}")
+                    return False
+                
+                # Insert or update relationship
+                cursor.execute("""
+                    INSERT OR REPLACE INTO tool_relationships 
+                    (tool1_id, tool2_id, relationship_type, strength)
+                    VALUES (?, ?, ?, ?)
+                """, (tool1_id, tool2_id, relationship_type, strength))
+                
+                conn.commit()
+                logger.info(f"[RELATIONSHIP] Added: {tool1_id} {relationship_type} {tool2_id} (strength: {strength})")
+                return True
+                
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to add tool relationship: {e}")
+            return False
+    
+    def add_tool_relationship(self, tool1_id: str, tool2_id: str,
+                             relationship_type: str, strength: float = 0.5) -> bool:
+        """Add a relationship between two tools."""
+        return self._add_tool_relationship_sync(tool1_id, tool2_id, relationship_type, strength)
+    
+    async def add_tool_relationship(self, tool1_id: str, tool2_id: str,
+                                   relationship_type: str, strength: float = 0.5) -> bool:
+        """Async wrapper for add_tool_relationship."""
+        return self._add_tool_relationship_sync(tool1_id, tool2_id, relationship_type, strength)
     
     def record_usage(self, tool_id: str, success: bool, execution_time: float, 
                     task_type: Optional[str] = None, error_message: Optional[str] = None,

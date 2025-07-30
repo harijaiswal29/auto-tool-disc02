@@ -254,7 +254,14 @@ class ToolDiscoveryAgent:
         tool_embedding = await self._get_tool_embedding(tool['id'], tool_desc)
         
         # Get query embedding
-        query_embedding = intent_result.features.get('embedding')
+        # Check if embedding is in metadata.features or metadata directly
+        if hasattr(intent_result, 'features') and intent_result.features:
+            query_embedding = intent_result.features.get('embedding')
+        elif hasattr(intent_result, 'metadata') and intent_result.metadata:
+            features = intent_result.metadata.get('features', {})
+            query_embedding = features.get('embedding') if features else None
+        else:
+            query_embedding = None
         
         if query_embedding is None:
             return 0.0

@@ -5,7 +5,9 @@ This module contains intelligent agents that handle different aspects
 of the tool discovery and execution pipeline.
 """
 
-from .intent_recognition_agent import IntentRecognitionAgent
+# Avoid circular imports by not importing IntentRecognitionAgent here
+# Import it directly where needed: from src.agents.intent_recognition_agent import IntentRecognitionAgent
+
 from .intent_models import (
     Intent,
     IntentResult,
@@ -26,7 +28,7 @@ from .tool_discovery_agent import (
 
 __all__ = [
     # Intent Recognition
-    'IntentRecognitionAgent',
+    # 'IntentRecognitionAgent',  # Import directly to avoid circular imports
     'Intent',
     'IntentResult',
     'TextPreprocessor',

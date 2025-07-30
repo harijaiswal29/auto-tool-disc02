@@ -17,7 +17,8 @@ import os
 # Add the project root to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from src.agents.intent_recognition_agent import IntentRecognitionAgent, IntentResult
+from src.agents.intent_recognition_agent import IntentRecognitionAgent
+from src.agents.intent_models import IntentResult
 from src.core.mcp_integration import MCPIntegration
 from src.core.tool_registry import ToolRegistry
 from src.utils.logger import get_logger
