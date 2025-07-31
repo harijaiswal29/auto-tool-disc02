@@ -85,7 +85,8 @@ class ConversationStateMachine(StateMachine):
                 ConversationStates.CLARIFICATION_NEEDED,
                 ConversationStates.ERROR,
                 ConversationStates.TIMEOUT,
-                ConversationStates.USER_CANCELLED
+                ConversationStates.USER_CANCELLED,
+                ConversationStates.IDLE  # Allow direct return to IDLE
             }),
             
             State(ConversationStates.INTENT_RECOGNIZED, StateType.TRANSIENT, {
@@ -574,7 +575,9 @@ class ConversationStateMachine(StateMachine):
             ConversationStates.ERROR_RECOVERY,
             ConversationStates.TIMEOUT,
             ConversationStates.EXECUTION_COMPLETE,
-            ConversationStates.EXECUTION_FAILED
+            ConversationStates.EXECUTION_FAILED,
+            ConversationStates.QUERY_RECEIVED,  # Allow returning to IDLE after query processing
+            ConversationStates.INTENT_RECOGNIZED  # Also allow from intent recognized state
         ]
         
         if not any(self.is_in_state(state) for state in valid_states):

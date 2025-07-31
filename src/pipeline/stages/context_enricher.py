@@ -74,97 +74,118 @@ class ContextEnricherStage(PipelineStage):
         Returns:
             Pipeline data enriched with context
         """
-        # Get the original context passed with the query
-        original_context = data.context or {}
-        
-        # Get classified intents from previous stage
-        intents = data.get_stage_result('IntentClassifier', 'classified_intents', [])
-        
-        # Get the normalized query
-        normalized_query = data.get_stage_result('TextPreprocessor', 'normalized_text', '')
-        
-        self.logger.debug(f"Enriching context for query: {normalized_query}")
-        
-        # If persistence is enabled, get enriched context from service
-        if self.persistence_service and self.enable_persistence:
-            # Get or create session and user
-            session_id = original_context.get('session_id')
-            user_id = original_context.get('user_id')
-            domain = original_context.get('domain', 'general')
+        try:
+            # Get the original context passed with the query
+            original_context = data.context or {}
             
-            # Get or create session
-            session = await self.persistence_service.get_or_create_session(
-                session_id=session_id,
-                user_id=user_id,
-                domain=domain
+            # Get classified intents from previous stage
+            intents = data.get_stage_result('IntentClassifier', 'classified_intents', [])
+            
+            # Get the normalized query
+            normalized_query = data.get_stage_result('TextPreprocessor', 'normalized_text', '')
+            
+            self.logger.debug(f"Enriching context for query: {normalized_query}")
+            
+            # If persistence is enabled, get enriched context from service
+            if self.persistence_service and self.enable_persistence:
+                # Get or create session and user
+                session_id = original_context.get('session_id')
+                user_id = original_context.get('user_id')
+                domain = original_context.get('domain', 'general')
+                
+                # Get or create session
+                session = await self.persistence_service.get_or_create_session(
+                    session_id=session_id,
+                    user_id=user_id,
+                    domain=domain
+                )
+                
+                # Update context with session info
+                original_context['session_id'] = session['session_id']
+                if session.get('user_id'):
+                    original_context['user_id'] = session['user_id']
+                
+                # Get enriched context from persistence service
+                enriched_from_db = await self.persistence_service.get_enriched_context(
+                    session_id=session['session_id'],
+                    user_id=session.get('user_id')
+                )
+                
+                # Extract context components from persistent data (handle None case)
+                if enriched_from_db:
+                    history_context = enriched_from_db.get('history', [])
+                    domain_context = {'name': enriched_from_db.get('domain', 'general')}
+                    user_context = enriched_from_db.get('user_profile', {})
+                    session_context = enriched_from_db.get('session', {})
+                else:
+                    # Fallback if persistence returns None
+                    history_context = []
+                    domain_context = {'name': 'general'}
+                    user_context = {}
+                    session_context = {}
+            else:
+                # Fallback to original extraction methods
+                history_context = self._extract_history_context(original_context)
+                domain_context = self._extract_domain_context(original_context)
+                user_context = self._extract_user_context(original_context)
+                session_context = self._extract_session_context(original_context)
+            
+            # Calculate context relevance score
+            context_score = self._calculate_context_relevance(
+                history_context, domain_context, user_context, session_context
             )
             
-            # Update context with session info
-            original_context['session_id'] = session['session_id']
-            if session.get('user_id'):
-                original_context['user_id'] = session['user_id']
-            
-            # Get enriched context from persistence service
-            enriched_from_db = await self.persistence_service.get_enriched_context(
-                session_id=session['session_id'],
-                user_id=session.get('user_id')
+            # Enrich intents with context
+            enriched_intents = self._enrich_intents_with_context(
+                intents, history_context, domain_context
             )
             
-            # Extract context components from persistent data
-            history_context = enriched_from_db.get('history', [])
-            domain_context = {'name': enriched_from_db.get('domain', 'general')}
-            user_context = enriched_from_db.get('user_profile', {})
-            session_context = enriched_from_db.get('session', {})
-        else:
-            # Fallback to original extraction methods
-            history_context = self._extract_history_context(original_context)
-            domain_context = self._extract_domain_context(original_context)
-            user_context = self._extract_user_context(original_context)
-            session_context = self._extract_session_context(original_context)
-        
-        # Calculate context relevance score
-        context_score = self._calculate_context_relevance(
-            history_context, domain_context, user_context, session_context
-        )
-        
-        # Enrich intents with context
-        enriched_intents = self._enrich_intents_with_context(
-            intents, history_context, domain_context
-        )
-        
-        # Find related previous queries
-        related_queries = self._find_related_queries(normalized_query, history_context)
-        
-        # Build enriched context
-        enriched_context = {
-            'original_context': original_context,
-            'history': history_context,
-            'domain': domain_context,
-            'user': user_context,
-            'session': session_context,
-            'context_score': context_score,
-            'related_queries': related_queries,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        # Update conversation history
-        await self._update_conversation_history(normalized_query, intents, enriched_context)
-        
-        # Store results
-        data.add_stage_result(self.name, 'enriched_context', enriched_context)
-        data.add_stage_result(self.name, 'context_score', context_score)
-        data.add_stage_result(self.name, 'enriched_intents', enriched_intents)
-        
-        # Update pipeline context
-        data.context.update(enriched_context)
-        
-        # Add to metadata
-        data.add_metadata('context_score', context_score)
-        data.add_metadata('has_history', bool(history_context))
-        
-        self.logger.debug(f"Context enrichment complete. Score: {context_score:.2f}")
-        
-        return data
+            # Find related previous queries
+            related_queries = self._find_related_queries(normalized_query, history_context)
+            
+            # Build enriched context
+            enriched_context = {
+                'original_context': original_context,
+                'history': history_context,
+                'domain': domain_context,
+                'user': user_context,
+                'session': session_context,
+                'context_score': context_score,
+                'related_queries': related_queries,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Update conversation history
+            await self._update_conversation_history(normalized_query, intents, enriched_context)
+            
+            # Store results
+            data.add_stage_result(self.name, 'enriched_context', enriched_context)
+            data.add_stage_result(self.name, 'context_score', context_score)
+            data.add_stage_result(self.name, 'enriched_intents', enriched_intents)
+            
+            # Update pipeline context
+            data.context.update(enriched_context)
+            
+            # Add to metadata
+            data.add_metadata('context_score', context_score)
+            data.add_metadata('has_history', bool(history_context))
+            
+            self.logger.debug(f"Context enrichment complete. Score: {context_score:.2f}")
+            
+            return data
+            
+        except Exception as e:
+            # Log the error with full traceback for debugging
+            import traceback
+            self.logger.error(f"Error in ContextEnricher: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # Provide minimal fallback data so pipeline can continue
+            data.add_stage_result(self.name, 'enriched_context', {'original_context': data.context or {}})
+            data.add_stage_result(self.name, 'context_score', 0.5)
+            data.add_stage_result(self.name, 'enriched_intents', intents if 'intents' in locals() else [])
+            
+            return data
     
     def _extract_history_context(self, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract conversation history from context."""
@@ -242,9 +263,9 @@ class ContextEnricherStage(PipelineStage):
         """
         scores = {
             'history': 1.0 if history else 0.0,
-            'domain': 1.0 if domain.get('name') != 'general' else 0.5,
-            'user_profile': 1.0 if user.get('preferences') else 0.5,
-            'session': 1.0 if session.get('id') != 'default' else 0.5
+            'domain': 1.0 if domain and domain.get('name') != 'general' else 0.5,
+            'user_profile': 1.0 if user and user.get('preferences') else 0.5,
+            'session': 1.0 if session and session.get('id') != 'default' else 0.5
         }
         
         # Weighted average
@@ -271,21 +292,33 @@ class ContextEnricherStage(PipelineStage):
         enriched_intents = []
         
         for intent in intents:
+            # Safely get intent type (handles both Intent objects and dicts)
+            intent_type = None
+            if hasattr(intent, 'type'):
+                intent_type = intent.type
+            elif isinstance(intent, dict) and 'type' in intent:
+                intent_type = intent['type']
+            
+            if not intent_type:
+                continue
+            
             # Check if intent type matches recent history
             history_boost = 0.0
             for hist_item in history[-3:]:  # Look at last 3 items
-                if hist_item.get('intent_type') == intent.type:
+                if hist_item.get('intent_type') == intent_type:
                     history_boost = 0.1  # 10% boost for repeated intent type
                     break
             
             # Check if intent matches domain
             domain_boost = 0.0
-            if domain.get('name') in intent.type:
+            if domain.get('name') and domain.get('name') in intent_type:
                 domain_boost = 0.1  # 10% boost for domain match
             
-            # Apply boosts
+            # Apply boosts safely
             if hasattr(intent, 'confidence'):
                 intent.confidence = min(intent.confidence + history_boost + domain_boost, 1.0)
+            elif isinstance(intent, dict) and 'confidence' in intent:
+                intent['confidence'] = min(intent['confidence'] + history_boost + domain_boost, 1.0)
             
             enriched_intents.append(intent)
         
@@ -341,10 +374,10 @@ class ContextEnricherStage(PipelineStage):
         """
         history_item = {
             'query': query,
-            'intent_type': intents[0].type if intents else 'unknown',
-            'confidence': intents[0].confidence if intents else 0.0,
+            'intent_type': self._safe_get_intent_attribute(intents[0] if intents else None, 'type', 'unknown'),
+            'confidence': self._safe_get_intent_attribute(intents[0] if intents else None, 'confidence', 0.0),
             'timestamp': datetime.now().isoformat(),
-            'domain': context.get('domain', {}).get('name', 'general')
+            'domain': context.get('domain', {}).get('name', 'general') if context else 'general'
         }
         
         # Always update in-memory history
@@ -377,3 +410,28 @@ class ContextEnricherStage(PipelineStage):
         """Validate that input contains required data."""
         # Context enricher can work with minimal data
         return True
+    
+    def _safe_get_intent_attribute(self, intent, attr_name, default_value):
+        """
+        Safely get attribute from intent (handles both objects and dicts).
+        
+        Args:
+            intent: Intent object or dictionary
+            attr_name: Attribute/key name to get
+            default_value: Default value if attribute not found
+            
+        Returns:
+            Attribute value or default
+        """
+        if intent is None:
+            return default_value
+        
+        # Try object attribute
+        if hasattr(intent, attr_name):
+            return getattr(intent, attr_name)
+        
+        # Try dictionary key
+        if isinstance(intent, dict) and attr_name in intent:
+            return intent[attr_name]
+        
+        return default_value

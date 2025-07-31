@@ -67,7 +67,8 @@ class TokenizerModule(PipelineStage):
         tokens = self.tokenize(normalized_text)
         
         # Extract linguistic features
-        word_count = len(tokens)
+        # Count only word tokens, excluding punctuation
+        word_count = len([t for t in tokens if t not in '.!?'])
         unique_tokens = list(set(tokens))
         token_frequencies = Counter(tokens)
         
