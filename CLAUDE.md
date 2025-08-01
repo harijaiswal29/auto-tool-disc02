@@ -149,6 +149,11 @@ For troubleshooting common issues and solutions, see `docs/troubleshooting.md`
 
 ### Testing & Deployment
 - `tests/README.md` - **Comprehensive test suite documentation and ALL test commands**
+- `tests/dissertation_test_suite/` - **Dissertation-focused test suite for validating research hypotheses**
+  - `dissertation-testing-strategy.md` - Pragmatic testing strategy for dissertation goals
+  - Hypothesis validation tests (H1-H5)
+  - Performance benchmarks aligned with evaluation targets
+  - Statistical validation and reproducibility tests
 - `docs/testing/test-summary.md` - Test coverage summary and metrics
 - `docs/testing/coverage_summary.md` - Detailed test coverage report
 - `docs/deployment/requirements.md` - Non-functional requirements and SLOs

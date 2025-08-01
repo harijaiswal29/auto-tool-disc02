@@ -229,6 +229,42 @@ tests/
 - Helper scripts for testing
 - `check_encoding.py` - Verify Unicode/emoji support
 
+### Dissertation Test Suite (`tests/dissertation_test_suite/`)
+- **Purpose**: Validate research hypotheses and provide empirical evidence for dissertation
+- **Characteristics**:
+  - Focus on demonstrating research contributions
+  - Statistical validation of improvements
+  - Reproducible results for academic publication
+  - Performance benchmarks against evaluation targets
+
+**Key Components:**
+- `dissertation-testing-strategy.md` - Comprehensive testing strategy aligned with research goals
+- `hypothesis_validation/` - Tests for validating core research hypotheses (H1-H5)
+  - Q-learning improvement over baselines (>30%)
+  - Statistical significance testing (p < 0.05, Cohen's d > 0.8)
+  - Learning convergence validation (<1000 episodes)
+- `performance_benchmarks/` - Tests for performance targets
+  - Intent recognition <100ms (p95)
+  - Tool selection accuracy >80%
+  - System throughput >100 queries/minute
+- `algorithm_validation/` - Core algorithm verification
+- `scenario_demonstrations/` - End-to-end capability demonstrations
+- `results/` - Test outputs, metrics, and visualizations for dissertation
+
+**Running Dissertation Tests:**
+```bash
+# Run all dissertation-critical tests
+pytest tests/dissertation_test_suite/ -v -m dissertation
+
+# Generate performance metrics and visualizations
+python -m pytest tests/dissertation_test_suite/ -v --dissertation-metrics
+
+# Run specific hypothesis validation
+pytest tests/dissertation_test_suite/hypothesis_validation/ -v
+```
+
+See [Dissertation Test Suite README](./dissertation_test_suite/README.md) for detailed documentation.
+
 ## Running Tests
 
 ### Basic Commands
