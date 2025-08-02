@@ -92,7 +92,7 @@ class TestParallelExecution:
         ]
         
         for tool in test_tools:
-            await registry.register_tool(tool)
+            registry.register_tool(tool)
         
         return {
             'registry': registry,

@@ -230,6 +230,15 @@ class ResultCache:
             self.logger.debug(f"Evicted oldest cache entry: {oldest_key}")
             self._track_metric_event('eviction', oldest_key, 0)
         
+        # Check if result is serializable before caching
+        if self.persistence_enabled:
+            try:
+                # Test if we can pickle the result
+                pickle.dumps(result)
+            except (pickle.PicklingError, TypeError) as e:
+                self.logger.warning(f"Result not serializable, skipping cache: {e}")
+                return False
+        
         # Create and store entry
         entry = CacheEntry(
             result=result,
@@ -483,5 +492,9 @@ class ResultCache:
     
     def __del__(self):
         """Save cache on cleanup."""
-        if hasattr(self, 'persistence_enabled') and self.persistence_enabled:
-            self.save_cache()
+        try:
+            if hasattr(self, 'persistence_enabled') and self.persistence_enabled:
+                self.save_cache()
+        except Exception:
+            # During interpreter shutdown, some globals might not be available
+            pass

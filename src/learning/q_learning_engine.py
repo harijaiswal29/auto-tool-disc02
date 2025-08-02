@@ -64,7 +64,7 @@ class StateRepresentation:
                 intent_embedding = np.resize(intent_embedding, 
                                            self.state_dimensions['intent_vector'])
         else:
-            intent_embedding = np.zeros(self.state_dimensions['intent_vector'])
+            intent_embedding = np.zeros(self.state_dimensions['intent_vector'], dtype=np.float32)
         state_components.append(intent_embedding)
         
         # Context features
@@ -100,12 +100,12 @@ class StateRepresentation:
         state_components.append(domain_features)
         
         # Combine all components
-        state_vector = np.concatenate(state_components)
+        state_vector = np.concatenate(state_components).astype(np.float32)
         return state_vector
     
     def _encode_context(self, context: Dict[str, Any]) -> np.ndarray:
         """Encode context features."""
-        features = np.zeros(self.state_dimensions['context_features'])
+        features = np.zeros(self.state_dimensions['context_features'], dtype=np.float32)
         
         # Domain encoding (one-hot)
         domains = ['engineering', 'data_science', 'general', 'system']
@@ -130,7 +130,7 @@ class StateRepresentation:
     
     def _encode_history(self, history: List[str]) -> np.ndarray:
         """Encode tool usage history."""
-        features = np.zeros(self.state_dimensions['tool_history'])
+        features = np.zeros(self.state_dimensions['tool_history'], dtype=np.float32)
         
         # Frequency encoding for recent tools
         tool_counts = defaultdict(int)
@@ -160,7 +160,7 @@ class StateRepresentation:
     
     def _encode_metrics(self, metrics: Dict[str, Any]) -> np.ndarray:
         """Encode performance metrics."""
-        features = np.zeros(self.state_dimensions['performance_metrics'])
+        features = np.zeros(self.state_dimensions['performance_metrics'], dtype=np.float32)
         
         features[0] = metrics.get('avg_response_time', 1000) / 5000.0  # Normalized to 5s
         features[1] = metrics.get('success_rate', 0.5)
@@ -172,7 +172,7 @@ class StateRepresentation:
     
     def _encode_failure_rates(self, failure_rates: Dict[str, float]) -> np.ndarray:
         """Encode per-tool failure rates."""
-        features = np.zeros(self.state_dimensions['failure_rates'])
+        features = np.zeros(self.state_dimensions['failure_rates'], dtype=np.float32)
         
         # Common tools get dedicated features
         common_tools = ['filesystem_mcp', 'sqlite_mcp', 'search_mcp', 
@@ -194,7 +194,7 @@ class StateRepresentation:
     
     def _encode_failure_types(self, failure_types: Dict[str, int]) -> np.ndarray:
         """Encode failure type distribution."""
-        features = np.zeros(self.state_dimensions['failure_types'])
+        features = np.zeros(self.state_dimensions['failure_types'], dtype=np.float32)
         
         # Map failure types to indices
         type_mapping = {
@@ -215,7 +215,7 @@ class StateRepresentation:
     
     def _encode_retry_patterns(self, retry_patterns: Dict[str, Any]) -> np.ndarray:
         """Encode retry statistics and patterns."""
-        features = np.zeros(self.state_dimensions['retry_patterns'])
+        features = np.zeros(self.state_dimensions['retry_patterns'], dtype=np.float32)
         
         features[0] = retry_patterns.get('avg_retry_count', 0) / 5.0  # Normalized
         features[1] = retry_patterns.get('retry_success_rate', 0.5)
@@ -227,7 +227,7 @@ class StateRepresentation:
     
     def _encode_user_expertise(self, expertise: str) -> np.ndarray:
         """Encode user expertise level as one-hot vector."""
-        features = np.zeros(self.state_dimensions['user_expertise'])
+        features = np.zeros(self.state_dimensions['user_expertise'], dtype=np.float32)
         
         expertise_map = {
             'novice': 0,
@@ -245,7 +245,7 @@ class StateRepresentation:
     
     def _encode_domain_context(self, domain: str) -> np.ndarray:
         """Encode domain context as one-hot vector."""
-        features = np.zeros(self.state_dimensions['domain_context'])
+        features = np.zeros(self.state_dimensions['domain_context'], dtype=np.float32)
         
         domain_map = {
             'general': 0,
@@ -728,6 +728,19 @@ class QLearningEngine:
                 logger.debug(f"Random selection (no Q-values): {action}")
         
         return action
+    
+    def _hash_state(self, state: np.ndarray) -> str:
+        """Convert state array to hashable string representation.
+        
+        Args:
+            state: State array
+            
+        Returns:
+            Hashable string representation
+        """
+        # Convert to tuple for hashing, round to avoid floating point issues
+        state_tuple = tuple(np.round(state, decimals=4))
+        return str(hash(state_tuple))
     
     async def learn_from_experience(self, state: np.ndarray, action: Tuple[str, ...],
                                   reward: float, next_state: np.ndarray,

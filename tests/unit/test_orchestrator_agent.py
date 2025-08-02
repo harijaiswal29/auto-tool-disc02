@@ -178,10 +178,10 @@ class TestOrchestratorAgent:
         # Setup mocks
         orchestrator.intent_agent.process_query.return_value = mock_intent_result
         orchestrator.tool_registry.search_tools.return_value = []
-        orchestrator.state_machine.is_in_state.side_effect = [
-            False,  # Not TOOLS_DISCOVERED
-            True,   # NO_TOOLS_FOUND
-        ]
+        # Mock state machine to return NO_TOOLS_FOUND state
+        mock_state = Mock()
+        mock_state.name = ConversationStates.NO_TOOLS_FOUND
+        orchestrator.state_machine.get_current_state.return_value = mock_state
         
         # Process query
         result = await orchestrator.process_user_query("Find something impossible")
@@ -198,11 +198,10 @@ class TestOrchestratorAgent:
         # Setup mocks
         orchestrator.intent_agent.process_query.return_value = mock_intent_result
         orchestrator.tool_registry.search_tools.return_value = []
-        orchestrator.state_machine.is_in_state.side_effect = [
-            False,  # Not TOOLS_DISCOVERED
-            False,  # Not NO_TOOLS_FOUND
-            True,   # CLARIFICATION_NEEDED
-        ]
+        # Mock state machine to return CLARIFICATION_NEEDED state
+        mock_state = Mock()
+        mock_state.name = ConversationStates.CLARIFICATION_NEEDED
+        orchestrator.state_machine.get_current_state.return_value = mock_state
         
         # Process query
         result = await orchestrator.process_user_query("Do something")

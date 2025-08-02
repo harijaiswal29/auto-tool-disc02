@@ -109,27 +109,28 @@ class StrategyManager:
         
         if adv_config.get('enabled', True):
             # Temporal strategy
-            if adv_config.get('strategies', {}).get('temporal_difference', {}).get('enabled', True):
+            strategies_config = adv_config.get('strategies', {})
+            if strategies_config.get('temporal_difference', {}).get('enabled', True):
                 strategies['temporal'] = TemporalRewardCalculator(
-                    adv_config['strategies']['temporal_difference']
+                    strategies_config.get('temporal_difference', {})
                 )
             
             # Hierarchical strategy
-            if adv_config.get('strategies', {}).get('hierarchical', {}).get('enabled', True):
+            if strategies_config.get('hierarchical', {}).get('enabled', True):
                 strategies['hierarchical'] = HierarchicalRewardCalculator(
-                    adv_config['strategies']['hierarchical']
+                    strategies_config.get('hierarchical', {})
                 )
             
             # Adaptive shaping strategy
-            if adv_config.get('strategies', {}).get('adaptive_shaping', {}).get('enabled', True):
+            if strategies_config.get('adaptive_shaping', {}).get('enabled', True):
                 strategies['adaptive'] = AdaptiveRewardShaper(
-                    adv_config['strategies']['adaptive_shaping']
+                    strategies_config.get('adaptive_shaping', {})
                 )
             
             # Information-theoretic strategy
-            if adv_config.get('strategies', {}).get('information_theoretic', {}).get('enabled', True):
+            if strategies_config.get('information_theoretic', {}).get('enabled', True):
                 strategies['information_theoretic'] = InformationTheoreticRewardCalculator(
-                    adv_config['strategies']['information_theoretic']
+                    strategies_config.get('information_theoretic', {})
                 )
         
         return strategies

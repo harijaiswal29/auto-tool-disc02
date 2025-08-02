@@ -744,7 +744,7 @@ class OrchestratorAgent:
             }
             
             # Record failure in database
-            if self.current_session_id:
+            if hasattr(self, 'current_session_id') and self.current_session_id:
                 await self.db_manager.record_failure(
                     execution_id=self.current_session_id,
                     tool_id=tool_id,
