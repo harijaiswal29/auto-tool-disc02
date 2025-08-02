@@ -255,6 +255,11 @@ class TestToolDiscoveryAgent:
         tool = mock_tools[0]
         intent_result = Mock()
         intent_result.features = {'embedding': None}
+        intent_result.metadata = None
+        intent_result.raw_query = None
+        intent_result.original_query = None
+        intent_result.primary_intent = Mock()
+        intent_result.primary_intent.keywords = []
         
         score = await discovery_agent._calculate_semantic_score(tool, intent_result)
         
@@ -288,9 +293,13 @@ class TestToolDiscoveryAgent:
         # Add one more - should evict oldest
         await discovery_agent._get_tool_embedding("tool3", "desc3")
         assert len(discovery_agent.tool_embeddings) == 2
-        assert "tool1" not in discovery_agent.tool_embeddings
-        assert "tool2" in discovery_agent.tool_embeddings
-        assert "tool3" in discovery_agent.tool_embeddings
+        
+        # Check that oldest was evicted (using cache keys)
+        cache_keys = list(discovery_agent.tool_embeddings.keys())
+        # Keys should contain tool2 and tool3 (tool1 evicted)
+        assert any("tool2" in key for key in cache_keys)
+        assert any("tool3" in key for key in cache_keys)
+        assert not any("tool1" in key for key in cache_keys)
     
     def test_calculate_capability_score(self, discovery_agent, mock_intent_result):
         """Test capability score calculation."""
@@ -301,8 +310,13 @@ class TestToolDiscoveryAgent:
         )
         
         assert 0 <= score <= 1.0
-        # Should have moderate score since 3/10 required capabilities match
-        assert 0.3 < score < 0.5
+        # With enhanced capability matching and synonyms:
+        # - All 3 tool capabilities ('search', 'find', 'query') are in the required list
+        # - These expand to many synonyms that match most/all of the 10 required capabilities
+        # - 1/3 keywords match ('find')
+        # - Plus diversity bonus for 3 capabilities
+        # Score should be high due to excellent capability coverage
+        assert score > 0.8
     
     def test_calculate_capability_score_with_synonyms(self, discovery_agent, mock_intent_result):
         """Test capability score with synonyms."""

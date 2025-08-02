@@ -89,8 +89,8 @@ class ToolDiscoveryAgent:
                 'view', 'show', 'display', 'extract'
             ],
             'query.analyze': [
-                'analyze', 'examine', 'inspect', 'evaluate', 'assess',
-                'investigate', 'study', 'review', 'diagnose', 'profile'
+                'view', 'show', 'display', 'report', 'insight',
+                'metric', 'statistic', 'result', 'finding', 'summary'
             ],
             'action.create': [
                 'create', 'write', 'generate', 'make', 'build', 'produce',
@@ -104,6 +104,15 @@ class ToolDiscoveryAgent:
                 'delete', 'remove', 'clear', 'drop', 'erase', 'destroy',
                 'purge', 'clean', 'eliminate', 'discard'
             ],
+            'action.analyze': [
+                'analyze', 'examine', 'inspect', 'evaluate', 'assess',
+                'investigate', 'study', 'review', 'diagnose', 'profile',
+                'process', 'compute', 'interpret', 'measure'
+            ],
+            'action.export': [
+                'export', 'save', 'output', 'download', 'write', 'dump',
+                'serialize', 'backup', 'convert', 'extract'
+            ],
             'system.configure': [
                 'configure', 'setup', 'initialize', 'install', 'deploy',
                 'provision', 'prepare', 'customize', 'tune', 'optimize'
@@ -114,14 +123,46 @@ class ToolDiscoveryAgent:
             ]
         }
         
-        # Capability synonyms for better matching
+        # Capability synonyms for better matching - ENHANCED
         self.capability_synonyms = {
-            'search': ['find', 'query', 'lookup'],
-            'read': ['get', 'fetch', 'retrieve'],
-            'write': ['create', 'save', 'store'],
-            'delete': ['remove', 'drop', 'clear'],
-            'list': ['enumerate', 'show', 'display']
+            # Query operations
+            'search': ['find', 'query', 'lookup', 'locate', 'discover', 'seek', 'explore', 'scan', 'filter'],
+            'read': ['get', 'fetch', 'retrieve', 'load', 'access', 'view', 'show', 'extract', 'pull', 'obtain'],
+            'list': ['enumerate', 'show', 'display', 'index', 'catalog', 'directory', 'browse', 'inventory'],
+            
+            # Modification operations
+            'write': ['create', 'save', 'store', 'add', 'insert', 'put', 'generate', 'produce', 'compose'],
+            'update': ['modify', 'edit', 'change', 'alter', 'revise', 'patch', 'amend', 'adjust', 'refresh'],
+            'delete': ['remove', 'drop', 'clear', 'erase', 'destroy', 'purge', 'eliminate', 'discard', 'clean'],
+            
+            # Analysis operations
+            'analyze': ['examine', 'inspect', 'evaluate', 'assess', 'investigate', 'study', 'diagnose', 'review'],
+            'process': ['handle', 'execute', 'run', 'perform', 'compute', 'calculate', 'transform', 'convert'],
+            'export': ['output', 'save', 'download', 'extract', 'transfer', 'dump', 'serialize', 'backup'],
+            
+            # System operations
+            'configure': ['setup', 'initialize', 'install', 'customize', 'tune', 'prepare', 'provision'],
+            'monitor': ['track', 'watch', 'observe', 'supervise', 'check', 'audit', 'measure', 'log'],
+            'connect': ['link', 'join', 'attach', 'bind', 'couple', 'interface', 'integrate', 'sync'],
+            
+            # Data operations
+            'import': ['load', 'upload', 'ingest', 'read', 'fetch', 'pull', 'acquire', 'collect'],
+            'filter': ['select', 'choose', 'pick', 'screen', 'sift', 'refine', 'narrow', 'constrain'],
+            'sort': ['order', 'arrange', 'organize', 'rank', 'classify', 'group', 'categorize'],
+            
+            # File operations
+            'copy': ['duplicate', 'clone', 'replicate', 'backup', 'mirror', 'reproduce'],
+            'move': ['transfer', 'relocate', 'migrate', 'shift', 'transport', 'displace'],
+            'compress': ['zip', 'archive', 'pack', 'compact', 'shrink', 'reduce']
         }
+        
+        # Build reverse mapping for bidirectional lookup
+        self.reverse_synonyms = {}
+        for primary, synonyms in self.capability_synonyms.items():
+            for synonym in synonyms:
+                if synonym not in self.reverse_synonyms:
+                    self.reverse_synonyms[synonym] = []
+                self.reverse_synonyms[synonym].append(primary)
         
         self.logger.info("Tool Discovery Agent initialized successfully")
     
@@ -136,7 +177,7 @@ class ToolDiscoveryAgent:
                 'performance_weight': 0.2,
                 'relationship_weight': 0.2
             },
-            'min_score_threshold': 0.3
+            'min_score_threshold': 0.1
         }
     
     async def discover_tools(self, intent_result: IntentResult, 
@@ -171,7 +212,7 @@ class ToolDiscoveryAgent:
         candidates = []
         for tool in all_tools:
             candidate = await self._score_tool(tool, intent_result, context)
-            if candidate.overall_score >= self.config.get('min_score_threshold', 0.3):
+            if candidate.overall_score >= self.config.get('min_score_threshold', 0.1):
                 candidates.append(candidate)
         
         # Sort by overall score
@@ -193,10 +234,20 @@ class ToolDiscoveryAgent:
         capabilities = self._parse_capabilities(tool.get('capabilities', {}))
         
         # Calculate individual scores
-        semantic_score = await self._calculate_semantic_score(tool, intent_result)
-        capability_score = self._calculate_capability_score(capabilities, intent_result)
-        performance_score = tool.get('performance_score', 0.5)
-        relationship_score = await self._calculate_relationship_score(tool_id, context)
+        raw_semantic_score = await self._calculate_semantic_score(tool, intent_result)
+        raw_capability_score = self._calculate_capability_score(capabilities, intent_result)
+        raw_performance_score = tool.get('performance_score', 0.5)
+        raw_relationship_score = await self._calculate_relationship_score(tool_id, context)
+        
+        # Normalize all scores to ensure they're in [0, 1] range
+        # Use sigmoid for semantic scores to spread them out better
+        semantic_score = self._normalize_score(raw_semantic_score, method='sigmoid')
+        # Use minmax for capability scores as they're already well-distributed
+        capability_score = self._normalize_score(raw_capability_score, method='minmax')
+        # Use minmax for performance scores
+        performance_score = self._normalize_score(raw_performance_score, method='minmax')
+        # Use minmax for relationship scores
+        relationship_score = self._normalize_score(raw_relationship_score, method='minmax')
         
         # Calculate weighted overall score
         weights = self.config.get('discovery', {})
@@ -229,12 +280,19 @@ class ToolDiscoveryAgent:
                 return [capabilities]
         
         if isinstance(capabilities, dict):
-            # Extract operation names
+            # Extract operation names AND categories
             operations = capabilities.get('operations', [])
             cap_list = []
             for op in operations:
                 if isinstance(op, dict):
-                    cap_list.append(op.get('name', ''))
+                    # Add operation name
+                    name = op.get('name', '')
+                    if name:
+                        cap_list.append(name)
+                    # Also add category if present
+                    category = op.get('category', '')
+                    if category and category not in cap_list:
+                        cap_list.append(category)
                 else:
                     cap_list.append(str(op))
             return cap_list
@@ -244,11 +302,87 @@ class ToolDiscoveryAgent:
         
         return []
     
+    def _build_tool_description(self, tool: Dict[str, Any]) -> str:
+        """Build a comprehensive tool description for embedding generation."""
+        tool_name = tool.get('name', '')
+        tool_description = tool.get('description', '')
+        tool_type = tool.get('type', '')
+        capabilities = self._parse_capabilities(tool.get('capabilities', {}))
+        
+        # Build rich description with proper weighting
+        description_parts = []
+        
+        # Name is most important
+        if tool_name:
+            description_parts.append(f"Tool: {tool_name}")
+        
+        # Full description carries significant weight
+        if tool_description:
+            description_parts.append(f"Description: {tool_description}")
+        
+        # Tool type helps with categorization
+        if tool_type:
+            description_parts.append(f"Type: {tool_type}")
+        
+        # Capabilities provide functional context
+        if capabilities:
+            # Expand capability descriptions with synonyms
+            expanded_caps = []
+            for cap in capabilities:
+                expanded_caps.append(cap)
+                # Add primary term if it's a synonym
+                cap_lower = cap.lower()
+                if cap_lower in self.reverse_synonyms:
+                    expanded_caps.extend(self.reverse_synonyms[cap_lower])
+            
+            description_parts.append(f"Capabilities: {', '.join(expanded_caps)}")
+        
+        # Add endpoint/server type for additional context
+        if 'endpoint' in tool:
+            endpoint_type = tool['endpoint'].split('://')[0] if '://' in tool['endpoint'] else 'unknown'
+            description_parts.append(f"Protocol: {endpoint_type}")
+        
+        if 'server_type' in tool:
+            description_parts.append(f"Server Type: {tool['server_type']}")
+        
+        # Combine all parts with proper spacing
+        return ' | '.join(description_parts)
+    
+    def _normalize_score(self, score: float, method: str = 'sigmoid') -> float:
+        """
+        Normalize a score to [0, 1] range using various methods.
+        
+        Args:
+            score: Raw score to normalize
+            method: Normalization method ('sigmoid', 'minmax', 'tanh')
+            
+        Returns:
+            Normalized score in [0, 1] range
+        """
+        if method == 'sigmoid':
+            # Sigmoid normalization with adjustable steepness
+            # Scores around 0.5 map to ~0.5, higher scores approach 1
+            import math
+            return 1 / (1 + math.exp(-10 * (score - 0.5)))
+        
+        elif method == 'tanh':
+            # Tanh normalization scaled to [0, 1]
+            import math
+            return (math.tanh(2 * score - 1) + 1) / 2
+        
+        elif method == 'minmax':
+            # Simple clipping to [0, 1]
+            return max(0.0, min(1.0, score))
+        
+        else:
+            # Default to simple clipping
+            return max(0.0, min(1.0, score))
+    
     async def _calculate_semantic_score(self, tool: Dict[str, Any], 
                                        intent_result: IntentResult) -> float:
         """Calculate semantic similarity between tool and intent."""
-        # Create tool description
-        tool_desc = f"{tool['name']} {tool.get('type', '')} {' '.join(self._parse_capabilities(tool.get('capabilities', {})))}"
+        # Create enhanced tool description using helper method
+        tool_desc = self._build_tool_description(tool)
         
         # Get or create tool embedding
         tool_embedding = await self._get_tool_embedding(tool['id'], tool_desc)
@@ -264,7 +398,21 @@ class ToolDiscoveryAgent:
             query_embedding = None
         
         if query_embedding is None:
-            return 0.0
+            # Compute query embedding if not provided
+            query_text = getattr(intent_result, 'raw_query', '') or getattr(intent_result, 'original_query', '')
+            if query_text:
+                query_embedding = self.model.encode(query_text)
+            else:
+                # If no query text and no embedding, use keywords as fallback
+                if hasattr(intent_result, 'primary_intent') and intent_result.primary_intent:
+                    keywords = getattr(intent_result.primary_intent, 'keywords', [])
+                    if keywords:
+                        query_text = ' '.join(keywords)
+                        query_embedding = self.model.encode(query_text)
+                    else:
+                        return 0.0
+                else:
+                    return 0.0
         
         # Calculate cosine similarity
         similarity = cosine_similarity([tool_embedding], [query_embedding])[0][0]
@@ -273,8 +421,10 @@ class ToolDiscoveryAgent:
     
     async def _get_tool_embedding(self, tool_id: str, tool_desc: str) -> np.ndarray:
         """Get or compute tool embedding with caching."""
-        if tool_id in self.tool_embeddings:
-            return self.tool_embeddings[tool_id]
+        # Use tool description as part of cache key to handle description changes
+        cache_key = f"{tool_id}:{hash(tool_desc)}"
+        if cache_key in self.tool_embeddings:
+            return self.tool_embeddings[cache_key]
         
         # Compute embedding
         embedding = self.model.encode(tool_desc)
@@ -284,13 +434,13 @@ class ToolDiscoveryAgent:
             # Remove oldest entry
             self.tool_embeddings.pop(next(iter(self.tool_embeddings)))
         
-        self.tool_embeddings[tool_id] = embedding
+        self.tool_embeddings[cache_key] = embedding
         
         return embedding
     
     def _calculate_capability_score(self, tool_capabilities: List[str], 
                                    intent_result: IntentResult) -> float:
-        """Calculate capability match score."""
+        """Calculate capability match score with enhanced synonym matching."""
         if not tool_capabilities:
             return 0.0
         
@@ -301,34 +451,85 @@ class ToolDiscoveryAgent:
         # Also consider keywords from the query
         query_keywords = intent_result.primary_intent.keywords
         
-        # Normalize capabilities
-        tool_caps_normalized = set()
+        # Fallback: If no keywords, extract from raw query
+        if not query_keywords and hasattr(intent_result, 'raw_query'):
+            # Simple keyword extraction from raw query
+            raw_query = intent_result.raw_query.lower()
+            # Common action words to extract
+            action_words = ['read', 'write', 'get', 'fetch', 'create', 'update', 'delete', 
+                           'search', 'find', 'query', 'analyze', 'export', 'import',
+                           'load', 'save', 'list', 'show', 'display', 'modify', 'edit']
+            query_keywords = [word for word in action_words if word in raw_query]
+        
+        # Normalize and expand tool capabilities with synonyms
+        tool_caps_expanded = set()
         for cap in tool_capabilities:
             cap_lower = cap.lower()
-            tool_caps_normalized.add(cap_lower)
-            # Add synonyms
-            for key, synonyms in self.capability_synonyms.items():
-                if cap_lower == key:
-                    tool_caps_normalized.update(synonyms)
+            tool_caps_expanded.add(cap_lower)
+            
+            # Add primary terms if this is a synonym
+            if cap_lower in self.reverse_synonyms:
+                tool_caps_expanded.update(self.reverse_synonyms[cap_lower])
+            
+            # Add synonyms if this is a primary term
+            if cap_lower in self.capability_synonyms:
+                tool_caps_expanded.update(self.capability_synonyms[cap_lower])
         
-        # Calculate overlap
+        # Normalize and expand required capabilities
+        required_caps_expanded = set()
+        for req_cap in required_capabilities:
+            req_cap_lower = req_cap.lower()
+            required_caps_expanded.add(req_cap_lower)
+            
+            # Add synonyms for required capabilities
+            if req_cap_lower in self.capability_synonyms:
+                required_caps_expanded.update(self.capability_synonyms[req_cap_lower])
+        
+        # Calculate overlap with enhanced matching
         matches = 0
-        total = len(required_capabilities) + len(query_keywords)
+        matched_capabilities = set()
         
+        # Check required capabilities (full weight)
+        for req_cap in required_caps_expanded:
+            if any(req_cap in tool_cap or tool_cap in req_cap for tool_cap in tool_caps_expanded):
+                if req_cap not in matched_capabilities:
+                    matches += 1
+                    matched_capabilities.add(req_cap)
+        
+        # Check query keywords (partial weight)
+        for keyword in query_keywords:
+            keyword_lower = keyword.lower()
+            
+            # Check direct match or synonym match
+            if any(keyword_lower in tool_cap or tool_cap in keyword_lower for tool_cap in tool_caps_expanded):
+                matches += 0.7  # Higher weight for keyword matches with synonym support
+            elif keyword_lower in self.reverse_synonyms:
+                # Check if any synonym matches
+                for primary in self.reverse_synonyms[keyword_lower]:
+                    if any(primary in tool_cap for tool_cap in tool_caps_expanded):
+                        matches += 0.5
+                        break
+        
+        # Calculate total expected matches
+        total = len(required_capabilities) + len(query_keywords)
         if total == 0:
             return 0.5  # Neutral score
         
-        # Check required capabilities
-        for req_cap in required_capabilities:
-            if any(req_cap in tool_cap for tool_cap in tool_caps_normalized):
-                matches += 1
+        # Normalize score with bonus for exact matches
+        base_score = min(matches / total, 1.0)
         
-        # Check query keywords
-        for keyword in query_keywords:
-            if any(keyword in tool_cap for tool_cap in tool_caps_normalized):
-                matches += 0.5  # Half weight for keyword matches
+        # Bonus for having multiple matching capabilities
+        diversity_bonus = min(len(matched_capabilities) * 0.05, 0.2)
         
-        return min(matches / total, 1.0)
+        # If we used fallback keywords and found matches, boost the score
+        # This compensates for poor intent classification
+        if matches > 0 and required_capabilities and not any(
+            cap in tool_caps_expanded for cap in required_capabilities
+        ):
+            # Intent type doesn't match well, but keywords do - boost score
+            base_score = max(base_score, 0.6)
+        
+        return min(base_score + diversity_bonus, 1.0)
     
     async def _calculate_relationship_score(self, tool_id: str, context: Dict[str, Any]) -> float:
         """Calculate score based on tool relationships and context."""
@@ -447,12 +648,13 @@ class ToolDiscoveryAgent:
         candidates = []
         
         for tool in all_tools:
-            tool_desc = f"{tool['name']} {tool.get('type', '')} {' '.join(self._parse_capabilities(tool.get('capabilities', {})))}"
+            # Use the same enhanced description builder
+            tool_desc = self._build_tool_description(tool)
             tool_embedding = await self._get_tool_embedding(tool['id'], tool_desc)
             
             similarity = cosine_similarity([pattern_embedding], [tool_embedding])[0][0]
             
-            if similarity > 0.5:  # Threshold for pattern matching
+            if similarity > 0.2:  # Threshold for pattern matching
                 candidate = ToolCandidate(
                     tool_id=tool['id'],
                     tool_name=tool['name'],

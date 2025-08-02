@@ -62,10 +62,10 @@ class FeatureExtractorStage(PipelineStage):
                 "display content"
             ],
             'query.analyze': [
-                "analyze the data",
-                "examine the code",
-                "investigate the issue",
-                "evaluate performance"
+                "what is the analysis",
+                "show me the analysis",
+                "get analysis results",
+                "view the analysis report"
             ],
             'action.create': [
                 "create a new file",
@@ -96,6 +96,19 @@ class FeatureExtractorStage(PipelineStage):
                 "monitor performance",
                 "track progress",
                 "watch for changes"
+            ],
+            'action.analyze': [
+                "analyze this data",
+                "analyze the code",
+                "perform analysis on",
+                "examine and evaluate",
+                "investigate the issue"
+            ],
+            'action.export': [
+                "export results to",
+                "save output as",
+                "download the data",
+                "export to CSV"
             ]
         }
         

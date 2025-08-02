@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from src.agents.intent_recognition_agent import IntentRecognitionAgent
 from src.agents.intent_models import IntentResult
+from src.agents.result_cache import ResultCache
 from src.core.mcp_integration import MCPIntegration
 from src.core.tool_registry import ToolRegistry
 from src.utils.logger import get_logger
@@ -160,6 +161,20 @@ class OrchestratorAgent:
             'avg_tools_used': 1.0
         }
         
+        # Initialize result cache
+        self.result_cache = ResultCache(config.get('result_cache', {}))
+        
+        # Initialize cache monitoring if enabled
+        self.cache_monitor = None
+        cache_monitor_config = config.get('cache_monitoring', {})
+        if cache_monitor_config.get('enabled', False):
+            from src.monitoring.cache_metrics_monitor import CacheMetricsMonitor
+            self.cache_monitor = CacheMetricsMonitor(config)
+            self.cache_monitor.attach_cache(self.result_cache)
+            
+            # Set pattern extractor for query pattern analysis
+            self.result_cache.set_pattern_extractor(self._extract_query_pattern)
+        
         self.logger.info("Orchestrator Agent initialized successfully")
     
     def _load_default_config(self) -> Dict[str, Any]:
@@ -201,6 +216,28 @@ class OrchestratorAgent:
         self.context['current_query'] = query
         
         self.logger.info(f"Processing user query: {query}")
+        
+        # Check cache first
+        cache_context = {
+            'domain': context.get('domain'),
+            'user_expertise': context.get('user_expertise')
+        }
+        cache_key = self.result_cache.generate_key(query, cache_context)
+        cached_result = self.result_cache.get(cache_key)
+        
+        if cached_result is not None:
+            self.logger.info(f"Cache hit for query: {query}")
+            # Update metrics for cached result
+            cache_metrics = self.result_cache.get_metrics()
+            self.logger.debug(f"Cache hit rate: {cache_metrics['hit_rate']:.2%}")
+            
+            # Track in monitoring if enabled
+            if self.cache_monitor:
+                response_time_ms = (time.time() - start_time) * 1000
+                pattern = self._extract_query_pattern(cache_key)
+                self.cache_monitor.track_query_pattern(query, pattern, True, response_time_ms)
+            
+            return cached_result
         
         try:
             # Step 0: Update state machine - receive query
@@ -246,9 +283,10 @@ class OrchestratorAgent:
             self.logger.info(f"Selected {len(selected_tools)} tools for execution")
             
             # Check if we're in the right state to execute
-            if not self.state_machine.is_in_state(ConversationStates.TOOLS_DISCOVERED):
+            current_state_name = self.state_machine.get_current_state().name if self.state_machine.get_current_state() else None
+            if current_state_name != ConversationStates.TOOLS_DISCOVERED:
                 # Handle edge cases like NO_TOOLS_FOUND or CLARIFICATION_NEEDED
-                if self.state_machine.is_in_state(ConversationStates.NO_TOOLS_FOUND):
+                if current_state_name == ConversationStates.NO_TOOLS_FOUND:
                     return OrchestrationResult(
                         query=query,
                         intent=intent_result,
@@ -259,7 +297,7 @@ class OrchestratorAgent:
                         success=False,
                         summary="No tools found for the given query. Please try rephrasing or provide more details."
                     )
-                elif self.state_machine.is_in_state(ConversationStates.CLARIFICATION_NEEDED):
+                elif current_state_name == ConversationStates.CLARIFICATION_NEEDED:
                     return OrchestrationResult(
                         query=query,
                         intent=intent_result,
@@ -313,6 +351,24 @@ class OrchestratorAgent:
                 success=success,
                 summary=summary
             )
+            
+            # Cache successful results
+            if result.success:
+                # Update cache context with intent information
+                cache_context['intent_type'] = intent_result.primary_intent.type
+                cache_context['intent_confidence'] = intent_result.primary_intent.confidence
+                cache_context['domain'] = user_context.domain if 'user_context' in locals() else cache_context.get('domain')
+                cache_context['user_expertise'] = user_context.user_expertise if 'user_context' in locals() else cache_context.get('user_expertise')
+                
+                # Generate cache key with full context
+                cache_key = self.result_cache.generate_key(query, cache_context)
+                self.result_cache.put(cache_key, result)
+                self.logger.debug(f"Cached result for query: {query}")
+                
+                # Track successful cache storage in monitoring
+                if self.cache_monitor:
+                    pattern = self._extract_query_pattern(cache_key)
+                    self.cache_monitor.track_query_pattern(query, pattern, False, total_time_ms)
             
             # Return to idle state for next query
             await self.state_machine.return_to_idle()
@@ -485,8 +541,8 @@ class OrchestratorAgent:
         # Encode current state with user context
         user_context = self.context.get('user_context')
         context = {
-            'domain': user_context.domain if user_context else 'general',
-            'user_expertise': user_context.user_expertise if user_context else 'intermediate',
+            'domain': user_context.domain if user_context is not None else 'general',
+            'user_expertise': user_context.user_expertise if user_context is not None else 'intermediate',
             'query_count': len(self.execution_history),
             'success_rate': self._calculate_success_rate(),
             'metrics': {
@@ -574,7 +630,8 @@ class OrchestratorAgent:
                         tool_name=selected_tools[i]['name'],
                         success=False,
                         result=None,
-                        error=str(result)
+                        error=str(result),
+                        execution_time_ms=0.0  # Default for exceptions in parallel execution
                     ))
                 else:
                     final_results.append(result)
@@ -591,7 +648,8 @@ class OrchestratorAgent:
                         tool_name=tool['name'],
                         success=False,
                         result=None,
-                        error=str(e)
+                        error=str(e),
+                        execution_time_ms=0.0  # Default for exceptions in sequential execution
                     ))
         
         return results
@@ -626,7 +684,12 @@ class OrchestratorAgent:
             
             # Get retry count from MCP integration if available
             if hasattr(self.mcp_integration, 'get_last_retry_count'):
-                retry_count = self.mcp_integration.get_last_retry_count(tool_id)
+                retry_count_result = self.mcp_integration.get_last_retry_count(tool_id)
+                # Handle both sync and async results (for mocks)
+                if asyncio.iscoroutine(retry_count_result):
+                    retry_count = await retry_count_result
+                else:
+                    retry_count = retry_count_result
             
             execution_time_ms = (time.time() - start_time) * 1000
             
@@ -936,7 +999,8 @@ class OrchestratorAgent:
     
     async def handle_user_clarification(self, clarification: str) -> bool:
         """Handle user clarification when in CLARIFICATION_NEEDED state."""
-        if not self.state_machine.is_in_state(ConversationStates.CLARIFICATION_NEEDED):
+        current_state = self.state_machine.get_current_state()
+        if not current_state or current_state.name != ConversationStates.CLARIFICATION_NEEDED:
             self.logger.warning("Clarification received but not in CLARIFICATION_NEEDED state")
             return False
         
@@ -963,6 +1027,10 @@ class OrchestratorAgent:
         
         # Initialize MCP Integration (which handles the registry)
         await self.mcp_integration.initialize()
+        
+        # Warm cache from execution history if available
+        if self.execution_history:
+            await self.warm_cache_from_history()
         
         self.logger.info("Orchestrator initialization complete")
     
@@ -1005,22 +1073,28 @@ class OrchestratorAgent:
             relationships = await self.tool_registry.get_tool_relationships(tool_id)
             
             for rel in relationships:
-                if rel['type'] == 'conflicts':
+                # Get the relationship type from the correct field
+                rel_type = rel.get('relationship_type', rel.get('type', ''))
+                
+                # Determine the other tool in the relationship
+                other_tool = rel['tool2_id'] if rel['tool1_id'] == tool_id else rel['tool1_id']
+                
+                if rel_type == 'conflicts':
                     if tool_id not in constraints['conflicts']:
                         constraints['conflicts'][tool_id] = []
-                    constraints['conflicts'][tool_id].append(rel['tool2_id'])
+                    constraints['conflicts'][tool_id].append(other_tool)
                 
-                elif rel['type'] == 'requires':
+                elif rel_type == 'requires':
                     if tool_id not in constraints['requires']:
                         constraints['requires'][tool_id] = []
-                    constraints['requires'][tool_id].append(rel['tool2_id'])
+                    constraints['requires'][tool_id].append(other_tool)
         
         return constraints
     
     async def _update_q_learning(self, execution_results: List[ToolExecutionResult], 
                                 intent_result: IntentResult):
         """Update Q-learning based on execution results."""
-        if not self.q_learning_engine or not self.current_state:
+        if not self.q_learning_engine or self.current_state is None:
             return
         
         # Calculate reward based on execution results
@@ -1032,8 +1106,8 @@ class OrchestratorAgent:
         # Prepare next state (after execution)
         user_context = self.context.get('user_context')
         next_context = {
-            'domain': user_context.domain if user_context else 'general',
-            'user_expertise': user_context.user_expertise if user_context else 'intermediate',
+            'domain': user_context.domain if user_context is not None else 'general',
+            'user_expertise': user_context.user_expertise if user_context is not None else 'intermediate',
             'query_count': len(self.execution_history) + 1,
             'success_rate': self._calculate_success_rate(),
             'metrics': {
@@ -1081,23 +1155,34 @@ class OrchestratorAgent:
         user_context = self.context.get('user_context')
         
         # Update execution history
+        # Handle potential coroutine in execution_time_ms (for mocks)
+        exec_times = []
+        for r in execution_results:
+            exec_time = r.execution_time_ms
+            if asyncio.iscoroutine(exec_time):
+                exec_times.append(await exec_time)
+            else:
+                exec_times.append(exec_time)
+        
+        total_exec_time = sum(exec_times)
+            
         execution_record = {
             'execution_id': self.current_session_id,
             'query': self.context.get('current_query', ''),
             'tools': [r.tool_id for r in execution_results],
             'success': any(r.success for r in execution_results),
-            'execution_time_ms': sum(r.execution_time_ms for r in execution_results),
+            'execution_time_ms': total_exec_time,
             'intent': intent_result.primary_intent.type,
             'reward': reward,
             'timestamp': datetime.now(),
             'execution_results': execution_results,  # Store full results for feedback updates
             'context': {
-                'mode': 'exploration' if self.q_learning_engine.exploration_rate > 0.15 else 'production',
+                'mode': 'exploration' if getattr(self.q_learning_engine, 'exploration_rate', 0.2) > 0.15 else 'production',
                 'intent_confidence': intent_result.primary_intent.confidence,
                 'user_initiated': True
             },
-            'user_expertise': user_context.user_expertise if user_context else 'intermediate',
-            'domain': user_context.domain if user_context else 'general'
+            'user_expertise': user_context.user_expertise if user_context is not None else 'intermediate',
+            'domain': user_context.domain if user_context is not None else 'general'
         }
         self.execution_history.append(execution_record)
         
@@ -1112,7 +1197,7 @@ class OrchestratorAgent:
             self.execution_history = self.execution_history[-100:]
         
         # Periodically save model
-        if len(self.execution_history) % 10 == 0:
+        if hasattr(self, 'execution_history') and isinstance(self.execution_history, list) and len(self.execution_history) % 10 == 0:
             await self.q_learning_engine.save_model()
             self.logger.info("Q-learning model saved")
     
@@ -1139,7 +1224,7 @@ class OrchestratorAgent:
         
         # Get context for reward calculation
         reward_context = {
-            'mode': 'exploration' if self.q_learning_engine.exploration_rate > 0.15 else 'production',
+            'mode': 'exploration' if getattr(self.q_learning_engine, 'exploration_rate', 0.2) > 0.15 else 'production',
             'intent_confidence': self.context.get('last_intent_confidence', 0.7),
             'user_initiated': True,  # Assuming user-initiated for now
             'session_duration': (datetime.now() - self.context.get('session_start', datetime.now())).seconds
@@ -1186,10 +1271,23 @@ class OrchestratorAgent:
                 )
         
         # Update retry patterns
-        avg_retry_count = sum(r.retry_count for r in execution_results) / len(execution_results)
-        retry_success_rate = sum(1 for r in execution_results if r.retry_count > 0 and r.success) / max(
-            sum(1 for r in execution_results if r.retry_count > 0), 1
-        )
+        # Handle potential mocks in retry_count
+        retry_counts = []
+        for r in execution_results:
+            retry_count = getattr(r, 'retry_count', 0)
+            if isinstance(retry_count, (int, float)):
+                retry_counts.append(retry_count)
+            else:
+                retry_counts.append(0)
+        avg_retry_count = sum(retry_counts) / len(execution_results) if execution_results else 0
+        # Handle potential mocks in retry_count
+        retried_results = []
+        for r in execution_results:
+            retry_count = getattr(r, 'retry_count', 0)
+            if isinstance(retry_count, (int, float)) and retry_count > 0:
+                retried_results.append(r)
+        
+        retry_success_rate = sum(1 for r in retried_results if r.success) / max(len(retried_results), 1)
         
         self.failure_metrics['retry_patterns'] = {
             'avg_retry_count': avg_retry_count,
@@ -1354,9 +1452,97 @@ class OrchestratorAgent:
             'result_usage_rate': 0.0
         }
     
+    def get_cache_metrics(self) -> Dict[str, Any]:
+        """Get cache performance metrics."""
+        return self.result_cache.get_metrics()
+    
+    def clear_cache(self):
+        """Clear the result cache."""
+        self.result_cache.clear()
+        self.logger.info("Result cache cleared")
+    
+    def invalidate_cache_for_tool(self, tool_id: str):
+        """Invalidate cache entries that used a specific tool."""
+        # Invalidate based on tool ID pattern in the cache
+        self.result_cache.invalidate(pattern=tool_id)
+        self.logger.info(f"Invalidated cache entries for tool: {tool_id}")
+    
+    async def warm_cache_from_history(self):
+        """Warm the cache from execution history."""
+        if self.execution_history:
+            self.result_cache.warm_cache(self.execution_history)
+            self.logger.info(f"Warmed cache from {len(self.execution_history)} execution history entries")
+    
+    def save_cache(self):
+        """Save cache to persistent storage."""
+        self.result_cache.save_cache()
+    
+    def _extract_query_pattern(self, query: str) -> str:
+        """
+        Extract a pattern from a query for pattern-based analysis.
+        
+        Args:
+            query: The query or cache key
+            
+        Returns:
+            Pattern string
+        """
+        # If it's a hash (cache key), use the first 8 chars
+        if len(query) == 32 and all(c in '0123456789abcdef' for c in query):
+            return f"hash_{query[:8]}"
+        
+        # Otherwise, extract pattern from query
+        query_lower = query.lower()
+        
+        # Common patterns
+        if 'find' in query_lower and 'file' in query_lower:
+            return 'find_files'
+        elif 'search' in query_lower:
+            return 'search_query'
+        elif 'create' in query_lower:
+            return 'create_action'
+        elif 'analyze' in query_lower:
+            return 'analyze_data'
+        elif 'list' in query_lower:
+            return 'list_items'
+        elif 'get' in query_lower or 'fetch' in query_lower:
+            return 'retrieve_data'
+        elif 'update' in query_lower or 'modify' in query_lower:
+            return 'update_action'
+        elif 'delete' in query_lower or 'remove' in query_lower:
+            return 'delete_action'
+        else:
+            # Extract first verb if possible
+            words = query_lower.split()
+            if words:
+                return f"query_{words[0][:10]}"
+            return 'unknown_pattern'
+    
+    async def start_cache_monitoring(self):
+        """Start cache monitoring if configured."""
+        if self.cache_monitor and not self.cache_monitor.monitoring_active:
+            await self.cache_monitor.start_monitoring()
+            self.logger.info("Cache monitoring started")
+    
+    async def stop_cache_monitoring(self):
+        """Stop cache monitoring if active."""
+        if self.cache_monitor and self.cache_monitor.monitoring_active:
+            await self.cache_monitor.stop_monitoring()
+            self.logger.info("Cache monitoring stopped")
+    
+    def get_cache_monitor(self):
+        """Get the cache monitor instance."""
+        return self.cache_monitor
+    
     async def shutdown(self):
         """Cleanup and shutdown all components."""
         self.logger.info("Shutting down Orchestrator...")
+        
+        # Stop cache monitoring if active
+        await self.stop_cache_monitoring()
+        
+        # Save cache before shutdown
+        self.save_cache()
         
         # Shutdown MCP Integration (which handles the registry)
         await self.mcp_integration.shutdown()

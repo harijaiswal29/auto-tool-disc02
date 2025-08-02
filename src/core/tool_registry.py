@@ -248,9 +248,13 @@ class ToolRegistry:
         """Async version of get_all_tools for compatibility."""
         return self.list_tools()
     
-    async def get_tool_relationships(self) -> List[Dict[str, Any]]:
+    async def get_tool_relationships(self, tool_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Get all tool relationships from the registry.
+        Get tool relationships from the registry.
+        
+        Args:
+            tool_id: If provided, get relationships for this specific tool.
+                    If None, get all relationships.
         
         Returns:
             List of tool relationships
@@ -259,9 +263,15 @@ class ToolRegistry:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
-            cursor.execute("""
-                SELECT * FROM tool_relationships
-            """)
+            if tool_id:
+                cursor.execute("""
+                    SELECT * FROM tool_relationships
+                    WHERE tool1_id = ? OR tool2_id = ?
+                """, (tool_id, tool_id))
+            else:
+                cursor.execute("""
+                    SELECT * FROM tool_relationships
+                """)
             
             relationships = [dict(row) for row in cursor.fetchall()]
             return relationships

@@ -31,6 +31,10 @@ from src.core.tool_registry import ToolRegistry
 from src.learning.q_learning_engine import QLearningEngine
 from src.learning.reward_calculator import ExecutionMetrics
 from src.state_machine.conversation_state_machine import ConversationStates
+from tests.utils.test_tools_setup import (
+    get_test_tools, register_test_tools, setup_tool_relationships,
+    mock_tool_execution, create_test_config
+)
 
 
 class TestOrchestratorIntegration:
@@ -69,60 +73,15 @@ class TestOrchestratorIntegration:
         registry_path = tmp_path / "test_registry.db"
         registry = ToolRegistry(str(registry_path))
         
-        # Add test tools to registry
-        test_tools = [
-            {
-                'id': 'search.web',
-                'name': 'Web Search',
-                'type': 'search',
-                'server': 'search_mcp',
-                'capabilities': json.dumps({
-                    'operations': ['search', 'find', 'query']
-                }),
-                'status': 'active',
-                'performance_score': 0.85
-            },
-            {
-                'id': 'database.query',
-                'name': 'Database Query',
-                'type': 'database',
-                'server': 'sqlite_mcp',
-                'capabilities': json.dumps({
-                    'operations': ['query', 'retrieve', 'analyze']
-                }),
-                'status': 'active',
-                'performance_score': 0.90
-            },
-            {
-                'id': 'filesystem.read',
-                'name': 'File Reader',
-                'type': 'filesystem',
-                'server': 'filesystem_mcp',
-                'capabilities': json.dumps({
-                    'operations': ['read', 'retrieve', 'get']
-                }),
-                'status': 'active',
-                'performance_score': 0.95
-            },
-            {
-                'id': 'database.export',
-                'name': 'Database Export',
-                'type': 'database',
-                'server': 'sqlite_mcp',
-                'capabilities': json.dumps({
-                    'operations': ['export', 'save']
-                }),
-                'status': 'active',
-                'performance_score': 0.80
-            }
-        ]
+        # Register standard test tools using utility
+        if not register_test_tools(registry):
+            raise RuntimeError("Failed to register test tools")
         
-        for tool in test_tools:
-            registry.register_tool(tool)
+        # Setup tool relationships
+        await setup_tool_relationships(registry)
         
-        # Add tool relationships
-        await registry.add_tool_relationship('database.query', 'database.export', 'complements')
-        await registry.add_tool_relationship('search.web', 'filesystem.read', 'conflicts')
+        # Get the registered tools for reference
+        test_tools = get_test_tools()
         
         # Update test config with registry path
         test_config['database']['tool_registry'] = str(registry_path)
@@ -146,35 +105,8 @@ class TestOrchestratorIntegration:
         mock_mcp = AsyncMock()
         orchestrator.mcp_integration = mock_mcp
         
-        # Mock successful tool execution by default
-        async def mock_execute_tool(tool_id, tool_input):
-            """Mock tool execution with realistic responses."""
-            await asyncio.sleep(0.05)  # Simulate execution time
-            
-            if 'search' in tool_id:
-                return {
-                    'results': [
-                        {'title': 'Result 1', 'url': 'http://example.com/1'},
-                        {'title': 'Result 2', 'url': 'http://example.com/2'}
-                    ]
-                }
-            elif 'database' in tool_id:
-                return {
-                    'rows': [
-                        {'id': 1, 'name': 'Item 1'},
-                        {'id': 2, 'name': 'Item 2'}
-                    ],
-                    'count': 2
-                }
-            elif 'filesystem' in tool_id:
-                return {
-                    'content': 'File content here',
-                    'size': 1024
-                }
-            else:
-                return {'status': 'success', 'data': 'Generic result'}
-        
-        mock_mcp.execute_tool = AsyncMock(side_effect=mock_execute_tool)
+        # Use the utility mock execution function
+        mock_mcp.execute_tool = AsyncMock(side_effect=mock_tool_execution)
         mock_mcp.initialize = AsyncMock()
         mock_mcp.shutdown = AsyncMock()
         
@@ -204,9 +136,9 @@ class TestOrchestratorIntegration:
                 keywords=['search', 'information', 'save'],
                 confidence=0.85
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=50.0
+            all_intents=[],
+            processed_query="search for information and save to database",
+            metadata={'processing_time_ms': 50.0}
         )
         
         # Mock intent recognition
@@ -252,9 +184,9 @@ class TestOrchestratorIntegration:
                 keywords=['search', 'web', 'read', 'files'],
                 confidence=0.80
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=45.0
+            all_intents=[],
+            processed_query="search web and read files",
+            metadata={'processing_time_ms': 45.0}
         )
         
         orchestrator.intent_agent.process_query = AsyncMock(return_value=intent_result)
@@ -264,8 +196,8 @@ class TestOrchestratorIntegration:
         
         # Verify that conflicting tools are not selected together
         selected_tools = result.selected_tools
-        has_search = any('search.web' in tool_id for tool_id in selected_tools)
-        has_filesystem = any('filesystem.read' in tool_id for tool_id in selected_tools)
+        has_search = any('test_search_001' in tool_id for tool_id in selected_tools)
+        has_filesystem = any('test_fs_001' in tool_id for tool_id in selected_tools)
         
         # Should not have both due to conflict relationship
         assert not (has_search and has_filesystem)
@@ -286,9 +218,9 @@ class TestOrchestratorIntegration:
                 keywords=['analyze', 'database', 'search', 'information'],
                 confidence=0.90
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=40.0
+            all_intents=[],
+            processed_query="analyze database and search for related information",
+            metadata={'processing_time_ms': 40.0}
         )
         
         orchestrator.intent_agent.process_query = AsyncMock(return_value=intent_result)
@@ -335,18 +267,10 @@ class TestOrchestratorIntegration:
         """Test error handling during parallel execution."""
         orchestrator = orchestrator_with_mocks
         
-        # Mock some tools to fail
-        async def mock_execute_with_errors(tool_id, tool_input):
-            await asyncio.sleep(0.05)
-            
-            if 'search' in tool_id:
-                raise Exception("Search service unavailable")
-            elif 'database' in tool_id:
-                return {'rows': [], 'count': 0}
-            else:
-                return {'status': 'success'}
+        # Import and use the mock with errors from our utility
+        from tests.utils.test_tools_setup import mock_tool_execution_with_errors
         
-        orchestrator.mcp_integration.execute_tool = AsyncMock(side_effect=mock_execute_with_errors)
+        orchestrator.mcp_integration.execute_tool = AsyncMock(side_effect=mock_tool_execution_with_errors)
         
         intent_result = IntentResult(
             raw_query="Search and analyze data",
@@ -355,9 +279,9 @@ class TestOrchestratorIntegration:
                 keywords=['search', 'analyze', 'data'],
                 confidence=0.85
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=35.0
+            all_intents=[],
+            processed_query="search and analyze data",
+            metadata={'processing_time_ms': 35.0}
         )
         
         orchestrator.intent_agent.process_query = AsyncMock(return_value=intent_result)
@@ -420,9 +344,9 @@ class TestOrchestratorIntegration:
                 keywords=['search', 'query', 'database', 'export'],
                 confidence=0.92
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=30.0
+            all_intents=[],
+            processed_query="search data, query database, and export results",
+            metadata={'processing_time_ms': 30.0}
         )
         
         orchestrator.intent_agent.process_query = AsyncMock(return_value=intent_result)
@@ -487,9 +411,9 @@ class TestOrchestratorIntegration:
                 keywords=['query', 'database'],
                 confidence=0.88
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=28.0
+            all_intents=[],
+            processed_query="query database",
+            metadata={'processing_time_ms': 28.0}
         )
         
         orchestrator.intent_agent.process_query = AsyncMock(return_value=intent_result)
@@ -541,9 +465,9 @@ class TestOrchestratorIntegration:
                 keywords=['search', 'analyze', 'sources'],
                 confidence=0.91
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=25.0
+            all_intents=[],
+            processed_query="search and analyze various sources",
+            metadata={'processing_time_ms': 25.0}
         )
         
         orchestrator.intent_agent.process_query = AsyncMock(return_value=intent_result)
@@ -575,9 +499,9 @@ class TestOrchestratorIntegration:
                 keywords=['process', 'data'],
                 confidence=0.87
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=22.0
+            all_intents=[],
+            processed_query="process data",
+            metadata={'processing_time_ms': 22.0}
         )
         
         orchestrator.intent_agent.process_query = AsyncMock(return_value=intent_result)
@@ -662,9 +586,9 @@ class TestOrchestratorIntegration:
                 keywords=['complex', 'multi', 'tool'],
                 confidence=0.89
             ),
-            alternative_intents=[],
-            context={},
-            processing_time_ms=20.0
+            all_intents=[],
+            processed_query="complex multi-tool query",
+            metadata={'processing_time_ms': 20.0}
         )
         
         summary = orchestrator._generate_summary(intent_result, execution_results)

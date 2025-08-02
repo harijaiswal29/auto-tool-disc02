@@ -318,18 +318,18 @@ class MultiIntentHandler:
 ## Intent Categories
 
 ### Query Intents
-- **search**: Find, search, look for, where is
-- **retrieve**: Get, fetch, show, display
-- **analyze**: Analyze, examine, investigate
+- **search**: Find, search, look for, where is, locate, discover, browse, explore, scan, seek, lookup
+- **retrieve**: Read, get, fetch, show, display, list, view, query, data, database, user, information, details, retrieve, access, load, pull, extract
+- **analyze**: Analyze, examine, investigate, inspect, evaluate, assess, process, compute, calculate, measure, study, review
 
 ### Action Intents
-- **create**: Create, make, generate, build
-- **modify**: Update, change, edit, modify
-- **delete**: Remove, delete, drop, clear
+- **create**: Create, make, generate, build, add, new, produce, construct, write, compose, establish
+- **modify**: Update, change, edit, modify, alter, revise, adjust, transform, configure, set, patch
+- **delete**: Remove, delete, drop, clear, erase, destroy, purge, eliminate, discard, clean, wipe
 
 ### System Intents
-- **configure**: Setup, configure, settings
-- **monitor**: Check, monitor, status, health
+- **configure**: Setup, configure, settings, config, initialize, install, deploy, provision, prepare, customize
+- **monitor**: Check, monitor, status, health, track, watch, observe, supervise, audit, log, report
 
 ## Performance Monitoring
 

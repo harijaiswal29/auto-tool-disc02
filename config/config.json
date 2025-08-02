@@ -227,6 +227,33 @@
     "execution_timeout": 30
   },
   
+  "result_cache": {
+    "enabled": true,
+    "max_size": 1000,
+    "ttl_seconds": 3600,
+    "cache_strategy": "lru",
+    "cache_successful_only": true,
+    "consider_context": true,
+    "enable_persistence": true,
+    "cache_file": "data/cache/result_cache.pkl",
+    "track_patterns": true,
+    "max_metric_events": 1000
+  },
+  
+  "cache_monitoring": {
+    "enabled": true,
+    "collection_interval": 10.0,
+    "history_window": 3600,
+    "max_history_size": 1000,
+    "track_patterns": true,
+    "metrics_file": "data/monitoring/cache_metrics.json",
+    "alert_thresholds": {
+      "min_hit_rate": 0.3,
+      "max_eviction_rate": 0.2,
+      "performance_degradation": -0.1
+    }
+  },
+  
   "tool_discovery": {
     "semantic_weight": 0.3,
     "capability_weight": 0.3,

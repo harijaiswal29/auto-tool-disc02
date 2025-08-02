@@ -146,11 +146,21 @@ class ConfidenceScorerStage(PipelineStage):
         # Apply keyword boost if strong match
         if scores['keyword_match'] >= self.keyword_boost_threshold:
             scores['keyword_match'] = 1.0
+            
+        # ENHANCED: Boost confidence when keywords are strong but semantic is weak
+        # This handles cases like "Query the database" where semantic embedding might not capture intent well
+        if scores['keyword_match'] > 0.7 and scores['semantic_similarity'] < 0.3:
+            # Strong keyword match compensates for weak semantic match
+            scores['semantic_similarity'] = max(scores['semantic_similarity'], 0.4)
+            self.logger.debug(f"Boosted semantic score for {intent_type} due to strong keyword match")
         
         # Check for agreement between methods
         if scores['semantic_similarity'] > 0.5 and scores['keyword_match'] > 0.5:
             # Both methods agree - apply boost
             agreement_factor = 1.0 + self.agreement_boost
+        elif scores['keyword_match'] >= 0.8:
+            # Very strong keyword match - apply smaller boost
+            agreement_factor = 1.0 + (self.agreement_boost * 0.5)
         else:
             agreement_factor = 1.0
         
@@ -199,6 +209,20 @@ class ConfidenceScorerStage(PipelineStage):
                 adjusted_confidence *= 1.05
             elif intent_type == 'system.monitor' and keyword_features.get('has_analyze_keyword', False):
                 adjusted_confidence *= 1.05
+        
+        # ENHANCED: Boost retrieve intents for database/data keywords
+        keywords = features.get('keywords', [])
+        if intent_type == 'query.retrieve':
+            # Check for database-related keywords
+            if any(kw in keywords for kw in ['query', 'database', 'data', 'db']):
+                adjusted_confidence *= 1.15
+                self.logger.debug(f"Boosted confidence for {intent_type} due to database keywords")
+        
+        # ENHANCED: Special handling for low-confidence but keyword-rich queries
+        if base_confidence < 0.3 and len(keywords) >= 2:
+            # Multiple keywords found but low confidence - likely a valid query
+            adjusted_confidence = max(adjusted_confidence, 0.5)
+            self.logger.debug(f"Applied minimum confidence for keyword-rich query")
         
         return min(adjusted_confidence, 1.0)
     

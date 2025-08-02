@@ -353,7 +353,9 @@ class TestToolDiscoverySimple:
         
         for tool_id in tool_ids:
             embedding = await discovery_agent._get_tool_embedding(tool_id, f"Test tool {tool_id}")
-            assert tool_id in discovery_agent.tool_embeddings, f"Tool {tool_id} should be cached"
+            # Check if tool_id is in any of the cache keys (composite key format)
+            cache_keys = list(discovery_agent.tool_embeddings.keys())
+            assert any(tool_id in str(k) for k in cache_keys), f"Tool {tool_id} should be cached"
         
         assert len(discovery_agent.tool_embeddings) == 3, "Should have 3 cached embeddings"
         print(f"  ✓ Successfully cached {len(discovery_agent.tool_embeddings)} tool embeddings")
@@ -386,14 +388,33 @@ class TestToolDiscoverySimple:
         # Add more embeddings than cache size
         for i in range(7):
             tool_id = f"test_tool_{i}"
-            await discovery_agent._get_tool_embedding(tool_id, f"Description {i}")
+            embedding = await discovery_agent._get_tool_embedding(tool_id, f"Description {i}")
+            print(f"Added embedding for {tool_id}, type: {type(embedding)}")
         
         # Cache should not exceed limit
         assert len(discovery_agent.tool_embeddings) <= 5, "Cache should not exceed size limit"
         
-        # First tools should be evicted
-        assert 'test_tool_0' not in discovery_agent.tool_embeddings, "Oldest entry should be evicted"
-        assert 'test_tool_6' in discovery_agent.tool_embeddings, "Newest entry should be in cache"
+        # Print cache keys to debug the issue
+        cache_keys = list(discovery_agent.tool_embeddings.keys())
+        print(f"\nCache keys after eviction: {[str(k) for k in cache_keys]}")
+        
+        # The cache should have entries with composite keys containing tool IDs
+        # Check if the newest entries are present and oldest are evicted
+        cache_key_strs = [str(k) for k in cache_keys]
+        
+        # Find which tool IDs are in cache
+        tools_in_cache = []
+        for i in range(7):
+            tool_id = f"test_tool_{i}"
+            if any(tool_id in str(k) for k in cache_key_strs):
+                tools_in_cache.append(i)
+        
+        print(f"Tools in cache: {tools_in_cache}")
+        
+        # Should have the 5 most recent tools (2, 3, 4, 5, 6)
+        assert 6 in tools_in_cache, "test_tool_6 (newest) should be in cache"
+        assert 0 not in tools_in_cache, "test_tool_0 (oldest) should be evicted"
+        assert len(tools_in_cache) == 5, f"Should have exactly 5 tools in cache, got {len(tools_in_cache)}"
         
         print(f"  ✓ Cache size limit working: {len(discovery_agent.tool_embeddings)} entries (limit: 5)")
         

@@ -13,12 +13,14 @@ import asyncio
 
 from src.evaluation.realtime_monitor import RealtimeMonitor
 from src.evaluation.evaluation_engine import EvaluationEngine
+from src.monitoring.cache_metrics_monitor import CacheMetricsMonitor
 
 router = APIRouter(prefix="/api/v1/monitoring", tags=["monitoring"])
 
 # Global reference to monitoring service
 monitor_service: Optional[RealtimeMonitor] = None
 evaluation_engine: Optional[EvaluationEngine] = None
+cache_monitor: Optional[CacheMetricsMonitor] = None
 
 
 def set_monitor_service(service: RealtimeMonitor):
@@ -28,6 +30,12 @@ def set_monitor_service(service: RealtimeMonitor):
     if service:
         global evaluation_engine
         evaluation_engine = service.evaluation_engine
+
+
+def set_cache_monitor(monitor: CacheMetricsMonitor):
+    """Set the global cache monitor instance."""
+    global cache_monitor
+    cache_monitor = monitor
 
 
 @router.get("/performance")
@@ -226,6 +234,273 @@ async def reset_baseline(strategy_name: str) -> Dict[str, Any]:
         "strategy": strategy_name,
         "timestamp": datetime.now().isoformat()
     }
+
+
+# Cache Monitoring Endpoints
+
+@router.get("/cache/metrics")
+async def get_cache_metrics() -> Dict[str, Any]:
+    """
+    Get current cache performance metrics.
+    
+    Returns:
+        Current cache metrics including hit rate, performance indicators, and patterns
+    """
+    if not cache_monitor:
+        raise HTTPException(status_code=503, detail="Cache monitor not available")
+    
+    metrics = cache_monitor.get_current_metrics()
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "monitoring_active": cache_monitor.monitoring_active,
+        **metrics
+    }
+
+
+@router.get("/cache/history")
+async def get_cache_history(
+    hours: int = 1,
+    resolution: Optional[str] = "raw"  # raw, hourly, daily
+) -> Dict[str, Any]:
+    """
+    Get historical cache performance data.
+    
+    Args:
+        hours: Number of hours of history to retrieve
+        resolution: Data resolution (raw, hourly, daily)
+        
+    Returns:
+        Historical cache metrics
+    """
+    if not cache_monitor:
+        raise HTTPException(status_code=503, detail="Cache monitor not available")
+    
+    historical_data = cache_monitor.get_historical_metrics(hours=hours)
+    
+    # Apply resolution if needed
+    if resolution == "hourly":
+        # Group by hour
+        hourly_data = {}
+        for metric in historical_data:
+            hour_key = datetime.fromisoformat(metric['timestamp']).replace(
+                minute=0, second=0, microsecond=0
+            ).isoformat()
+            
+            if hour_key not in hourly_data:
+                hourly_data[hour_key] = []
+            hourly_data[hour_key].append(metric)
+        
+        # Average metrics per hour
+        aggregated = []
+        for hour, metrics in hourly_data.items():
+            if metrics:
+                aggregated.append({
+                    'timestamp': hour,
+                    'hit_rate': sum(m['hit_rate'] for m in metrics) / len(metrics),
+                    'avg_retrieval_time_ms': sum(m['avg_retrieval_time_ms'] for m in metrics) / len(metrics),
+                    'total_queries': sum(m['total_queries'] for m in metrics)
+                })
+        historical_data = aggregated
+    
+    return {
+        "hours": hours,
+        "resolution": resolution,
+        "data_points": len(historical_data),
+        "data": historical_data
+    }
+
+
+@router.get("/cache/patterns")
+async def get_cache_patterns() -> Dict[str, Any]:
+    """
+    Get cache performance metrics grouped by query patterns.
+    
+    Returns:
+        Pattern-based cache metrics
+    """
+    if not cache_monitor or not cache_monitor.cache_ref:
+        raise HTTPException(status_code=503, detail="Cache monitor not available")
+    
+    pattern_metrics = cache_monitor.cache_ref.get_pattern_metrics()
+    
+    # Sort by hit rate
+    sorted_patterns = sorted(
+        pattern_metrics.items(),
+        key=lambda x: x[1]['hit_rate'],
+        reverse=True
+    )
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "total_patterns": len(pattern_metrics),
+        "patterns": [
+            {
+                "pattern": pattern,
+                **metrics
+            }
+            for pattern, metrics in sorted_patterns[:20]  # Top 20 patterns
+        ]
+    }
+
+
+@router.get("/cache/learning")
+async def get_cache_learning_metrics() -> Dict[str, Any]:
+    """
+    Get cache learning effectiveness metrics.
+    
+    Returns:
+        Learning effectiveness indicators for dissertation evaluation
+    """
+    if not cache_monitor:
+        raise HTTPException(status_code=503, detail="Cache monitor not available")
+    
+    effectiveness = cache_monitor.calculate_learning_effectiveness()
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "effectiveness_metrics": effectiveness,
+        "interpretation": {
+            "learning_rate": "Positive values indicate improving hit rate over time",
+            "performance_gain": "Positive values indicate faster response times",
+            "stability_score": "Higher values indicate more consistent performance",
+            "overall_effectiveness": "Combined score (0-1) of all metrics"
+        }
+    }
+
+
+@router.get("/cache/alerts")
+async def get_cache_alerts(
+    minutes: int = 60
+) -> Dict[str, Any]:
+    """
+    Get recent cache performance alerts.
+    
+    Args:
+        minutes: Number of minutes of alert history
+        
+    Returns:
+        Recent cache alerts and their status
+    """
+    if not cache_monitor:
+        raise HTTPException(status_code=503, detail="Cache monitor not available")
+    
+    # This would integrate with the alert system
+    # For now, check current thresholds
+    if cache_monitor.last_snapshot:
+        alerts = cache_monitor._check_alerts(cache_monitor.last_snapshot)
+    else:
+        alerts = []
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "alert_count": len(alerts),
+        "alerts": alerts,
+        "thresholds": cache_monitor.alert_thresholds
+    }
+
+
+@router.post("/cache/monitoring/{action}")
+async def control_cache_monitoring(action: str) -> Dict[str, Any]:
+    """
+    Control cache monitoring (start/stop).
+    
+    Args:
+        action: "start" or "stop"
+        
+    Returns:
+        Success status
+    """
+    if not cache_monitor:
+        raise HTTPException(status_code=503, detail="Cache monitor not available")
+    
+    if action == "start":
+        await cache_monitor.start_monitoring()
+        return {
+            "success": True,
+            "action": "started",
+            "monitoring_active": True,
+            "timestamp": datetime.now().isoformat()
+        }
+    elif action == "stop":
+        await cache_monitor.stop_monitoring()
+        return {
+            "success": True,
+            "action": "stopped",
+            "monitoring_active": False,
+            "timestamp": datetime.now().isoformat()
+        }
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
+
+
+@router.websocket("/cache/live")
+async def cache_metrics_websocket(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time cache metrics.
+    
+    Sends cache metrics updates every few seconds while connected.
+    """
+    await websocket.accept()
+    
+    if not cache_monitor:
+        await websocket.send_json({
+            "error": "Cache monitor not available"
+        })
+        await websocket.close()
+        return
+    
+    try:
+        while True:
+            # Get current metrics
+            metrics = cache_monitor.get_current_metrics()
+            
+            # Add timestamp
+            metrics['timestamp'] = datetime.now().isoformat()
+            metrics['type'] = 'cache_metrics_update'
+            
+            # Send to client
+            await websocket.send_json(metrics)
+            
+            # Wait before next update
+            await asyncio.sleep(5)  # 5 second updates
+            
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.send_json({
+            "error": str(e)
+        })
+        await websocket.close()
+
+
+@router.get("/cache/export")
+async def export_cache_metrics(
+    format: str = "json"  # json, csv
+) -> Dict[str, Any]:
+    """
+    Export cache metrics for analysis.
+    
+    Args:
+        format: Export format (json or csv)
+        
+    Returns:
+        File path or data depending on format
+    """
+    if not cache_monitor:
+        raise HTTPException(status_code=503, detail="Cache monitor not available")
+    
+    # Save current metrics
+    await cache_monitor.save_metrics()
+    
+    if format == "json":
+        return {
+            "format": "json",
+            "file_path": str(cache_monitor.metrics_file),
+            "timestamp": datetime.now().isoformat()
+        }
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
 
 @router.get("/anomalies")

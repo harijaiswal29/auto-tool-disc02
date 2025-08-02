@@ -20,7 +20,7 @@ import random
 import itertools
 
 from database.database import DatabaseManager
-from utils.logger import get_logger
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -516,9 +516,9 @@ class QLearningEngine:
     def __init__(self, config: Dict[str, Any]):
         # Extract Q-learning parameters from config
         q_config = config.get('q_learning', {})
-        self.learning_rate = q_config.get('learning_rate', 0.1)
-        self.discount_factor = q_config.get('discount_factor', 0.9)
-        self.exploration_rate = q_config.get('exploration_rate', 0.2)
+        self.learning_rate = q_config.get('learning_rate', q_config.get('alpha', 0.1))
+        self.discount_factor = q_config.get('discount_factor', q_config.get('gamma', 0.9))
+        self.exploration_rate = q_config.get('exploration_rate', q_config.get('epsilon', 0.2))
         self.exploration_decay = q_config.get('exploration_decay', 0.995)
         self.min_exploration_rate = q_config.get('min_exploration_rate', 0.01)
         
