@@ -55,7 +55,30 @@ async def create_sample_execution_data(db_path: str):
                 lift REAL,
                 contexts JSON,
                 discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                usage_count INTEGER DEFAULT 0
+                usage_count INTEGER DEFAULT 0,
+                temporal_metadata JSON
+            )
+        """)
+        
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pattern_statistics (
+                pattern_hash TEXT PRIMARY KEY,
+                pattern_type TEXT NOT NULL,
+                tool_sequence JSON NOT NULL,
+                occurrence_count INTEGER DEFAULT 0,
+                success_count INTEGER DEFAULT 0,
+                total_support REAL DEFAULT 0.0,
+                total_confidence REAL DEFAULT 0.0,
+                last_seen TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pattern_mining_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         

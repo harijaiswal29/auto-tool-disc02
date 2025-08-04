@@ -30,7 +30,12 @@ class TestStateRepresentation:
         assert self.state_encoder.state_dimensions['context_features'] == 10
         assert self.state_encoder.state_dimensions['tool_history'] == 20
         assert self.state_encoder.state_dimensions['performance_metrics'] == 5
-        assert self.state_encoder.total_dimensions == 419
+        assert self.state_encoder.state_dimensions['failure_rates'] == 10
+        assert self.state_encoder.state_dimensions['failure_types'] == 5
+        assert self.state_encoder.state_dimensions['retry_patterns'] == 5
+        assert self.state_encoder.state_dimensions['user_expertise'] == 3
+        assert self.state_encoder.state_dimensions['domain_context'] == 5
+        assert self.state_encoder.total_dimensions == 447  # Updated to correct value
     
     def test_encode_state(self):
         """Test state encoding."""
@@ -68,7 +73,7 @@ class TestStateRepresentation:
     
     def test_encode_to_hash(self):
         """Test state vector hashing."""
-        state_vector = np.random.rand(419)
+        state_vector = np.random.rand(447)
         
         hash1 = self.state_encoder.encode_to_hash(state_vector)
         hash2 = self.state_encoder.encode_to_hash(state_vector)
@@ -205,7 +210,7 @@ class TestQTable:
     @pytest.mark.asyncio
     async def test_get_q_value(self):
         """Test getting Q-value."""
-        state = np.random.rand(419)
+        state = np.random.rand(447)
         action = ('tool1', 'tool2')
         
         # Initially should return 0
@@ -224,10 +229,10 @@ class TestQTable:
     @pytest.mark.asyncio
     async def test_update(self):
         """Test Q-value update."""
-        state = np.random.rand(419)
+        state = np.random.rand(447)
         action = ('tool1',)
         reward = 1.0
-        next_state = np.random.rand(419)
+        next_state = np.random.rand(447)
         next_actions = [('tool1',), ('tool2',)]
         
         # Perform update
@@ -273,10 +278,10 @@ class TestExperienceReplayBuffer:
     def test_add_experience(self):
         """Test adding experiences."""
         experience = {
-            'state': np.random.rand(419),
+            'state': np.random.rand(447),
             'action': ('tool1',),
             'reward': 1.0,
-            'next_state': np.random.rand(419)
+            'next_state': np.random.rand(447)
         }
         
         self.buffer.add(experience)
@@ -293,7 +298,7 @@ class TestExperienceReplayBuffer:
         # Add diverse experiences
         for i in range(5):
             experience = {
-                'state': np.random.rand(419),
+                'state': np.random.rand(447),
                 'action': (f'tool{i}',),
                 'reward': i * 0.2
             }
@@ -310,7 +315,7 @@ class TestExperienceReplayBuffer:
         # Add experiences with different priorities
         for i in range(5):
             experience = {
-                'state': np.random.rand(419),
+                'state': np.random.rand(447),
                 'action': (f'tool{i}',),
                 'reward': i * 0.5,  # Higher reward = higher priority
                 'success': i > 2
@@ -378,7 +383,7 @@ class TestQLearningEngine:
         engine = QLearningEngine(self.config)
         engine.exploration_rate = 1.0  # Always explore
         
-        state = np.random.rand(419)
+        state = np.random.rand(447)
         tools = ['tool1', 'tool2', 'tool3']
         constraints = {}
         
@@ -395,7 +400,7 @@ class TestQLearningEngine:
         engine = QLearningEngine(self.config)
         engine.exploration_rate = 0.0  # Always exploit
         
-        state = np.random.rand(419)
+        state = np.random.rand(447)
         tools = ['tool1', 'tool2']
         constraints = {}
         
@@ -414,10 +419,10 @@ class TestQLearningEngine:
         """Test learning from experience."""
         engine = QLearningEngine(self.config)
         
-        state = np.random.rand(419)
+        state = np.random.rand(447)
         action = ('tool1',)
         reward = 1.0
-        next_state = np.random.rand(419)
+        next_state = np.random.rand(447)
         next_tools = ['tool1', 'tool2']
         constraints = {}
         

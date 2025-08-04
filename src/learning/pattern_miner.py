@@ -62,7 +62,12 @@ class Pattern:
     
     def get_hash(self) -> str:
         """Generate unique hash for pattern."""
-        pattern_str = f"{self.pattern_type}:{':'.join(sorted(self.tool_sequence))}"
+        if self.pattern_type == 'sequential':
+            # For sequential patterns, order matters
+            pattern_str = f"{self.pattern_type}:{':'.join(self.tool_sequence)}"
+        else:
+            # For combination patterns, order doesn't matter
+            pattern_str = f"{self.pattern_type}:{':'.join(sorted(self.tool_sequence))}"
         return hashlib.md5(pattern_str.encode()).hexdigest()
 
 
@@ -1721,11 +1726,17 @@ class PatternMiner:
         partial_match_score = 0.0
         
         for ctx in pattern.contexts:
-            ctx_expertise, ctx_domain = ctx.split(':')
-            if ctx_expertise == user_expertise:
-                partial_match_score = max(partial_match_score, 0.7)
-            if ctx_domain == domain:
-                partial_match_score = max(partial_match_score, 0.6)
+            # Handle both old and new context formats
+            if ':' in ctx:
+                ctx_expertise, ctx_domain = ctx.split(':', 1)
+                if ctx_expertise == user_expertise:
+                    partial_match_score = max(partial_match_score, 0.7)
+                if ctx_domain == domain:
+                    partial_match_score = max(partial_match_score, 0.6)
+            else:
+                # Legacy format or single context value
+                if ctx == user_expertise or ctx == domain:
+                    partial_match_score = max(partial_match_score, 0.5)
         
         return partial_match_score
     

@@ -235,6 +235,22 @@ class DatabaseManager:
                 ON user_feedback(execution_id)
             """)
             
+            # Create indexes for context columns
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_execution_history_expertise 
+                ON execution_history(user_expertise)
+            """)
+            
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_execution_history_domain 
+                ON execution_history(domain)
+            """)
+            
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_execution_history_context 
+                ON execution_history(user_expertise, domain)
+            """)
+            
             await db.commit()
             
         self._initialized = True

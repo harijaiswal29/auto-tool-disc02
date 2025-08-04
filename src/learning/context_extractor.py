@@ -43,7 +43,7 @@ class ContextExtractor:
             'web_dev': [
                 'html', 'css', 'javascript', 'frontend', 'backend', 'api',
                 'website', 'webpage', 'react', 'vue', 'angular', 'node',
-                'server', 'client', 'responsive', 'ui', 'ux'
+                'server', 'client', 'responsive', 'ui', 'ux', 'styling'
             ],
             'devops': [
                 'deploy', 'docker', 'kubernetes', 'ci', 'cd', 'pipeline',
@@ -115,6 +115,7 @@ class ContextExtractor:
         """
         query_lower = query.lower()
         domain_scores = {}
+        domain_match_counts = {}  # Track number of matches for tie-breaking
         
         # Calculate keyword matches for each domain
         for domain, keywords in self.domain_keywords.items():
@@ -128,9 +129,10 @@ class ContextExtractor:
                     score += weight
                     matches += 1
             
-            # Normalize by number of keywords
+            # Normalize by square root of number of keywords for better scaling
             if matches > 0:
-                domain_scores[domain] = score / len(keywords)
+                domain_scores[domain] = score / (len(keywords) ** 0.5)
+                domain_match_counts[domain] = matches
         
         # Consider intent type for domain hints
         if intent_type:
@@ -141,9 +143,16 @@ class ContextExtractor:
             elif 'deploy' in intent_type or 'monitor' in intent_type:
                 domain_scores['devops'] = domain_scores.get('devops', 0) + 0.2
         
-        # Select domain with highest score
+        # Select domain with highest score (use match count for tie-breaking)
         if domain_scores:
-            best_domain = max(domain_scores.items(), key=lambda x: x[1])
+            # Sort by score first, then by match count for tie-breaking
+            sorted_domains = sorted(
+                domain_scores.items(), 
+                key=lambda x: (x[1], domain_match_counts.get(x[0], 0)),
+                reverse=True
+            )
+            best_domain = sorted_domains[0]
+            
             # Only select if score is significant
             if best_domain[1] > 0.1:
                 return best_domain[0], domain_scores
@@ -197,7 +206,7 @@ class ContextExtractor:
         else:
             expertise_scores['expert'] += 0.2
         
-        # Use of technical terms
+        # Use of technical terms (progressive scoring)
         technical_terms = ['api', 'endpoint', 'schema', 'regex', 'async', 'pipeline', 'optimize']
         tech_count = sum(1 for term in technical_terms if term in query_lower)
         if tech_count == 0:
@@ -205,7 +214,8 @@ class ContextExtractor:
         elif tech_count <= 2:
             expertise_scores['intermediate'] += 0.1
         else:
-            expertise_scores['expert'] += 0.1
+            # Progressive scoring for expert - more terms = higher score
+            expertise_scores['expert'] += 0.1 + (tech_count - 2) * 0.05
         
         # Consider user statistics if available
         if user_stats:
@@ -238,11 +248,14 @@ class ContextExtractor:
                 expertise_scores['expert'] += 0.1
         
         # Determine expertise level
-        best_level = max(expertise_scores.items(), key=lambda x: x[1])
+        sorted_levels = sorted(expertise_scores.items(), key=lambda x: x[1], reverse=True)
+        best_level = sorted_levels[0]
         
-        # Default to intermediate if scores are too close
-        if all(abs(score - best_level[1]) < 0.1 for score in expertise_scores.values()):
-            return 'intermediate', expertise_scores
+        # Default to intermediate if top two scores are too close
+        if len(sorted_levels) > 1 and abs(sorted_levels[0][1] - sorted_levels[1][1]) < 0.05:
+            # If intermediate is one of the top two, prefer it
+            if 'intermediate' in [sorted_levels[0][0], sorted_levels[1][0]]:
+                return 'intermediate', expertise_scores
         
         return best_level[0], expertise_scores
     

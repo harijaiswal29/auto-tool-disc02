@@ -355,7 +355,7 @@ class TestIntegration:
         assert engine.dqn_agent is not None
         
         # Test action selection
-        state = np.random.randn(439)  # Full state dimension
+        state = np.random.randn(447)  # Full state dimension (updated)
         available_tools = ['tool1', 'tool2', 'tool3']
         constraints = {}
         
@@ -363,7 +363,7 @@ class TestIntegration:
         assert isinstance(action, tuple)
         
         # Test learning
-        next_state = np.random.randn(439)
+        next_state = np.random.randn(447)
         reward = 1.0
         
         await engine.learn_from_experience(
