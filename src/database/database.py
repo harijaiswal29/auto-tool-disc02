@@ -29,7 +29,15 @@ class DatabaseManager:
         if self._initialized:
             return
             
-        async with aiosqlite.connect(self.db_path) as db:
+        async with aiosqlite.connect(
+            self.db_path,
+            timeout=30.0,  # Increased timeout
+            isolation_level=None  # Autocommit mode
+        ) as db:
+            # Enable WAL mode to reduce locking issues
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA busy_timeout=10000")  # 10 second busy timeout
+            await db.execute("PRAGMA synchronous=NORMAL")
             # Create model snapshots table
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS model_snapshots (
@@ -257,8 +265,12 @@ class DatabaseManager:
         logger.info("Learning database initialized")
     
     def get_connection(self):
-        """Get a database connection context manager."""
-        return aiosqlite.connect(self.db_path)
+        """Get a database connection context manager with proper settings."""
+        return aiosqlite.connect(
+            self.db_path,
+            timeout=30.0,
+            isolation_level=None
+        )
     
     async def close(self):
         """Close any open connections."""

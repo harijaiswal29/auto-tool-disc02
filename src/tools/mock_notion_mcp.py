@@ -34,7 +34,44 @@ class MockNotionMCPServer:
         # Initialize with some sample data
         self._init_sample_data()
         
+        # Official Notion MCP server tools - matching github.com/makenotion/notion-mcp-server
         self.tools = [
+            {
+                "name": "search_content",
+                "description": "Search content in Notion workspace",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum results (default: 10)"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            },
+            {
+                "name": "create_comments",
+                "description": "Create comments on a Notion page",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "page_id": {
+                            "type": "string",
+                            "description": "Page ID to comment on"
+                        },
+                        "comment": {
+                            "type": "string",
+                            "description": "Comment text"
+                        }
+                    },
+                    "required": ["page_id", "comment"]
+                }
+            },
             {
                 "name": "create_page",
                 "description": "Create a new page in Notion",
@@ -62,14 +99,14 @@ class MockNotionMCPServer:
                 }
             },
             {
-                "name": "get_page",
-                "description": "Get page content and properties",
+                "name": "retrieve_page_content",
+                "description": "Retrieve page content by ID or name",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "page_id": {
                             "type": "string",
-                            "description": "Page ID"
+                            "description": "Page ID or name"
                         },
                         "format": {
                             "type": "string",
@@ -81,163 +118,17 @@ class MockNotionMCPServer:
                 }
             },
             {
-                "name": "update_page",
-                "description": "Update page content or properties",
+                "name": "access_page",
+                "description": "Access pages by name or ID",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "page_id": {
+                        "identifier": {
                             "type": "string",
-                            "description": "Page ID"
-                        },
-                        "title": {
-                            "type": "string",
-                            "description": "New title (optional)"
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "New content in Markdown format (optional)"
-                        },
-                        "properties": {
-                            "type": "object",
-                            "description": "Updated properties (optional)"
+                            "description": "Page name or ID"
                         }
                     },
-                    "required": ["page_id"]
-                }
-            },
-            {
-                "name": "delete_page",
-                "description": "Delete a page",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "page_id": {
-                            "type": "string",
-                            "description": "Page ID to delete"
-                        }
-                    },
-                    "required": ["page_id"]
-                }
-            },
-            {
-                "name": "search_pages",
-                "description": "Search for pages in the workspace",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results (default: 10)"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            },
-            {
-                "name": "create_database",
-                "description": "Create a new database",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "title": {
-                            "type": "string",
-                            "description": "Database title"
-                        },
-                        "parent_id": {
-                            "type": "string",
-                            "description": "Parent page ID (optional)"
-                        },
-                        "properties": {
-                            "type": "object",
-                            "description": "Database schema properties"
-                        }
-                    },
-                    "required": ["title", "properties"]
-                }
-            },
-            {
-                "name": "query_database",
-                "description": "Query a database with filters",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "database_id": {
-                            "type": "string",
-                            "description": "Database ID"
-                        },
-                        "filter": {
-                            "type": "object",
-                            "description": "Filter conditions (optional)"
-                        },
-                        "sorts": {
-                            "type": "array",
-                            "description": "Sort order (optional)"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results (default: 10)"
-                        }
-                    },
-                    "required": ["database_id"]
-                }
-            },
-            {
-                "name": "create_database_record",
-                "description": "Create a new record in a database",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "database_id": {
-                            "type": "string",
-                            "description": "Database ID"
-                        },
-                        "properties": {
-                            "type": "object",
-                            "description": "Record properties"
-                        }
-                    },
-                    "required": ["database_id", "properties"]
-                }
-            },
-            {
-                "name": "append_block",
-                "description": "Append a block to a page",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "page_id": {
-                            "type": "string",
-                            "description": "Page ID"
-                        },
-                        "block_type": {
-                            "type": "string",
-                            "enum": ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "code", "quote"],
-                            "description": "Block type"
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "Block content"
-                        }
-                    },
-                    "required": ["page_id", "block_type", "content"]
-                }
-            },
-            {
-                "name": "list_workspace_pages",
-                "description": "List all pages in the workspace",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results (default: 20)"
-                        }
-                    }
+                    "required": ["identifier"]
                 }
             }
         ]
@@ -358,26 +249,16 @@ class MockNotionMCPServer:
         logger.info(f"[TOOL_CALL] Tool: {tool_name}, Args: {arguments}")
         
         try:
-            if tool_name == "create_page":
+            if tool_name == "search_content":
+                return await self.search_content(arguments, request_id)
+            elif tool_name == "create_comments":
+                return await self.create_comments(arguments, request_id)
+            elif tool_name == "create_page":
                 return await self.create_page(arguments, request_id)
-            elif tool_name == "get_page":
-                return await self.get_page(arguments, request_id)
-            elif tool_name == "update_page":
-                return await self.update_page(arguments, request_id)
-            elif tool_name == "delete_page":
-                return await self.delete_page(arguments, request_id)
-            elif tool_name == "search_pages":
-                return await self.search_pages(arguments, request_id)
-            elif tool_name == "create_database":
-                return await self.create_database(arguments, request_id)
-            elif tool_name == "query_database":
-                return await self.query_database(arguments, request_id)
-            elif tool_name == "create_database_record":
-                return await self.create_database_record(arguments, request_id)
-            elif tool_name == "append_block":
-                return await self.append_block(arguments, request_id)
-            elif tool_name == "list_workspace_pages":
-                return await self.list_workspace_pages(arguments, request_id)
+            elif tool_name == "retrieve_page_content":
+                return await self.retrieve_page_content(arguments, request_id)
+            elif tool_name == "access_page":
+                return await self.access_page(arguments, request_id)
             else:
                 return self.error_response(request_id, -32602, f"Unknown tool: {tool_name}")
                 
@@ -421,8 +302,72 @@ class MockNotionMCPServer:
             }
         }
     
-    async def get_page(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Get page content."""
+    async def search_content(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Search content in Notion workspace."""
+        query = arguments.get("query", "").lower()
+        limit = arguments.get("limit", 10)
+        
+        results = []
+        for page_id, page in self.pages.items():
+            if page.get("archived", False):
+                continue
+                
+            # Search in title and content
+            if (query in page["title"].lower() or 
+                query in page.get("content", "").lower()):
+                results.append({
+                    "id": page_id,
+                    "title": page["title"],
+                    "url": f"https://notion.so/{page_id}",
+                    "last_edited_time": page["last_edited_time"]
+                })
+                
+                if len(results) >= limit:
+                    break
+        
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "results": results,
+                "has_more": len(results) == limit
+            }
+        }
+    
+    async def create_comments(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Create comments on a Notion page."""
+        page_id = arguments.get("page_id", "")
+        comment = arguments.get("comment", "")
+        
+        if page_id not in self.pages:
+            return self.error_response(request_id, -32602, f"Page not found: {page_id}")
+        
+        # Store comment as a special block
+        comment_id = str(uuid.uuid4())
+        comment_block = {
+            "id": comment_id,
+            "type": "comment",
+            "content": comment,
+            "created_time": datetime.now(timezone.utc).isoformat()
+        }
+        
+        if page_id not in self.blocks:
+            self.blocks[page_id] = []
+        self.blocks[page_id].append(comment_block)
+        
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "id": comment_id,
+                "page_id": page_id,
+                "comment": comment,
+                "created_time": comment_block["created_time"]
+            }
+        }
+    
+    async def retrieve_page_content(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Retrieve page content by ID or name."""
         page_id = arguments.get("page_id", "")
         format_type = arguments.get("format", "markdown")
         
@@ -451,235 +396,40 @@ class MockNotionMCPServer:
                 }
             }
     
-    async def update_page(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Update page content or properties."""
-        page_id = arguments.get("page_id", "")
+    async def access_page(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Access pages by name or ID."""
+        identifier = arguments.get("identifier", "")
         
-        if page_id not in self.pages:
-            return self.error_response(request_id, -32602, f"Page not found: {page_id}")
-        
-        page = self.pages[page_id]
-        
-        # Update fields if provided
-        if "title" in arguments:
-            page["title"] = arguments["title"]
-        if "content" in arguments:
-            page["content"] = arguments["content"]
-            self.blocks[page_id] = self._parse_markdown_to_blocks(arguments["content"])
-        if "properties" in arguments:
-            page["properties"].update(arguments["properties"])
-        
-        page["last_edited_time"] = datetime.now(timezone.utc).isoformat()
-        
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "id": page_id,
-                "success": True,
-                "last_edited_time": page["last_edited_time"]
-            }
-        }
-    
-    async def delete_page(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Delete a page."""
-        page_id = arguments.get("page_id", "")
-        
-        if page_id not in self.pages:
-            return self.error_response(request_id, -32602, f"Page not found: {page_id}")
-        
-        # Archive instead of delete
-        self.pages[page_id]["archived"] = True
-        self.pages[page_id]["last_edited_time"] = datetime.now(timezone.utc).isoformat()
-        
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "id": page_id,
-                "success": True,
-                "archived": True
-            }
-        }
-    
-    async def search_pages(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Search for pages."""
-        query = arguments.get("query", "").lower()
-        limit = arguments.get("limit", 10)
-        
-        results = []
-        for page_id, page in self.pages.items():
-            if page["archived"]:
-                continue
-                
-            # Search in title and content
-            if (query in page["title"].lower() or 
-                query in page.get("content", "").lower()):
-                results.append({
-                    "id": page_id,
+        # Try to find by ID first
+        if identifier in self.pages:
+            page = self.pages[identifier]
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "id": identifier,
                     "title": page["title"],
-                    "url": f"https://notion.so/{page_id}",
+                    "url": f"https://notion.so/{identifier}",
                     "last_edited_time": page["last_edited_time"]
-                })
-                
-                if len(results) >= limit:
-                    break
-        
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "results": results,
-                "has_more": len(results) == limit
+                }
             }
-        }
-    
-    async def create_database(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Create a new database."""
-        title = arguments.get("title", "")
-        parent_id = arguments.get("parent_id")
-        properties = arguments.get("properties", {})
         
-        db_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        
-        self.databases[db_id] = {
-            "id": db_id,
-            "title": title,
-            "parent_id": parent_id,
-            "properties": properties,
-            "records": [],
-            "created_time": now,
-            "last_edited_time": now
-        }
-        
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "id": db_id,
-                "url": f"https://notion.so/{db_id}",
-                "title": title
-            }
-        }
-    
-    async def query_database(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Query a database."""
-        database_id = arguments.get("database_id", "")
-        filter_obj = arguments.get("filter", {})
-        sorts = arguments.get("sorts", [])
-        limit = arguments.get("limit", 10)
-        
-        if database_id not in self.databases:
-            return self.error_response(request_id, -32602, f"Database not found: {database_id}")
-        
-        database = self.databases[database_id]
-        records = database.get("records", [])
-        
-        # Simple filtering (in real implementation would be more complex)
-        if filter_obj:
-            # This is a simplified filter - real Notion has complex filter syntax
-            filtered_records = records
-        else:
-            filtered_records = records[:limit]
-        
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "results": filtered_records,
-                "has_more": len(records) > limit
-            }
-        }
-    
-    async def create_database_record(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Create a record in a database."""
-        database_id = arguments.get("database_id", "")
-        properties = arguments.get("properties", {})
-        
-        if database_id not in self.databases:
-            return self.error_response(request_id, -32602, f"Database not found: {database_id}")
-        
-        record_id = str(uuid.uuid4())
-        record = {
-            "id": record_id,
-            "properties": properties,
-            "created_time": datetime.now(timezone.utc).isoformat()
-        }
-        
-        self.databases[database_id]["records"].append(record)
-        self.databases[database_id]["last_edited_time"] = datetime.now(timezone.utc).isoformat()
-        
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "id": record_id,
-                "url": f"https://notion.so/{database_id}#{record_id}",
-                "properties": properties
-            }
-        }
-    
-    async def append_block(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Append a block to a page."""
-        page_id = arguments.get("page_id", "")
-        block_type = arguments.get("block_type", "paragraph")
-        content = arguments.get("content", "")
-        
-        if page_id not in self.pages:
-            return self.error_response(request_id, -32602, f"Page not found: {page_id}")
-        
-        block_id = str(uuid.uuid4())
-        block = {
-            "id": block_id,
-            "type": block_type,
-            "content": content
-        }
-        
-        if page_id not in self.blocks:
-            self.blocks[page_id] = []
-        
-        self.blocks[page_id].append(block)
-        self.pages[page_id]["last_edited_time"] = datetime.now(timezone.utc).isoformat()
-        
-        # Update page content
-        self.pages[page_id]["content"] = self._blocks_to_markdown(self.blocks[page_id])
-        
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "id": block_id,
-                "type": block_type,
-                "success": True
-            }
-        }
-    
-    async def list_workspace_pages(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """List all pages in workspace."""
-        limit = arguments.get("limit", 20)
-        
-        pages = []
+        # Try to find by name
         for page_id, page in self.pages.items():
-            if not page["archived"]:
-                pages.append({
-                    "id": page_id,
-                    "title": page["title"],
-                    "url": f"https://notion.so/{page_id}",
-                    "last_edited_time": page["last_edited_time"]
-                })
-                
-                if len(pages) >= limit:
-                    break
+            if page["title"].lower() == identifier.lower():
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "id": page_id,
+                        "title": page["title"],
+                        "url": f"https://notion.so/{page_id}",
+                        "last_edited_time": page["last_edited_time"]
+                    }
+                }
         
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "pages": pages,
-                "has_more": len(pages) == limit
-            }
-        }
+        return self.error_response(request_id, -32602, f"Page not found: {identifier}")
+    
     
     def _parse_markdown_to_blocks(self, markdown: str) -> List[Dict[str, Any]]:
         """Simple markdown to blocks parser."""

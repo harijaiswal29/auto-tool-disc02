@@ -44,22 +44,25 @@ async def initialize_tool_registry():
                 "requires_config": {"database_path": "str"}
             }
         },
-        {
-            "id": "search_mcp",
-            "name": "Search MCP",
-            "type": "mcp",
-            "endpoint": "stdio://mcp-server-brave-search",
-            "capabilities": {
-                "operations": ["search", "news", "images"],
-                "constraints": {"max_results": 100},
-                "semantic_tags": ["search", "web", "information", "query"]
-            },
-            "metadata": {
-                "description": "Web search capabilities via Brave Search API",
-                "version": "1.0.0",
-                "requires_config": {"api_key": "str"}
-            }
-        },
+        # Removed: Generic "Search MCP" placeholder causes tool execution failures
+        # The actual search tools (search.web_search, search.news_search, etc.) 
+        # are registered by the Search MCP server itself when it connects
+        # {
+        #     "id": "search_mcp",
+        #     "name": "Search MCP",
+        #     "type": "mcp",
+        #     "endpoint": "stdio://mcp-server-brave-search",
+        #     "capabilities": {
+        #         "operations": ["search", "news", "images"],
+        #         "constraints": {"max_results": 100},
+        #         "semantic_tags": ["search", "web", "information", "query"]
+        #     },
+        #     "metadata": {
+        #         "description": "Web search capabilities via Brave Search API",
+        #         "version": "1.0.0",
+        #         "requires_config": {"api_key": "str"}
+        #     }
+        # },
         {
             "id": "weather_mcp",
             "name": "Weather MCP",

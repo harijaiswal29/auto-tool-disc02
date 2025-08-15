@@ -95,3 +95,23 @@ run_*_evaluation.py
 src/evaluation/reports/*.pdf
 src/evaluation/reports/*.json
 src/evaluation/reports/*.html
+
+# Cache files
+data/cache/*.pkl
+*.pkl
+
+# Results directories
+results/
+dissertation_results/
+test_new_rewards/
+
+# Backup files
+*.backup
+config/*.backup
+
+# Memory and temporary files
+:memory:
+*:memory:
+
+# Test execution scripts (temporary)
+tests/dissertation_test_suite/scripts/tmp_scripts/

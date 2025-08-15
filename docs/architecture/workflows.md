@@ -86,7 +86,7 @@ Similarity Scoring → Capability Filtering → Ranking
 
 ### Learning System Workflow
 
-**Note**: The Q-learning engine is implemented in `src/learning/q_learning_engine.py`. Pattern mining is not yet implemented.
+**Note**: The Q-learning engine is implemented in `src/learning/q_learning_engine.py` with 476-dimensional state representation. Pattern mining is implemented in `src/learning/pattern_miner.py`.
 
 1. **Experience Collection**
    - Capture execution context
@@ -95,10 +95,11 @@ Similarity Scoring → Capability Filtering → Ranking
    - Note user feedback
 
 2. **Reward Calculation**
-   - Task completion: +1.0 for success, -0.5 for failure
+   - Task completion: +1.0 for success, -0.5 to -1.0 for failure (type-dependent)
    - Time penalty: -0.1 * log(execution_time)
    - Resource usage: -0.05 * (cpu + memory)
    - User feedback: +1.0 positive, -1.0 negative
+   - Advanced strategies available: TD, Hierarchical, Adaptive, Information-theoretic
 
 3. **Q-Learning Update**
    ```python
@@ -177,6 +178,32 @@ EXECUTION_STARTED → EXECUTION_COMPLETE → FEEDBACK_RECEIVED → IDLE
    - Update shared context
    - Trigger dependent executions
    - Aggregate final results
+
+## Web Demonstration Workflow
+
+1. **User Interface Interaction**
+   - User submits query via web form
+   - WebSocket connection established for real-time updates
+   - Session ID assigned for tracking
+
+2. **Pipeline Visualization**
+   - Stage 1: Intent Recognition (visual update)
+   - Stage 2: Tool Discovery (display discovered tools)
+   - Stage 3: Tool Selection (show Q-learning decisions)
+   - Stage 4: Execution (progress tracking)
+   - Stage 5: Results (formatted display)
+
+3. **Real-time Updates**
+   - WebSocket messages for stage transitions
+   - Live metrics dashboard updates
+   - Q-value visualization for tool selection
+   - Cache hit/miss indicators
+
+4. **Performance Monitoring**
+   - Response time tracking
+   - Cache performance metrics
+   - Q-learning convergence indicators
+   - System resource utilization
 
 ## Performance Optimization Workflow
 

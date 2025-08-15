@@ -417,7 +417,41 @@ class ToolDiscoveryAgent:
         # Calculate cosine similarity
         similarity = cosine_similarity([tool_embedding], [query_embedding])[0][0]
         
-        return max(0.0, similarity)
+        # Apply keyword-based boost for better differentiation
+        query_lower = (getattr(intent_result, 'raw_query', '') or '').lower()
+        tool_name = tool.get('name', '').lower()
+        tool_id = tool.get('id', '').lower()
+        
+        # Give bonus points for exact keyword matches
+        bonus = 0.0
+        if 'news' in query_lower and 'news' in tool_name:
+            bonus += 0.2  # Strong boost for news match
+        elif 'latest' in query_lower and 'news' in tool_name:
+            bonus += 0.15  # Boost for "latest" implying news
+        elif 'image' in query_lower and 'image' in tool_name:
+            bonus += 0.2  # Strong boost for image match
+        elif 'video' in query_lower and 'video' in tool_name:
+            bonus += 0.2  # Strong boost for video match
+        elif 'github' in query_lower and 'github' in tool_id:
+            bonus += 0.15  # Boost for GitHub-specific queries
+        elif 'repository' in query_lower and 'github' in tool_id:
+            bonus += 0.15  # Boost for repository queries
+        elif 'code' in query_lower and 'github' in tool_id:
+            bonus += 0.1  # Smaller boost for code queries
+        
+        # Apply penalty for mismatched types
+        penalty = 0.0
+        if 'news' in query_lower and 'github' in tool_id:
+            penalty = 0.15  # News queries shouldn't prefer GitHub
+        elif 'news' in query_lower and ('image' in tool_name or 'video' in tool_name):
+            penalty = 0.1  # News queries shouldn't prefer image/video search
+        elif 'github' in query_lower and 'search' in tool_id and 'github' not in tool_id:
+            penalty = 0.1  # GitHub queries shouldn't prefer general search
+        
+        # Combine similarity with bonuses/penalties
+        final_score = similarity + bonus - penalty
+        
+        return max(0.0, min(1.0, final_score))
     
     async def _get_tool_embedding(self, tool_id: str, tool_desc: str) -> np.ndarray:
         """Get or compute tool embedding with caching."""
@@ -442,7 +476,8 @@ class ToolDiscoveryAgent:
                                    intent_result: IntentResult) -> float:
         """Calculate capability match score with enhanced synonym matching."""
         if not tool_capabilities:
-            return 0.0
+            # Give a small default score rather than 0 to avoid penalizing tools without explicit capabilities
+            return 0.3
         
         # Get required capabilities for the intent
         intent_type = intent_result.primary_intent.type

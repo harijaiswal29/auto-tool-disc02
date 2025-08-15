@@ -1,0 +1,24 @@
+{
+    "domain_keywords": {
+        "weather": {
+            "keywords": ["weather", "temperature", "forecast", "climate", "rain", "snow", "wind", "humidity", "pressure", "conditions"],
+            "preferred_tools": ["demo_weather_tool", "weather_mcp", "current_weather", "weather_forecast"],
+            "boost_factor": 1.5
+        },
+        "finance": {
+            "keywords": ["stock", "price", "trading", "finance", "market", "investment", "portfolio"],
+            "preferred_tools": ["demo_financial_tool", "financial_mcp", "get_stock_price", "zerodha_mcp"],
+            "boost_factor": 1.5
+        },
+        "database": {
+            "keywords": ["database", "query", "sql", "table", "schema", "data"],
+            "preferred_tools": ["demo_database_tool", "sqlite_mcp", "postgresql_mcp", "query"],
+            "boost_factor": 1.3
+        },
+        "filesystem": {
+            "keywords": ["file", "directory", "folder", "read", "write", "list", "create", "delete"],
+            "preferred_tools": ["demo_filesystem_tool", "filesystem_mcp", "read_file", "write_file"],
+            "boost_factor": 1.3
+        }
+    }
+}

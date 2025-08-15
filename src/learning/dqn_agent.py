@@ -80,6 +80,13 @@ class DQNAgent:
         self.epsilon_decay = self.dqn_config.get('exploration_decay', 0.995)
         self.min_epsilon = self.dqn_config.get('min_exploration_rate', 0.01)
         
+        # Adaptive decay settings
+        self.adaptive_decay = self.dqn_config.get('adaptive_decay', False)
+        self.decay_schedule = self.dqn_config.get('decay_schedule', 'exponential')
+        self.warmup_episodes = self.dqn_config.get('warmup_episodes', 500)
+        self.initial_epsilon = self.epsilon
+        self.recent_rewards = deque(maxlen=100)  # Track recent performance
+        
         # Experience replay
         self.batch_size = self.dqn_config.get('batch_size', 64)
         memory_size = self.dqn_config.get('memory_size', 100000)
@@ -145,10 +152,14 @@ class DQNAgent:
             
             # Mask invalid actions
             masked_q_values = torch.full_like(q_values, float('-inf'))
-            for i in range(len(valid_actions)):
+            for i in range(min(len(valid_actions), q_values.shape[1])):
                 masked_q_values[0, i] = q_values[0, i]
             
             action_idx = masked_q_values.argmax(dim=1).item()
+            
+            # Ensure action index is within bounds
+            if action_idx >= len(valid_actions):
+                action_idx = len(valid_actions) - 1
             
         return valid_actions[action_idx]
     
@@ -166,6 +177,10 @@ class DQNAgent:
             next_valid_actions: Valid actions in next state
             done: Whether episode ended
         """
+        # Track reward for adaptive decay
+        if self.adaptive_decay:
+            self.recent_rewards.append(reward)
+        
         # Get action index
         action_idx = self.reverse_action_mapping.get(action, 0)
         
@@ -286,9 +301,49 @@ class DQNAgent:
             self.target_network.load_state_dict(self.q_network.state_dict())
     
     def decay_epsilon(self):
-        """Decay exploration rate."""
-        self.epsilon = max(self.epsilon * self.epsilon_decay, self.min_epsilon)
+        """Decay exploration rate using adaptive schedule if enabled."""
         self.episodes_done += 1
+        
+        if self.adaptive_decay:
+            if self.episodes_done < self.warmup_episodes:
+                # Keep epsilon high during warmup
+                self.epsilon = self.initial_epsilon
+            elif self.decay_schedule == 'cosine':
+                # Cosine annealing after warmup
+                import math
+                total_episodes = 10000
+                adjusted_episode = self.episodes_done - self.warmup_episodes
+                max_episodes = total_episodes - self.warmup_episodes
+                
+                if adjusted_episode < max_episodes:
+                    cosine_decay = 0.5 * (1 + math.cos(math.pi * adjusted_episode / max_episodes))
+                    self.epsilon = self.min_epsilon + \
+                        (self.initial_epsilon - self.min_epsilon) * cosine_decay
+                else:
+                    self.epsilon = self.min_epsilon
+            elif self.decay_schedule == 'exponential':
+                # Standard exponential decay after warmup
+                self.epsilon = max(self.epsilon * self.epsilon_decay, self.min_epsilon)
+            else:
+                # Linear decay
+                total_episodes = 10000
+                if self.episodes_done < total_episodes:
+                    decay_per_episode = (self.initial_epsilon - self.min_epsilon) / (total_episodes - self.warmup_episodes)
+                    self.epsilon = max(
+                        self.initial_epsilon - decay_per_episode * (self.episodes_done - self.warmup_episodes),
+                        self.min_epsilon
+                    )
+            
+            # Performance-based adjustment
+            if len(self.recent_rewards) >= 50:
+                avg_reward = sum(self.recent_rewards) / len(self.recent_rewards)
+                if avg_reward > 5.0:  # Good performance
+                    self.epsilon *= 0.95
+                elif avg_reward < 0:  # Poor performance
+                    self.epsilon = min(self.epsilon * 1.02, 0.2)
+        else:
+            # Standard decay
+            self.epsilon = max(self.epsilon * self.epsilon_decay, self.min_epsilon)
     
     def save_checkpoint(self, filepath: str):
         """

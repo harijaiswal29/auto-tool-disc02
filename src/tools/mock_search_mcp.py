@@ -35,11 +35,11 @@ class MockSearchMCPServer:
         logger.info(f"[MOCK] Mock Search MCP Server initialized")
     
     def _define_tools(self) -> List[Dict[str, Any]]:
-        """Define available search tools."""
+        """Define available search tools to match real Brave Search MCP."""
         return [
             {
-                "name": "web_search",
-                "description": "Search the web for information",
+                "name": "brave_web_search",
+                "description": "Search the web using Brave Search",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -68,48 +68,8 @@ class MockSearchMCPServer:
                 }
             },
             {
-                "name": "code_search",
-                "description": "Search code repositories",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Code search query"
-                        },
-                        "language": {
-                            "type": "string",
-                            "description": "Programming language"
-                        },
-                        "repository": {
-                            "type": "string",
-                            "description": "Specific repository to search"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            },
-            {
-                "name": "doc_search",
-                "description": "Search technical documentation",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Documentation search query"
-                        },
-                        "source": {
-                            "type": "string",
-                            "description": "Documentation source (e.g., 'python', 'javascript')"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            },
-            {
-                "name": "news_search",
-                "description": "Search news articles",
+                "name": "brave_news_search",
+                "description": "Search news using Brave Search",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -117,42 +77,29 @@ class MockSearchMCPServer:
                             "type": "string",
                             "description": "News search query"
                         },
-                        "date_range": {
-                            "type": "object",
-                            "properties": {
-                                "from": {"type": "string", "format": "date"},
-                                "to": {"type": "string", "format": "date"}
-                            }
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": "News category"
+                        "count": {
+                            "type": "integer",
+                            "description": "Number of results to return",
+                            "default": 10
                         }
                     },
                     "required": ["query"]
                 }
             },
             {
-                "name": "scholarly_search",
-                "description": "Search academic papers and research",
+                "name": "brave_image_search",
+                "description": "Search images using Brave Search",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Academic search query"
+                            "description": "Image search query"
                         },
-                        "fields": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Academic fields to filter by"
-                        },
-                        "year_range": {
-                            "type": "object",
-                            "properties": {
-                                "from": {"type": "integer"},
-                                "to": {"type": "integer"}
-                            }
+                        "count": {
+                            "type": "integer",
+                            "description": "Number of results to return",
+                            "default": 10
                         }
                     },
                     "required": ["query"]
@@ -309,16 +256,12 @@ class MockSearchMCPServer:
         arguments = params.get("arguments", {})
         
         try:
-            if tool_name == "web_search":
+            if tool_name == "brave_web_search":
                 result = await self._web_search(arguments)
-            elif tool_name == "code_search":
-                result = await self._code_search(arguments)
-            elif tool_name == "doc_search":
-                result = await self._doc_search(arguments)
-            elif tool_name == "news_search":
-                result = await self._news_search(arguments)
-            elif tool_name == "scholarly_search":
-                result = await self._scholarly_search(arguments)
+            elif tool_name == "brave_news_search":
+                result = await self._news_search(arguments)  # Uses existing news_search method
+            elif tool_name == "brave_image_search":
+                result = await self._image_search(arguments)  # Changed from doc_search
             else:
                 return self._error_response(request_id, f"Unknown tool: {tool_name}")
             
@@ -436,6 +379,75 @@ class MockSearchMCPServer:
             "fields": fields,
             "total_results": len(results),
             "results": results
+        }
+    
+    async def _image_search(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Simulate Brave image search."""
+        query = args.get("query", "")
+        count = args.get("count", 10)
+        
+        results = [
+            {
+                "title": f"Image: {query} - Result {i}",
+                "url": f"https://example.com/images/{query.replace(' ', '_')}_{i}.jpg",
+                "thumbnail_url": f"https://example.com/thumbs/{query.replace(' ', '_')}_{i}_thumb.jpg",
+                "source": f"Example Site {i}",
+                "width": 1920 if i % 2 == 0 else 1280,
+                "height": 1080 if i % 2 == 0 else 720
+            } for i in range(1, min(count + 1, 6))
+        ]
+        
+        return {
+            "success": True,
+            "results": results,
+            "total_results": len(results)
+        }
+    
+    async def _video_search(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Simulate Brave video search."""
+        query = args.get("query", "")
+        count = args.get("count", 10)
+        
+        results = [
+            {
+                "title": f"{query} - Video Tutorial Part {i}",
+                "url": f"https://video.example.com/watch?v={i:04d}",
+                "thumbnail": f"https://video.example.com/thumbs/{i:04d}.jpg",
+                "duration": f"{i*3}:{30+i*5:02d}",
+                "source": "Example Video Platform",
+                "views": i * 5000,
+                "uploaded": f"2024-11-{15-i:02d}"
+            } for i in range(1, min(count + 1, 6))
+        ]
+        
+        return {
+            "success": True,
+            "results": results,
+            "total_results": len(results)
+        }
+    
+    async def _local_search(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Simulate Brave local search."""
+        query = args.get("query", "")
+        location = args.get("location", "San Francisco, CA")
+        
+        results = [
+            {
+                "name": f"{query} - Location {i}",
+                "address": f"{i*100} Market St, {location}",
+                "phone": f"(555) 555-{i:04d}",
+                "rating": 3.5 + (i * 0.3),
+                "reviews": i * 75,
+                "category": "Local Business",
+                "hours": "9:00 AM - 6:00 PM" if i % 2 == 0 else "10:00 AM - 8:00 PM",
+                "distance": f"{i * 0.5} miles"
+            } for i in range(1, 6)
+        ]
+        
+        return {
+            "success": True,
+            "results": results,
+            "total_results": len(results)
         }
     
     def _error_response(self, request_id: int, message: str) -> Dict[str, Any]:

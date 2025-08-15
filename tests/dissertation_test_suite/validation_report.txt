@@ -1,0 +1,35 @@
+============================================================
+DISSERTATION TEST SUITE VALIDATION REPORT
+============================================================
+Timestamp: 2025-08-12T12:47:54.892331
+
+Total Checks: 7
+Passed: 6
+Failed: 1
+
+Check Results:
+----------------------------------------
+✓ PASS File Structure
+   All required files present
+✓ PASS Test Queries
+   Query sets validated: {'quick_test': 10, 'simple_only': 20, 'complex_only': 15, 'ambiguous_only': 10, 'full_evaluation': 60, 'dissertation_core': 25}
+✓ PASS Configuration
+   Configuration files valid
+✓ PASS Imports
+   All imports successful
+✗ FAIL DQN Configuration
+   DQN strategy not found in experiment config
+✓ PASS Basic Functionality
+   Basic functionality OK
+✓ PASS Results Directories
+   Created 6 directories
+
+Errors:
+----------------------------------------
+- DQN Configuration: DQN strategy not found in experiment config
+
+Next Steps:
+----------------------------------------
+✗ Fix failures before running experiments
+  See error messages above for details
+============================================================

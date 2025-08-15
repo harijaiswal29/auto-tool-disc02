@@ -32,8 +32,26 @@ class MockZerodhaMCPServer:
         logger.info("[MOCK] Mock Zerodha MCP Server initialized")
     
     def _define_tools(self) -> List[Dict[str, Any]]:
-        """Define available Zerodha trading tools."""
+        """Define available Zerodha trading tools matching official github.com/zerodha/kite-mcp-server."""
         return [
+            {
+                "name": "login",
+                "description": "Login to Kite API and generate authorization link",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "api_key": {
+                            "type": "string",
+                            "description": "Kite API key"
+                        },
+                        "api_secret": {
+                            "type": "string",
+                            "description": "Kite API secret"
+                        }
+                    },
+                    "required": ["api_key", "api_secret"]
+                }
+            },
             {
                 "name": "get_holdings",
                 "description": "Get user's equity holdings",
@@ -157,7 +175,7 @@ class MockZerodhaMCPServer:
                 }
             },
             {
-                "name": "get_quote",
+                "name": "get_quotes",
                 "description": "Get market quote for instruments",
                 "inputSchema": {
                     "type": "object",
@@ -234,7 +252,7 @@ class MockZerodhaMCPServer:
                 }
             },
             {
-                "name": "get_instruments",
+                "name": "search_instruments",
                 "description": "Get list of tradeable instruments",
                 "inputSchema": {
                     "type": "object",
@@ -245,6 +263,144 @@ class MockZerodhaMCPServer:
                             "optional": True
                         }
                     }
+                }
+            },
+            {
+                "name": "get_ohlc",
+                "description": "Get OHLC data",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "instruments": {
+                            "type": "array",
+                            "description": "List of exchange:symbol pairs",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "required": ["instruments"]
+                }
+            },
+            {
+                "name": "get_profile",
+                "description": "User profile information",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "get_mf_holdings",
+                "description": "Mutual fund holdings",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "get_order_history",
+                "description": "Order execution history",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "order_id": {
+                            "type": "string",
+                            "description": "Order ID"
+                        }
+                    },
+                    "required": ["order_id"]
+                }
+            },
+            {
+                "name": "get_order_trades",
+                "description": "Get trades for a specific order",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "order_id": {
+                            "type": "string",
+                            "description": "Order ID"
+                        }
+                    },
+                    "required": ["order_id"]
+                }
+            },
+            {
+                "name": "get_gtts",
+                "description": "List GTT orders",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "place_gtt_order",
+                "description": "Create GTT orders",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "trigger_type": {
+                            "type": "string",
+                            "description": "Trigger type (single, two-leg)",
+                            "enum": ["single", "two-leg"]
+                        },
+                        "symbol": {
+                            "type": "string",
+                            "description": "Trading symbol"
+                        },
+                        "exchange": {
+                            "type": "string",
+                            "description": "Exchange"
+                        },
+                        "trigger_values": {
+                            "type": "array",
+                            "description": "Trigger price values",
+                            "items": {
+                                "type": "number"
+                            }
+                        },
+                        "orders": {
+                            "type": "array",
+                            "description": "Order details to execute on trigger"
+                        }
+                    },
+                    "required": ["trigger_type", "symbol", "exchange", "trigger_values", "orders"]
+                }
+            },
+            {
+                "name": "modify_gtt_order",
+                "description": "Modify GTT orders",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "trigger_id": {
+                            "type": "string",
+                            "description": "GTT trigger ID"
+                        },
+                        "trigger_values": {
+                            "type": "array",
+                            "description": "New trigger values",
+                            "items": {
+                                "type": "number"
+                            }
+                        }
+                    },
+                    "required": ["trigger_id"]
+                }
+            },
+            {
+                "name": "delete_gtt_order",
+                "description": "Delete GTT orders",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "trigger_id": {
+                            "type": "string",
+                            "description": "GTT trigger ID to delete"
+                        }
+                    },
+                    "required": ["trigger_id"]
                 }
             }
         ]
@@ -477,6 +633,7 @@ class MockZerodhaMCPServer:
         await asyncio.sleep(0.1)
         
         handlers = {
+            "login": self._login,
             "get_holdings": self._get_holdings,
             "get_positions": self._get_positions,
             "place_order": self._place_order,
@@ -484,11 +641,20 @@ class MockZerodhaMCPServer:
             "cancel_order": self._cancel_order,
             "get_orders": self._get_orders,
             "get_trades": self._get_trades,
-            "get_quote": self._get_quote,
+            "get_quotes": self._get_quotes,
             "get_ltp": self._get_ltp,
             "get_historical_data": self._get_historical_data,
             "get_margins": self._get_margins,
-            "get_instruments": self._get_instruments
+            "search_instruments": self._search_instruments,
+            "get_ohlc": self._get_ohlc,
+            "get_profile": self._get_profile,
+            "get_mf_holdings": self._get_mf_holdings,
+            "get_order_history": self._get_order_history,
+            "get_order_trades": self._get_order_trades,
+            "get_gtts": self._get_gtts,
+            "place_gtt_order": self._place_gtt_order,
+            "modify_gtt_order": self._modify_gtt_order,
+            "delete_gtt_order": self._delete_gtt_order
         }
         
         handler = handlers.get(tool_name)
@@ -620,7 +786,7 @@ class MockZerodhaMCPServer:
         
         return trades
     
-    def _get_quote(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_quotes(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Mock market quote."""
         key = f"{args['exchange']}:{args['symbol']}"
         
@@ -725,7 +891,7 @@ class MockZerodhaMCPServer:
         else:
             return self.mock_data["margins"]["equity"]
     
-    def _get_instruments(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _search_instruments(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Mock instruments list."""
         exchange = args.get("exchange")
         
@@ -733,6 +899,166 @@ class MockZerodhaMCPServer:
             return [inst for inst in self.mock_data["instruments"] if inst["exchange"] == exchange]
         else:
             return self.mock_data["instruments"]
+    
+    def _login(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock login response."""
+        api_key = args.get("api_key")
+        api_secret = args.get("api_secret")
+        
+        return {
+            "status": "success",
+            "auth_url": f"https://kite.trade/connect/login?api_key={api_key}",
+            "message": "Please visit the URL to complete authentication"
+        }
+    
+    def _get_ohlc(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock OHLC data."""
+        instruments = args.get("instruments", [])
+        ohlc_data = {}
+        
+        for instrument in instruments:
+            base_price = 1000 + random.uniform(0, 4000)
+            ohlc_data[instrument] = {
+                "instrument_token": str(random.randint(100000, 999999)),
+                "last_price": round(base_price, 2),
+                "ohlc": {
+                    "open": round(base_price - random.uniform(0, 50), 2),
+                    "high": round(base_price + random.uniform(0, 100), 2),
+                    "low": round(base_price - random.uniform(0, 100), 2),
+                    "close": round(base_price + random.uniform(-20, 20), 2)
+                }
+            }
+        
+        return ohlc_data
+    
+    def _get_profile(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock user profile."""
+        return {
+            "user_id": "AA0001",
+            "user_name": "Test User",
+            "user_shortname": "TEST",
+            "email": "test@example.com",
+            "user_type": "individual",
+            "broker": "ZERODHA",
+            "exchanges": ["NSE", "BSE", "NFO", "CDS", "MCX"],
+            "products": ["CNC", "MIS", "NRML"],
+            "order_types": ["MARKET", "LIMIT", "SL", "SL-M"]
+        }
+    
+    def _get_mf_holdings(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Mock mutual fund holdings."""
+        return [
+            {
+                "folio": "123456/78",
+                "fund": "Axis Bluechip Fund",
+                "tradingsymbol": "INF846K01EW2",
+                "quantity": 150.234,
+                "average_price": 45.67,
+                "last_price": 48.23,
+                "pnl": 384.45
+            },
+            {
+                "folio": "987654/32",
+                "fund": "HDFC Mid-Cap Opportunities",
+                "tradingsymbol": "INF179K01AX8",
+                "quantity": 200.567,
+                "average_price": 89.12,
+                "last_price": 92.45,
+                "pnl": 667.89
+            }
+        ]
+    
+    def _get_order_history(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Mock order history."""
+        order_id = args.get("order_id")
+        
+        return [
+            {
+                "order_id": order_id,
+                "status": "OPEN",
+                "status_message": "Order placed",
+                "timestamp": (datetime.now() - timedelta(minutes=5)).isoformat()
+            },
+            {
+                "order_id": order_id,
+                "status": "COMPLETE",
+                "status_message": "Order executed",
+                "timestamp": datetime.now().isoformat()
+            }
+        ]
+    
+    def _get_order_trades(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Mock order trades."""
+        order_id = args.get("order_id")
+        
+        return [
+            {
+                "trade_id": f"T{order_id[-6:]}",
+                "order_id": order_id,
+                "exchange": "NSE",
+                "tradingsymbol": "RELIANCE",
+                "quantity": 10,
+                "price": 2520.50,
+                "product": "CNC",
+                "fill_timestamp": datetime.now().isoformat()
+            }
+        ]
+    
+    def _get_gtts(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Mock GTT orders list."""
+        return [
+            {
+                "id": "GTT123",
+                "trigger_type": "single",
+                "tradingsymbol": "RELIANCE",
+                "exchange": "NSE",
+                "trigger_values": [2500],
+                "status": "active",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "expires_at": (datetime.now() + timedelta(days=365)).isoformat(),
+                "meta": {},
+                "orders": [
+                    {
+                        "transaction_type": "BUY",
+                        "quantity": 10,
+                        "product": "CNC",
+                        "order_type": "LIMIT",
+                        "price": 2500
+                    }
+                ]
+            }
+        ]
+    
+    def _place_gtt_order(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock GTT order placement."""
+        trigger_id = f"GTT{random.randint(1000, 9999)}"
+        
+        return {
+            "trigger_id": trigger_id,
+            "status": "success",
+            "message": "GTT order placed successfully"
+        }
+    
+    def _modify_gtt_order(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock GTT order modification."""
+        trigger_id = args.get("trigger_id")
+        
+        return {
+            "trigger_id": trigger_id,
+            "status": "success",
+            "message": "GTT order modified successfully"
+        }
+    
+    def _delete_gtt_order(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock GTT order deletion."""
+        trigger_id = args.get("trigger_id")
+        
+        return {
+            "trigger_id": trigger_id,
+            "status": "success",
+            "message": "GTT order deleted successfully"
+        }
     
     def _error_response(self, request_id: int, code: int, message: str) -> Dict[str, Any]:
         """Create error response."""

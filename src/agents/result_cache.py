@@ -400,22 +400,34 @@ class ResultCache:
             return
         
         try:
+            # Store references to built-ins in case we're called during shutdown
+            _open = open
+            _makedirs = os.makedirs
+            _dirname = os.path.dirname
+            _time = time.time
+            _pickle_dump = pickle.dump
+            
             # Ensure directory exists
-            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+            _makedirs(_dirname(self.cache_file), exist_ok=True)
             
             # Save cache and metrics
             save_data = {
                 'cache': dict(self.cache),
                 'metrics': self.metrics,
-                'timestamp': time.time()
+                'timestamp': _time()
             }
             
-            with open(self.cache_file, 'wb') as f:
-                pickle.dump(save_data, f)
+            with _open(self.cache_file, 'wb') as f:
+                _pickle_dump(save_data, f)
             
-            self.logger.debug(f"Saved cache to disk ({len(self.cache)} entries)")
+            if hasattr(self, 'logger') and self.logger:
+                self.logger.debug(f"Saved cache to disk ({len(self.cache)} entries)")
+        except (NameError, AttributeError) as e:
+            # Built-ins may not be available during Python shutdown
+            pass
         except Exception as e:
-            self.logger.error(f"Failed to save cache to disk: {e}")
+            if hasattr(self, 'logger') and self.logger:
+                self.logger.error(f"Failed to save cache to disk: {e}")
     
     def set_pattern_extractor(self, extractor: Callable[[str], str]):
         """Set a function to extract patterns from queries."""
@@ -493,8 +505,16 @@ class ResultCache:
     def __del__(self):
         """Save cache on cleanup."""
         try:
+            # Store references to built-ins before they potentially become unavailable
             if hasattr(self, 'persistence_enabled') and self.persistence_enabled:
-                self.save_cache()
+                # Check if save_cache method is still available and callable
+                if hasattr(self, 'save_cache') and callable(getattr(self, 'save_cache', None)):
+                    # Try to save cache, but catch all exceptions including NameError
+                    try:
+                        self.save_cache()
+                    except (NameError, AttributeError, RuntimeError) as e:
+                        # Built-ins or event loop may not be available during shutdown
+                        pass
         except Exception:
             # During interpreter shutdown, some globals might not be available
             pass

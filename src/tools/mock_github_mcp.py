@@ -13,14 +13,8 @@ import random
 class MockGitHubMCPServer:
     """Mock GitHub MCP server that simulates GitHub API operations.
     
-    Note: This mock server includes 4 tools not available in the real GitHub MCP server:
-    - list_repositories: Essential for listing user/org repos
-    - get_repository: Fundamental for getting repo details
-    - get_user: Common requirement for user information
-    - get_repository_content: Basic need for browsing repo contents
-    
-    These tools exist because they represent fundamental GitHub operations that
-    developers expect, making the mock server more useful for testing and development.
+    Since the official GitHub MCP server is archived, this mock implements
+    a reasonable set of core GitHub operations commonly needed for development.
     """
     
     def __init__(self):

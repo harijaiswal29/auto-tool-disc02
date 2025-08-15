@@ -9,7 +9,7 @@ The Autonomous Tool Discovery and Integration System consists of 5 core layers w
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        User Interface Layer                       │
-│                    (CLI, API, Web Interface)                     │
+│         (CLI, REST API, WebSocket, Web Demonstration UI)         │
 └─────────────────┬───────────────────────────┬──────────────────┘
                   │                           │
 ┌─────────────────▼───────────────────────────▼──────────────────┐
@@ -79,9 +79,11 @@ Finds relevant tools via:
 ### 3. Tool Selection & Learning Layer
 Optimizes tool choice using:
 - Epsilon-greedy multi-armed bandit
-- Q-learning
+- Q-learning with 476-dimensional state representation
+- Deep Q-Networks (DQN) with multiple architectures
 - Combination scoring
 - Contextual analysis
+- Pattern mining for tool synergies
 
 ### 4. Execution & Monitoring Layer
 Manages:
@@ -96,9 +98,11 @@ Manages:
 ### 5. Learning & Adaptation Layer
 Improves over time using:
 - Q-learning engine (✅ Implemented in `src/learning/q_learning_engine.py`)
-- Pattern mining (⏳ Not yet implemented)
+- Pattern mining (✅ Implemented in `src/learning/pattern_miner.py`)
+- Deep Q-Learning (✅ Implemented with DQN architectures)
+- Advanced reward strategies (✅ TD, Hierarchical, Adaptive, Information-theoretic)
 - Feedback processing (✅ Integrated in orchestrator)
-- Model adaptation (✅ Model persistence implemented)
+- Model adaptation (✅ Model persistence and checkpointing)
 
 ## Component Interactions
 
@@ -169,3 +173,39 @@ Improves over time using:
 - Failure pattern analysis and alerting
 - Per-service retry configuration
 - Detailed documentation: [Retry Architecture](./retry-architecture.md)
+
+### Web Demonstration Interface
+- FastAPI-based real-time demonstration (`src/web/demo_app.py`)
+- 5-stage pipeline visualization with live updates
+- WebSocket support for real-time monitoring
+- Q-learning metrics and decision visualization
+- Performance dashboard with cache and system metrics
+- Professional UI design for dissertation presentations
+- Quick launch via `launch_demo.py`
+
+## Available MCP Tools
+
+The system integrates with 10+ MCP tools, each with mock server fallback:
+
+### Database Tools
+- **SQLite MCP**: Database query execution and schema introspection
+- **PostgreSQL MCP**: Advanced database operations with connection pooling
+
+### File System Tools
+- **Filesystem MCP**: File operations, directory navigation, search capabilities
+
+### External Service Tools
+- **Search MCP**: Web search via Brave Search API
+- **Weather MCP**: Weather data from OpenWeatherMap
+- **GitHub MCP**: Repository operations, issue/PR management, code search
+- **Notion MCP**: Workspace integration for pages, databases, blocks
+
+### Specialized Tools
+- **Financial Datasets MCP**: Remote API for financial data access
+- **Zerodha MCP**: Trading platform integration for market data and orders
+
+All tools support:
+- Automatic fallback to mock servers when APIs unavailable
+- Connection pooling and retry logic
+- Performance monitoring and metrics collection
+- Parallel execution where applicable

@@ -5,27 +5,30 @@
     "author": "Your Name",
     "description": "AI agents that autonomously discover and integrate tools using MCP"
   },
-  
   "logging": {
     "level": "INFO",
     "log_dir": "data/logs",
     "max_file_size_mb": 10,
     "backup_count": 5
   },
-  
   "database": {
     "tool_registry": "data/registry/tools.db",
     "learning_data": "data/registry/learning.db"
   },
-  
   "mcp_servers": {
     "filesystem": {
-      "command": ["./node_modules/.bin/mcp-server-filesystem"],
-      "args": ["/tmp"],
+      "command": [
+        "./node_modules/.bin/mcp-server-filesystem"
+      ],
+      "args": [
+        "/tmp"
+      ],
       "enabled": true
     },
     "brave_search": {
-      "command": ["./node_modules/.bin/brave-search-mcp"],
+      "command": [
+        "./node_modules/.bin/brave-search-mcp"
+      ],
       "args": [],
       "enabled": true,
       "env": {
@@ -33,8 +36,12 @@
       }
     },
     "postgres": {
-      "command": ["./node_modules/.bin/mcp-server-postgres"],
-      "args": ["${POSTGRES_CONNECTION_STRING}"],
+      "command": [
+        "./node_modules/.bin/mcp-server-postgres"
+      ],
+      "args": [
+        "${POSTGRES_CONNECTION_STRING}"
+      ],
       "enabled": true,
       "config": {
         "connection_string": "${POSTGRES_CONNECTION_STRING}",
@@ -45,7 +52,9 @@
       }
     },
     "github": {
-      "command": ["./node_modules/.bin/mcp-server-github"],
+      "command": [
+        "./node_modules/.bin/mcp-server-github"
+      ],
       "args": [],
       "enabled": true,
       "env": {
@@ -81,7 +90,11 @@
     "notion": {
       "type": "remote",
       "endpoint": "https://api.notion.com/mcp/v1",
-      "command": ["npx", "-y", "@notionhq/notion-mcp-server"],
+      "command": [
+        "npx",
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ],
       "auth_type": "integration_token",
       "enabled": true,
       "env": {
@@ -96,37 +109,51 @@
       }
     }
   },
-  
   "learning": {
     "algorithm": "q_learning",
     "parameters": {
-      "learning_rate": 0.1,
-      "discount_factor": 0.9,
-      "epsilon": 0.2,
+      "learning_rate": 0.3,
+      "discount_factor": 0.99,
+      "epsilon": 0.5,
       "epsilon_decay": 0.995,
       "min_epsilon": 0.01
-    }
+    },
+    "episodes": 1000,
+    "checkpoint_interval": 100
   },
-  
   "q_learning": {
-    "learning_rate": 0.1,
-    "discount_factor": 0.9,
-    "exploration_rate": 0.2,
+    "learning_rate": 0.3,
+    "discount_factor": 0.99,
+    "exploration_rate": 0.5,
     "exploration_decay": 0.995,
     "min_exploration_rate": 0.01,
+    "adaptive_decay": true,
+    "decay_schedule": "exponential",
+    "decay_milestones": [
+      500,
+      1000,
+      2000,
+      5000
+    ],
+    "performance_based_decay": true,
     "max_tools": 3,
     "buffer_capacity": 10000,
-    "batch_size": 32,
-    "update_frequency": 4,
+    "batch_size": 64,
+    "update_frequency": 2,
     "enable_learning": true
   },
-  
   "dqn": {
-    "enabled": false,
-    "network_type": "standard",
-    "network_architecture": [512, 256, 128],
+    "enabled": true,
+    "network_type": "dueling",
+    "network_architecture": [
+      512,
+      512,
+      256,
+      128
+    ],
     "dropout_rate": 0.2,
-    "learning_rate": 0.0001,
+    "use_batch_norm": true,
+    "learning_rate": 0.001,
     "discount_factor": 0.99,
     "tau": 0.001,
     "target_update_frequency": 1000,
@@ -136,16 +163,18 @@
     "gradient_clip": 1.0,
     "batch_size": 64,
     "memory_size": 100000,
-    "exploration_rate": 0.1,
+    "exploration_rate": 0.5,
     "exploration_decay": 0.995,
     "min_exploration_rate": 0.01,
+    "adaptive_decay": true,
+    "decay_schedule": "cosine",
+    "warmup_episodes": 200,
     "prioritized_replay": true,
     "prioritized_replay_alpha": 0.6,
     "prioritized_replay_beta": 0.4,
     "prioritized_replay_beta_increment": 0.001,
-    "device": "auto"
+    "device": "cpu"
   },
-  
   "intent_recognition": {
     "model": "all-MiniLM-L6-v2",
     "similarity_threshold": 0.7,
@@ -187,21 +216,43 @@
     "multi_intent": {
       "enabled": true,
       "max_intents_per_query": 5,
-      "separators": [" and ", " then ", " also ", " plus ", ". ", "; "]
+      "separators": [
+        " and ",
+        " then ",
+        " also ",
+        " plus ",
+        ". ",
+        "; "
+      ]
     }
   },
-  
   "evaluation": {
     "enabled": true,
-    "baselines": ["random", "popular", "fixed_policy", "greedy", "context_agnostic"],
+    "debug_rewards": true,
+    "baselines": [
+      "random",
+      "popular",
+      "fixed_policy",
+      "greedy",
+      "context_agnostic"
+    ],
     "evaluation_interval": 100,
     "min_episodes_for_comparison": 50,
     "confidence_level": 0.95,
-    "metrics": ["accuracy", "response_time", "tool_efficiency", "convergence_rate", "sample_efficiency"],
+    "metrics": [
+      "accuracy",
+      "response_time",
+      "tool_efficiency",
+      "convergence_rate",
+      "sample_efficiency"
+    ],
     "baseline_comparison": true,
     "experiment_repetitions": 5,
     "report_generation": {
-      "format": ["pdf", "html"],
+      "format": [
+        "pdf",
+        "html"
+      ],
       "frequency": "daily",
       "include_visualizations": true,
       "output_dir": "src/evaluation/reports"
@@ -219,14 +270,12 @@
       "alert_on_regression": true
     }
   },
-  
   "orchestration": {
     "max_tools_per_query": 3,
     "tool_selection_strategy": "performance_weighted",
     "parallel_execution": true,
     "execution_timeout": 30
   },
-  
   "result_cache": {
     "enabled": true,
     "max_size": 1000,
@@ -239,7 +288,6 @@
     "track_patterns": true,
     "max_metric_events": 1000
   },
-  
   "cache_monitoring": {
     "enabled": true,
     "collection_interval": 10.0,
@@ -253,7 +301,6 @@
       "performance_degradation": -0.1
     }
   },
-  
   "tool_discovery": {
     "semantic_weight": 0.3,
     "capability_weight": 0.3,
@@ -262,7 +309,6 @@
     "min_score_threshold": 0.3,
     "cache_size": 1000
   },
-  
   "retry_policies": {
     "default": {
       "type": "exponential_backoff",
@@ -325,10 +371,10 @@
     "no_retry_errors": [
       "NonRetryableError",
       "AuthenticationError",
-      "InvalidArgumentError"
+      "InvalidArgumentError",
+      "Tool not found"
     ]
   },
-  
   "circuit_breaker": {
     "default": {
       "failure_threshold": 5,
@@ -373,19 +419,23 @@
       }
     }
   },
-  
   "connection_pool": {
     "max_connections": 10,
     "connection_timeout": 5.0,
     "idle_timeout": 300.0,
     "health_check_interval": 60.0
   },
-  
   "reward_calculation": {
     "base_weights": {
-      "success": 1.0,
-      "failure": -0.5,
-      "partial_success": 0.3
+      "success": 20.0,
+      "failure": -2.0,
+      "partial_success": 8.0,
+      "step_progress": 0.5,
+      "exploration_bonus": 0.2,
+      "learning_bonus": 0.3,
+      "tool_efficiency": 5.0,
+      "correct_tool_bonus": 3.0,
+      "wrong_tool_penalty": -1.0
     },
     "failure_penalties": {
       "network_timeout": -0.2,
@@ -416,7 +466,6 @@
       "system_initiated": 0.9
     }
   },
-  
   "advanced_reward_strategies": {
     "enabled": true,
     "combination_method": "weighted_average",
@@ -475,7 +524,6 @@
       }
     }
   },
-  
   "regression_detection": {
     "enabled": true,
     "z_score_threshold": 2.5,
@@ -485,7 +533,6 @@
     "baseline_window": 100,
     "min_samples": 20
   },
-  
   "alert_config": {
     "file_channel": {
       "enabled": true,
@@ -499,7 +546,6 @@
       "enabled": false
     }
   },
-  
   "realtime_monitoring": {
     "enabled": true,
     "update_interval": 1.0,
@@ -515,5 +561,78 @@
       "regret"
     ],
     "streaming_enabled": false
+  },
+  "agents": {
+    "intent_recognition": {
+      "enabled": true,
+      "model": "all-MiniLM-L6-v2",
+      "timeout": 10
+    },
+    "tool_discovery": {
+      "enabled": true,
+      "max_retries": 3,
+      "timeout": 15
+    },
+    "orchestrator": {
+      "enabled": true,
+      "max_parallel_tools": 3,
+      "timeout": 30
+    }
+  },
+  "tools": {
+    "filesystem": {
+      "enabled": true,
+      "priority": 0.8,
+      "capabilities": [
+        "read",
+        "write",
+        "list"
+      ]
+    },
+    "search": {
+      "enabled": true,
+      "priority": 0.9,
+      "capabilities": [
+        "search",
+        "query"
+      ]
+    },
+    "database": {
+      "enabled": true,
+      "priority": 0.7,
+      "capabilities": [
+        "query",
+        "insert",
+        "update",
+        "delete"
+      ]
+    },
+    "github": {
+      "enabled": true,
+      "priority": 0.6,
+      "capabilities": [
+        "repository",
+        "issues",
+        "pull_requests"
+      ]
+    },
+    "financial": {
+      "enabled": true,
+      "priority": 0.5,
+      "capabilities": [
+        "data",
+        "analysis",
+        "market"
+      ]
+    },
+    "notion": {
+      "enabled": true,
+      "priority": 0.4,
+      "capabilities": [
+        "pages",
+        "blocks",
+        "databases"
+      ]
+    }
   }
 }

@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-08-12T12:47:54.892331",
+  "checks": {
+    "File Structure": {
+      "passed": true,
+      "message": "All required files present"
+    },
+    "Test Queries": {
+      "passed": true,
+      "message": "Query sets validated: {'quick_test': 10, 'simple_only': 20, 'complex_only': 15, 'ambiguous_only': 10, 'full_evaluation': 60, 'dissertation_core': 25}"
+    },
+    "Configuration": {
+      "passed": true,
+      "message": "Configuration files valid"
+    },
+    "Imports": {
+      "passed": true,
+      "message": "All imports successful"
+    },
+    "DQN Configuration": {
+      "passed": false,
+      "message": "DQN strategy not found in experiment config"
+    },
+    "Basic Functionality": {
+      "passed": true,
+      "message": "Basic functionality OK"
+    },
+    "Results Directories": {
+      "passed": true,
+      "message": "Created 6 directories"
+    }
+  },
+  "errors": [
+    "DQN Configuration: DQN strategy not found in experiment config"
+  ],
+  "warnings": []
+}

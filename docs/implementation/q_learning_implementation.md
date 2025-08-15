@@ -18,7 +18,7 @@ The Q-Learning Engine is a core component of Phase 4 that enables the system to 
 
 ### State Representation
 
-The state vector consists of 447 dimensions:
+The state vector consists of 476 dimensions:
 - **Intent Vector** (384 dims): Sentence transformer embeddings from intent recognition
 - **Context Features** (10 dims): Domain, session info, user history
 - **Tool History** (20 dims): Recent tool usage patterns
@@ -28,6 +28,10 @@ The state vector consists of 447 dimensions:
 - **Retry Patterns** (5 dims): Retry statistics and patterns
 - **User Expertise** (3 dims): One-hot encoding for novice, intermediate, expert
 - **Domain Context** (5 dims): One-hot encoding for general, engineering, data_science, web_dev, devops
+- **Tool Categories** (10 dims): Tool category features for semantic matching
+- **Query Complexity** (5 dims): Query complexity indicators
+- **Temporal Features** (4 dims): Episode progress, learning phase
+- **Attention Weights** (10 dims): Attention mechanism for relevant features
 
 ```python
 state_dimensions = {

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomous Tool Discovery - Dissertation Demo</title>
+    <link rel="stylesheet" href="/static/demo.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>Autonomous Tool Discovery System</h1>
+            <p class="subtitle">Visual Workflow Demonstration</p>
+        </header>
+
+        <!-- Query Input Section -->
+        <div class="query-section">
+            <h2>Enter Your Query</h2>
+            <div class="query-input-group">
+                <input type="text" id="queryInput" placeholder="e.g., Find all Python files in the project" />
+                <button id="submitBtn" onclick="submitQuery()">Process Query</button>
+            </div>
+            <div class="sample-queries">
+                <span>Try these examples:</span>
+                <button class="sample-btn" onclick="setSampleQuery('Find weather information for London')">Weather Query</button>
+                <button class="sample-btn" onclick="setSampleQuery('Search for machine learning papers')">Search Query</button>
+                <button class="sample-btn" onclick="setSampleQuery('List all database tables')">Database Query</button>
+                <button class="sample-btn" onclick="setSampleQuery('Find Python files in current directory')">File Query</button>
+            </div>
+        </div>
+
+        <!-- Workflow Visualization -->
+        <div class="workflow-container">
+            <h2>Processing Workflow</h2>
+            
+            <div class="workflow-stages">
+                <!-- Stage 1: Intent Recognition -->
+                <div class="stage" id="stage-intent">
+                    <div class="stage-header">
+                        <div class="stage-icon">🎯</div>
+                        <h3>Intent Recognition</h3>
+                        <div class="stage-status" id="status-intent">Pending</div>
+                    </div>
+                    <div class="stage-content" id="content-intent">
+                        <p class="waiting-text">Waiting to start...</p>
+                    </div>
+                </div>
+
+                <div class="stage-arrow">→</div>
+
+                <!-- Stage 2: Tool Discovery -->
+                <div class="stage" id="stage-discovery">
+                    <div class="stage-header">
+                        <div class="stage-icon">🔍</div>
+                        <h3>Tool Discovery</h3>
+                        <div class="stage-status" id="status-discovery">Pending</div>
+                    </div>
+                    <div class="stage-content" id="content-discovery">
+                        <p class="waiting-text">Waiting to start...</p>
+                    </div>
+                </div>
+
+                <div class="stage-arrow">→</div>
+
+                <!-- Stage 3: Tool Selection -->
+                <div class="stage" id="stage-selection">
+                    <div class="stage-header">
+                        <div class="stage-icon">🤖</div>
+                        <h3>Tool Selection</h3>
+                        <div class="stage-status" id="status-selection">Pending</div>
+                    </div>
+                    <div class="stage-content" id="content-selection">
+                        <p class="waiting-text">Waiting to start...</p>
+                    </div>
+                </div>
+
+                <div class="stage-arrow">→</div>
+
+                <!-- Stage 4: Execution -->
+                <div class="stage" id="stage-execution">
+                    <div class="stage-header">
+                        <div class="stage-icon">⚙️</div>
+                        <h3>Execution</h3>
+                        <div class="stage-status" id="status-execution">Pending</div>
+                    </div>
+                    <div class="stage-content" id="content-execution">
+                        <p class="waiting-text">Waiting to start...</p>
+                    </div>
+                </div>
+
+                <div class="stage-arrow">→</div>
+
+                <!-- Stage 5: Results -->
+                <div class="stage" id="stage-results">
+                    <div class="stage-header">
+                        <div class="stage-icon">✅</div>
+                        <h3>Results</h3>
+                        <div class="stage-status" id="status-results">Pending</div>
+                    </div>
+                    <div class="stage-content" id="content-results">
+                        <p class="waiting-text">Waiting to start...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Dashboard -->
+        <div class="metrics-section">
+            <h2>System Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h4>Cache Performance</h4>
+                    <div id="cache-metrics">
+                        <div class="metric-item">
+                            <span>Hit Rate:</span>
+                            <span id="cache-hit-rate">--</span>
+                        </div>
+                        <div class="metric-item">
+                            <span>Total Queries:</span>
+                            <span id="cache-total">--</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <h4>Q-Learning Status</h4>
+                    <div id="qlearning-metrics">
+                        <div class="metric-item">
+                            <span>Exploration Rate:</span>
+                            <span id="exploration-rate">--</span>
+                        </div>
+                        <div class="metric-item">
+                            <span>Episodes:</span>
+                            <span id="episodes-count">--</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <h4>Performance</h4>
+                    <div id="performance-metrics">
+                        <div class="metric-item">
+                            <span>Total Time:</span>
+                            <span id="total-time">--</span>
+                        </div>
+                        <div class="metric-item">
+                            <span>Active Sessions:</span>
+                            <span id="active-sessions">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Raw Data Viewer (Hidden by default) -->
+        <div class="raw-data-section" id="rawDataSection" style="display: none;">
+            <h3>Raw Response Data</h3>
+            <button class="close-btn" onclick="hideRawData()">Close</button>
+            <pre id="rawDataContent"></pre>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>Autonomous Tool Discovery System - Dissertation Project</p>
+        <button onclick="clearSessions()" class="footer-btn">Clear All Sessions</button>
+        <button onclick="refreshMetrics()" class="footer-btn">Refresh Metrics</button>
+    </footer>
+
+    <script src="/static/demo.js"></script>
+</body>
+</html>

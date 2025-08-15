@@ -26,9 +26,9 @@ logger = get_logger(__name__)
 
 
 class StateRepresentation:
-    """Encodes states from intent vectors, context, and history."""
+    """Encodes states from intent vectors, context, and history with dimensionality reduction."""
     
-    def __init__(self):
+    def __init__(self, use_pca=True, target_dim=128):
         self.state_dimensions = {
             'intent_vector': 384,      # Sentence transformer output
             'context_features': 10,    # Domain, user history, etc.
@@ -38,9 +38,23 @@ class StateRepresentation:
             'failure_types': 5,        # Network, permission, timeout, rate_limit, other
             'retry_patterns': 5,       # Retry statistics and patterns
             'user_expertise': 3,       # One-hot: novice, intermediate, expert
-            'domain_context': 5        # One-hot: general, engineering, data_science, web_dev, devops
+            'domain_context': 5,       # One-hot: general, engineering, data_science, web_dev, devops
+            'tool_categories': 10,     # Tool category features for semantic matching
+            'query_complexity': 5,     # NEW: Query complexity indicators
+            'temporal_features': 4,    # NEW: Episode progress, learning phase
+            'attention_weights': 10    # NEW: Attention mechanism for relevant features
         }
         self.total_dimensions = sum(self.state_dimensions.values())
+        
+        # Dimensionality reduction settings
+        self.use_pca = use_pca
+        self.target_dim = target_dim
+        self.pca_fitted = False
+        self.pca_components = None
+        self.feature_importance = None
+        
+        # Initialize feature importance weights
+        self._initialize_feature_importance()
     
     def encode_state(self, intent: Any, context: Dict[str, Any], 
                      history: List[str]) -> np.ndarray:
@@ -99,8 +113,33 @@ class StateRepresentation:
         domain_features = self._encode_domain_context(context.get('domain', 'general'))
         state_components.append(domain_features)
         
+        # Tool categories
+        tool_category_features = self._encode_tool_categories(context.get('available_tool_categories', []))
+        state_components.append(tool_category_features)
+        
+        # Query complexity features (NEW)
+        complexity_features = self._encode_query_complexity(context)
+        state_components.append(complexity_features)
+        
+        # Temporal features (NEW)
+        temporal_features = self._encode_temporal_features(context)
+        state_components.append(temporal_features)
+        
+        # Attention weights (NEW)
+        attention_features = self._calculate_attention_weights(intent, context)
+        state_components.append(attention_features)
+        
         # Combine all components
         state_vector = np.concatenate(state_components).astype(np.float32)
+        
+        # Apply feature importance weighting
+        if self.feature_importance is not None:
+            state_vector = state_vector * self.feature_importance
+        
+        # Apply dimensionality reduction if enabled
+        if self.use_pca and self.target_dim < len(state_vector):
+            state_vector = self._apply_pca(state_vector)
+        
         return state_vector
     
     def _encode_context(self, context: Dict[str, Any]) -> np.ndarray:
@@ -263,6 +302,132 @@ class StateRepresentation:
         
         return features
     
+    def _encode_tool_categories(self, available_categories: List[str]) -> np.ndarray:
+        """Encode available tool categories as features.
+        
+        This helps Q-learning understand what types of tools are available
+        and learn category-specific patterns.
+        """
+        features = np.zeros(self.state_dimensions['tool_categories'], dtype=np.float32)
+        
+        # Define category mapping
+        category_map = {
+            'search': 0,
+            'code': 1,
+            'database': 2,
+            'filesystem': 3,
+            'finance': 4,
+            'weather': 5,
+            'productivity': 6,
+            'general': 7
+        }
+        
+        # Set binary features for available categories
+        for category in available_categories:
+            if category in category_map:
+                features[category_map[category]] = 1.0
+        
+        # Add diversity metric
+        features[8] = len(available_categories) / len(category_map) if category_map else 0  # Category diversity
+        
+        # Add primary category indicator (most relevant)
+        if available_categories:
+            primary_category = available_categories[0]  # First is most relevant
+            if primary_category in category_map:
+                features[9] = category_map[primary_category] / len(category_map)  # Normalized
+        
+        return features
+    
+    def _encode_query_complexity(self, context: Dict[str, Any]) -> np.ndarray:
+        """Encode query complexity indicators."""
+        features = np.zeros(self.state_dimensions['query_complexity'], dtype=np.float32)
+        
+        # Query type (simple/complex/mixed)
+        query_type = context.get('query_type', 'simple')
+        if query_type == 'simple':
+            features[0] = 1.0
+        elif query_type == 'complex':
+            features[1] = 1.0
+        else:  # mixed
+            features[2] = 1.0
+        
+        # Number of intents
+        num_intents = context.get('num_intents', 1)
+        features[3] = min(num_intents / 5.0, 1.0)  # Normalized
+        
+        # Expected tools needed
+        expected_tools = context.get('expected_tools', 1)
+        features[4] = min(expected_tools / 3.0, 1.0)  # Normalized
+        
+        return features
+    
+    def _encode_temporal_features(self, context: Dict[str, Any]) -> np.ndarray:
+        """Encode temporal features for learning phase awareness."""
+        features = np.zeros(self.state_dimensions['temporal_features'], dtype=np.float32)
+        
+        # Episode progress
+        episode = context.get('episode', 0)
+        total_episodes = context.get('total_episodes', 10000)
+        features[0] = min(episode / total_episodes, 1.0)
+        
+        # Learning phase (early/mid/late)
+        if episode < 1000:
+            features[1] = 1.0  # Early exploration
+        elif episode < 5000:
+            features[2] = 1.0  # Mid exploitation
+        else:
+            features[3] = 1.0  # Late refinement
+        
+        return features
+    
+    def _calculate_attention_weights(self, intent: Any, context: Dict[str, Any]) -> np.ndarray:
+        """Calculate attention weights for feature relevance."""
+        features = np.zeros(self.state_dimensions['attention_weights'], dtype=np.float32)
+        
+        # Simple attention mechanism based on intent confidence
+        if hasattr(intent, 'confidence_scores'):
+            scores = intent.confidence_scores[:10]  # Top 10 scores
+            features[:len(scores)] = scores
+        else:
+            # Default uniform attention
+            features[:] = 0.1
+        
+        return features
+    
+    def _initialize_feature_importance(self):
+        """Initialize feature importance weights for weighted state representation."""
+        # Start with uniform importance
+        self.feature_importance = np.ones(self.total_dimensions, dtype=np.float32)
+        
+        # Increase importance for key features
+        # Intent vector is most important
+        start_idx = 0
+        end_idx = self.state_dimensions['intent_vector']
+        self.feature_importance[start_idx:end_idx] *= 1.5
+        
+        # Context and performance metrics are important
+        start_idx = end_idx
+        end_idx = start_idx + self.state_dimensions['context_features']
+        self.feature_importance[start_idx:end_idx] *= 1.2
+        
+        # Normalize
+        self.feature_importance = self.feature_importance / np.mean(self.feature_importance)
+    
+    def _apply_pca(self, state_vector: np.ndarray) -> np.ndarray:
+        """Apply PCA dimensionality reduction."""
+        # For now, simple truncation (full PCA would require sklearn)
+        # In production, would use sklearn.decomposition.PCA
+        if len(state_vector) > self.target_dim:
+            # Select most important features based on importance weights
+            if self.feature_importance is not None:
+                # Get indices of top features
+                top_indices = np.argsort(self.feature_importance)[-self.target_dim:]
+                return state_vector[top_indices]
+            else:
+                # Simple truncation
+                return state_vector[:self.target_dim]
+        return state_vector
+    
     def encode_to_hash(self, state_vector: np.ndarray) -> str:
         """Convert state vector to hash for sparse storage."""
         # Discretize continuous values
@@ -356,24 +521,42 @@ class ActionSpace:
 
 
 class QTable:
-    """Sparse Q-table implementation with learning capabilities."""
+    """Sparse Q-table implementation with double Q-learning capabilities."""
     
-    def __init__(self, learning_rate: float = 0.1, discount_factor: float = 0.9):
+    def __init__(self, learning_rate: float = 0.1, discount_factor: float = 0.9, use_double_q: bool = True):
         self.alpha = learning_rate
         self.gamma = discount_factor
-        self.q_values = {}  # Sparse representation: (state_hash, action_str) -> q_value
+        self.use_double_q = use_double_q
+        
+        if self.use_double_q:
+            # Double Q-learning: maintain two Q-tables
+            self.q_values_a = {}  # Q-table A: (state_hash, action_str) -> q_value
+            self.q_values_b = {}  # Q-table B: (state_hash, action_str) -> q_value
+            # Optimistic initialization for better exploration
+            self.initial_q_value = 0.5
+        else:
+            # Single Q-table
+            self.q_values = {}
+            self.initial_q_value = 0.0
+        
         self.update_count = defaultdict(int)
         self.state_encoder = StateRepresentation()
         self.action_space = ActionSpace()
         self.lock = asyncio.Lock()
     
     async def get_q_value(self, state: np.ndarray, action: Tuple[str, ...]) -> float:
-        """Get Q-value for state-action pair."""
+        """Get Q-value for state-action pair (averaged for double Q-learning)."""
         state_hash = self.state_encoder.encode_to_hash(state)
         action_str = self.action_space.encode_action(action)
         
         async with self.lock:
-            return self.q_values.get((state_hash, action_str), 0.0)
+            if self.use_double_q:
+                # Return average of both Q-tables for action selection
+                q_a = self.q_values_a.get((state_hash, action_str), self.initial_q_value)
+                q_b = self.q_values_b.get((state_hash, action_str), self.initial_q_value)
+                return (q_a + q_b) / 2.0
+            else:
+                return self.q_values.get((state_hash, action_str), self.initial_q_value)
     
     async def get_all_q_values(self, state: np.ndarray, 
                               actions: List[Tuple[str, ...]]) -> Dict[Tuple[str, ...], float]:
@@ -384,51 +567,130 @@ class QTable:
         async with self.lock:
             for action in actions:
                 action_str = self.action_space.encode_action(action)
-                q_values[action] = self.q_values.get((state_hash, action_str), 0.0)
+                if self.use_double_q:
+                    # Average of both Q-tables
+                    q_a = self.q_values_a.get((state_hash, action_str), self.initial_q_value)
+                    q_b = self.q_values_b.get((state_hash, action_str), self.initial_q_value)
+                    q_values[action] = (q_a + q_b) / 2.0
+                else:
+                    q_values[action] = self.q_values.get((state_hash, action_str), self.initial_q_value)
         
         return q_values
     
     async def update(self, state: np.ndarray, action: Tuple[str, ...], 
                     reward: float, next_state: np.ndarray, 
                     next_actions: List[Tuple[str, ...]]):
-        """Update Q-value using Q-learning update rule.
+        """Update Q-value using double Q-learning to reduce overestimation bias.
         
-        Q(s,a) = Q(s,a) + α * (r + γ * max(Q(s',a')) - Q(s,a))
+        For double Q-learning:
+        - Randomly choose which Q-table to update
+        - Use the other Q-table to select the best action
+        - This reduces overestimation bias
         """
         state_hash = self.state_encoder.encode_to_hash(state)
         action_str = self.action_space.encode_action(action)
-        
-        # Get current Q-value
-        current_q = await self.get_q_value(state, action)
-        
-        # Get max Q-value for next state
-        if next_actions:
-            next_q_values = await self.get_all_q_values(next_state, next_actions)
-            max_next_q = max(next_q_values.values()) if next_q_values else 0.0
-        else:
-            max_next_q = 0.0
-        
-        # Q-learning update
-        new_q = current_q + self.alpha * (reward + self.gamma * max_next_q - current_q)
+        next_state_hash = self.state_encoder.encode_to_hash(next_state)
         
         async with self.lock:
-            self.q_values[(state_hash, action_str)] = new_q
+            if self.use_double_q:
+                # Double Q-learning update
+                import random
+                if random.random() < 0.5:
+                    # Update Q_A using Q_B for action selection
+                    current_q = self.q_values_a.get((state_hash, action_str), self.initial_q_value)
+                    
+                    if next_actions:
+                        # Find best action according to Q_A
+                        best_action = None
+                        best_q_a = float('-inf')
+                        for next_action in next_actions:
+                            next_action_str = self.action_space.encode_action(next_action)
+                            q_a_val = self.q_values_a.get((next_state_hash, next_action_str), self.initial_q_value)
+                            if q_a_val > best_q_a:
+                                best_q_a = q_a_val
+                                best_action = next_action_str
+                        
+                        # Use Q_B to evaluate the best action
+                        if best_action:
+                            next_q = self.q_values_b.get((next_state_hash, best_action), self.initial_q_value)
+                        else:
+                            next_q = 0.0
+                    else:
+                        next_q = 0.0
+                    
+                    # Update Q_A
+                    new_q = current_q + self.alpha * (reward + self.gamma * next_q - current_q)
+                    self.q_values_a[(state_hash, action_str)] = new_q
+                    
+                else:
+                    # Update Q_B using Q_A for action selection
+                    current_q = self.q_values_b.get((state_hash, action_str), self.initial_q_value)
+                    
+                    if next_actions:
+                        # Find best action according to Q_B
+                        best_action = None
+                        best_q_b = float('-inf')
+                        for next_action in next_actions:
+                            next_action_str = self.action_space.encode_action(next_action)
+                            q_b_val = self.q_values_b.get((next_state_hash, next_action_str), self.initial_q_value)
+                            if q_b_val > best_q_b:
+                                best_q_b = q_b_val
+                                best_action = next_action_str
+                        
+                        # Use Q_A to evaluate the best action
+                        if best_action:
+                            next_q = self.q_values_a.get((next_state_hash, best_action), self.initial_q_value)
+                        else:
+                            next_q = 0.0
+                    else:
+                        next_q = 0.0
+                    
+                    # Update Q_B
+                    new_q = current_q + self.alpha * (reward + self.gamma * next_q - current_q)
+                    self.q_values_b[(state_hash, action_str)] = new_q
+                
+            else:
+                # Standard Q-learning update
+                current_q = self.q_values.get((state_hash, action_str), self.initial_q_value)
+                
+                # Get max Q-value for next state
+                if next_actions:
+                    max_next_q = float('-inf')
+                    for next_action in next_actions:
+                        next_action_str = self.action_space.encode_action(next_action)
+                        q_val = self.q_values.get((next_state_hash, next_action_str), self.initial_q_value)
+                        max_next_q = max(max_next_q, q_val)
+                else:
+                    max_next_q = 0.0
+                
+                # Q-learning update
+                new_q = current_q + self.alpha * (reward + self.gamma * max_next_q - current_q)
+                self.q_values[(state_hash, action_str)] = new_q
+            
             self.update_count[(state_hash, action_str)] += 1
         
         logger.debug(f"Q-update: state={state_hash[:8]}, action={action_str}, "
-                    f"reward={reward:.2f}, Q: {current_q:.3f} -> {new_q:.3f}")
+                    f"reward={reward:.2f}, double_q={self.use_double_q}")
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get Q-table statistics."""
-        q_values_list = list(self.q_values.values())
+        if self.use_double_q:
+            # Combine values from both Q-tables
+            q_values_list = list(self.q_values_a.values()) + list(self.q_values_b.values())
+            total_entries = len(self.q_values_a) + len(self.q_values_b)
+        else:
+            q_values_list = list(self.q_values.values())
+            total_entries = len(self.q_values)
+        
         return {
-            'total_entries': len(self.q_values),
+            'total_entries': total_entries,
             'total_updates': sum(self.update_count.values()),
             'avg_q_value': np.mean(q_values_list) if q_values_list else 0.0,
             'max_q_value': max(q_values_list) if q_values_list else 0.0,
             'min_q_value': min(q_values_list) if q_values_list else 0.0,
             'most_updated': max(self.update_count.items(), 
-                               key=lambda x: x[1])[0] if self.update_count else None
+                               key=lambda x: x[1])[0] if self.update_count else None,
+            'using_double_q': self.use_double_q
         }
 
 
@@ -521,6 +783,14 @@ class QLearningEngine:
         self.exploration_rate = q_config.get('exploration_rate', q_config.get('epsilon', 0.2))
         self.exploration_decay = q_config.get('exploration_decay', 0.995)
         self.min_exploration_rate = q_config.get('min_exploration_rate', 0.01)
+        
+        # Adaptive decay settings
+        self.adaptive_decay = q_config.get('adaptive_decay', False)
+        self.decay_schedule = q_config.get('decay_schedule', 'exponential')
+        self.decay_milestones = q_config.get('decay_milestones', [1000, 3000, 5000, 7000])
+        self.performance_based_decay = q_config.get('performance_based_decay', False)
+        self.initial_exploration_rate = self.exploration_rate
+        self.recent_performance = deque(maxlen=100)  # Track recent rewards
         
         # Initialize components
         self.state_encoder = StateRepresentation()
@@ -806,6 +1076,10 @@ class QLearningEngine:
         self.total_reward += reward
         if reward > 0:
             self.success_count += 1
+        
+        # Track performance for adaptive decay
+        if self.performance_based_decay:
+            self.recent_performance.append(1.0 if reward > 0 else 0.0)
     
     async def _replay_experiences(self):
         """Learn from batch of experiences in replay buffer."""
@@ -830,10 +1104,14 @@ class QLearningEngine:
             self.exploration_rate = self.dqn_agent.epsilon  # Keep in sync for metrics
         else:
             # Tabular Q-learning exploration decay
-            self.exploration_rate = max(
-                self.exploration_rate * self.exploration_decay,
-                self.min_exploration_rate
-            )
+            if self.adaptive_decay:
+                self._apply_adaptive_decay()
+            else:
+                # Standard exponential decay
+                self.exploration_rate = max(
+                    self.exploration_rate * self.exploration_decay,
+                    self.min_exploration_rate
+                )
         self.episode_count += 1
     
     async def save_model(self, version: Optional[str] = None):
@@ -1025,6 +1303,51 @@ class QLearningEngine:
             await self.initialize_patterns()
             
         return self.pattern_miner.suggest_next_tools(current_tools, k)
+    
+    def _apply_adaptive_decay(self):
+        """Apply adaptive epsilon decay based on schedule and performance."""
+        if self.decay_schedule == 'exponential':
+            # Standard exponential decay with milestone adjustments
+            base_decay = self.exploration_rate * self.exploration_decay
+            
+            # Check for milestone adjustments
+            if self.episode_count in self.decay_milestones:
+                # Stronger decay at milestones
+                base_decay *= 0.5
+                logger.info(f"Milestone {self.episode_count}: Extra decay applied, ε={base_decay:.4f}")
+            
+            self.exploration_rate = max(base_decay, self.min_exploration_rate)
+            
+        elif self.decay_schedule == 'linear':
+            # Linear decay over total episodes
+            total_episodes = 10000  # Expected total episodes
+            decay_per_episode = (self.initial_exploration_rate - self.min_exploration_rate) / total_episodes
+            self.exploration_rate = max(
+                self.initial_exploration_rate - decay_per_episode * self.episode_count,
+                self.min_exploration_rate
+            )
+            
+        elif self.decay_schedule == 'cosine':
+            # Cosine annealing schedule
+            import math
+            total_episodes = 10000
+            if self.episode_count < total_episodes:
+                cosine_decay = 0.5 * (1 + math.cos(math.pi * self.episode_count / total_episodes))
+                self.exploration_rate = self.min_exploration_rate + \
+                    (self.initial_exploration_rate - self.min_exploration_rate) * cosine_decay
+            else:
+                self.exploration_rate = self.min_exploration_rate
+        
+        # Performance-based adjustment
+        if self.performance_based_decay and len(self.recent_performance) >= 50:
+            avg_performance = sum(self.recent_performance) / len(self.recent_performance)
+            if avg_performance > 0.5:  # Good performance, reduce exploration
+                self.exploration_rate *= 0.95
+            elif avg_performance < 0.2:  # Poor performance, increase exploration slightly
+                self.exploration_rate = min(self.exploration_rate * 1.05, 0.3)
+        
+        # Ensure within bounds
+        self.exploration_rate = max(min(self.exploration_rate, 1.0), self.min_exploration_rate)
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get current learning metrics."""

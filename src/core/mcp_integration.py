@@ -493,6 +493,58 @@ class MCPIntegration:
             logger.error(f"[ERROR] Failed to add Zerodha server: {e}")
             return False
     
+    async def add_notion_server(self, api_key: Optional[str] = None, endpoint: Optional[str] = None,
+                                server_id: str = "notion_default", use_mock: bool = False) -> bool:
+        """
+        Add a Notion MCP server for workspace operations.
+        
+        Args:
+            api_key: Notion Integration API key (if not provided, uses NOTION_API_KEY env var)
+            endpoint: Remote MCP server endpoint (optional, uses default if not provided)
+            server_id: Unique identifier for this server instance
+            use_mock: If True, use mock server implementation
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.info(f"[ADD] Adding Notion server: {server_id}")
+            
+            # Import Notion MCP client
+            from src.tools.notion_mcp import NotionMCPClient
+            
+            # Create Notion client
+            client = NotionMCPClient(api_key, endpoint)
+            
+            # Connect to server (try real first, then mock)
+            if await client.connect(use_mock=use_mock):
+                # Store connection
+                self.active_connections[server_id] = client
+                
+                # Register tools
+                client.register_tools_to_registry(self.registry)
+                
+                # Store server info
+                self.servers[server_id] = {
+                    'type': 'notion',
+                    'api_key': api_key if not use_mock else None,
+                    'endpoint': endpoint,
+                    'client': client,
+                    'status': 'active',
+                    'is_mock': client.use_mock
+                }
+                
+                mode = "mock" if client.use_mock else "real"
+                logger.info(f"[SUCCESS] Notion server {server_id} added successfully ({mode} mode)")
+                return True
+            else:
+                logger.error(f"[FAILED] Could not connect to Notion server {server_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to add Notion server: {e}")
+            return False
+    
     async def execute_tool(self, tool_id: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a tool by its ID with retry logic and circuit breaker.
@@ -509,8 +561,8 @@ class MCPIntegration:
         # Get tool info from registry
         tool_info = self.registry.get_tool(tool_id)
         if not tool_info:
-            logger.error(f"[ERROR] Tool not found: {tool_id}")
-            return {"error": f"Tool not found: {tool_id}"}
+            logger.error(f"[ERROR] Tool not found in registry: {tool_id}")
+            return {"error": f"Tool not found: {tool_id}", "success": False}
         
         # Find the appropriate server
         server_type = tool_info['server_type']
@@ -540,6 +592,20 @@ class MCPIntegration:
             tool_name = tool_id.replace('zerodha_', '')
         else:
             tool_name = tool_id
+        
+        # Validate that the tool exists on the server
+        if hasattr(client, 'tools'):
+            # Check if the tool exists in the client's tool list
+            tool_exists = any(t.get('name') == tool_name for t in client.tools)
+            if not tool_exists:
+                logger.error(f"[ERROR] Tool '{tool_name}' not available on server '{server_id}'")
+                # Also remove from registry if it's there
+                try:
+                    self.registry.remove_tool(tool_id)
+                    logger.warning(f"[CLEANUP] Removed invalid tool '{tool_id}' from registry")
+                except Exception:
+                    pass  # Tool might not be in registry
+                return {"error": f"Tool '{tool_name}' not available on server", "success": False}
         
         # Get retry policy and circuit breaker for this server
         server_type_lower = server_type.lower()
@@ -827,6 +893,64 @@ class MCPIntegration:
         
         # Execute the tool
         return await self.execute_tool(best_tool['id'], arguments)
+    
+    async def validate_registry(self) -> Dict[str, Any]:
+        """Validate all registered tools against their servers.
+        
+        Returns:
+            Validation report with valid/invalid tools
+        """
+        logger.info("[VALIDATE] Starting registry validation...")
+        
+        all_tools = self.registry.list_tools()
+        valid_tools = []
+        invalid_tools = []
+        
+        for tool in all_tools:
+            tool_id = tool['id']
+            server_type = tool.get('server_type', '')
+            
+            # Parse tool ID to get server and tool name
+            parts = tool_id.split('.', 1)
+            if len(parts) != 2:
+                invalid_tools.append({'tool_id': tool_id, 'reason': 'Invalid tool ID format'})
+                continue
+            
+            server_prefix, tool_name = parts
+            
+            # Find the active server for this tool
+            server_found = False
+            for server_id, server in self.servers.items():
+                if server['type'] == server_type and server['status'] == 'active':
+                    client = self.active_connections.get(server_id)
+                    if client and hasattr(client, 'tools'):
+                        # Check if tool exists on server
+                        if any(t.get('name') == tool_name for t in client.tools):
+                            valid_tools.append(tool_id)
+                            server_found = True
+                            break
+            
+            if not server_found:
+                invalid_tools.append({'tool_id': tool_id, 'reason': 'Tool not found on any active server'})
+        
+        # Remove invalid tools from registry
+        for invalid in invalid_tools:
+            try:
+                self.registry.remove_tool(invalid['tool_id'])
+                logger.warning(f"[CLEANUP] Removed invalid tool: {invalid['tool_id']} - {invalid['reason']}")
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to remove tool {invalid['tool_id']}: {e}")
+        
+        report = {
+            'total_tools': len(all_tools),
+            'valid_tools': len(valid_tools),
+            'invalid_tools': len(invalid_tools),
+            'invalid_details': invalid_tools,
+            'cleanup_performed': len(invalid_tools) > 0
+        }
+        
+        logger.info(f"[VALIDATE] Validation complete: {report['valid_tools']} valid, {report['invalid_tools']} invalid")
+        return report
     
     async def initialize(self):
         """Initialize the MCP Integration and registry."""

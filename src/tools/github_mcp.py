@@ -313,23 +313,43 @@ class GitHubMCPClient:
     def register_tools_to_registry(self, registry: ToolRegistry):
         """
         Register all GitHub tools to the tool registry.
+        Only registers tools that were discovered from the actual server.
         
         Args:
             registry: Tool registry instance
         """
+        if not self.tools:
+            logger.warning("[REGISTRY] No tools discovered from GitHub server, skipping registration")
+            return
+        
+        # Only register tools that we actually discovered from the server
+        registered_count = 0
         for tool in self.tools:
+            # Validate tool has required fields
+            if 'name' not in tool:
+                logger.warning(f"[REGISTRY] Skipping tool without name: {tool}")
+                continue
+            
             tool_info = {
                 'id': f"github.{tool['name']}",
                 'name': tool['name'],
                 'server_type': 'github',
-                'endpoint': 'node node_modules/.bin/mcp-server-github',
+                'endpoint': 'mock://github' if self.use_mock else 'node node_modules/.bin/mcp-server-github',
                 'description': tool.get('description', ''),
                 'capabilities': tool,
-                'input_schema': tool.get('inputSchema', {})
+                'input_schema': tool.get('inputSchema', {}),
+                'is_mock': self.use_mock  # Track if this is from mock server
             }
-            registry.register_tool(tool_info)
+            
+            try:
+                registry.register_tool(tool_info)
+                registered_count += 1
+                logger.debug(f"[REGISTRY] Registered tool: {tool['name']}")
+            except Exception as e:
+                logger.error(f"[REGISTRY] Failed to register tool {tool['name']}: {e}")
         
-        logger.info(f"[REGISTRY] Registered {len(self.tools)} GitHub tools")
+        mode = "mock" if self.use_mock else "real"
+        logger.info(f"[REGISTRY] Registered {registered_count}/{len(self.tools)} GitHub tools from {mode} server")
     
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """

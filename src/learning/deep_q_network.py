@@ -17,10 +17,11 @@ logger = get_logger(__name__)
 
 
 class DQN(nn.Module):
-    """Standard Deep Q-Network architecture."""
+    """Enhanced Deep Q-Network architecture with batch normalization."""
     
     def __init__(self, state_dim: int, action_dim: int, 
-                 hidden_dims: List[int] = None, dropout_rate: float = 0.2):
+                 hidden_dims: List[int] = None, dropout_rate: float = 0.2,
+                 use_batch_norm: bool = True):
         """
         Initialize DQN.
         
@@ -29,27 +30,40 @@ class DQN(nn.Module):
             action_dim: Number of possible actions (tool combinations)
             hidden_dims: List of hidden layer dimensions
             dropout_rate: Dropout rate for regularization
+            use_batch_norm: Whether to use batch normalization
         """
         super(DQN, self).__init__()
         
         if hidden_dims is None:
-            hidden_dims = [512, 256, 128]
+            # Deeper architecture for better representation learning
+            hidden_dims = [512, 512, 256, 128]
         
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.hidden_dims = hidden_dims
         self.dropout_rate = dropout_rate
+        self.use_batch_norm = use_batch_norm
         
         # Build network layers
         self.layers = nn.ModuleList()
+        self.batch_norms = nn.ModuleList() if use_batch_norm else None
         
         # Input layer
         prev_dim = state_dim
         for i, hidden_dim in enumerate(hidden_dims):
             self.layers.append(nn.Linear(prev_dim, hidden_dim))
+            
+            # Add batch normalization before activation
+            if use_batch_norm:
+                self.batch_norms.append(nn.BatchNorm1d(hidden_dim))
+            
             self.layers.append(nn.ReLU())
+            
+            # Dropout for regularization (reduced for later layers)
             if dropout_rate > 0:
-                self.layers.append(nn.Dropout(dropout_rate))
+                current_dropout = dropout_rate * (0.8 ** i)  # Decay dropout rate
+                self.layers.append(nn.Dropout(current_dropout))
+            
             prev_dim = hidden_dim
         
         # Output layer
@@ -82,10 +96,18 @@ class DQN(nn.Module):
             Q-values for all actions, shape (batch_size, action_dim)
         """
         x = state
+        bn_idx = 0
         
         # Pass through hidden layers
         for layer in self.layers:
-            x = layer(x)
+            if isinstance(layer, nn.Linear):
+                x = layer(x)
+                # Apply batch norm after linear layer if enabled
+                if self.use_batch_norm and bn_idx < len(self.batch_norms):
+                    x = self.batch_norms[bn_idx](x)
+                    bn_idx += 1
+            else:
+                x = layer(x)
         
         # Output Q-values
         q_values = self.output_layer(x)
@@ -109,13 +131,15 @@ class DQN(nn.Module):
 
 
 class DuelingDQN(nn.Module):
-    """Dueling Deep Q-Network architecture.
+    """Enhanced Dueling Deep Q-Network architecture.
     
     Separates value and advantage estimation for better learning stability.
+    Includes batch normalization and improved architecture.
     """
     
     def __init__(self, state_dim: int, action_dim: int,
-                 hidden_dims: List[int] = None, dropout_rate: float = 0.2):
+                 hidden_dims: List[int] = None, dropout_rate: float = 0.2,
+                 use_batch_norm: bool = True):
         """
         Initialize Dueling DQN.
         
@@ -124,16 +148,19 @@ class DuelingDQN(nn.Module):
             action_dim: Number of possible actions
             hidden_dims: List of hidden layer dimensions
             dropout_rate: Dropout rate for regularization
+            use_batch_norm: Whether to use batch normalization
         """
         super(DuelingDQN, self).__init__()
         
         if hidden_dims is None:
-            hidden_dims = [512, 256, 128]
+            # Enhanced architecture for dueling networks
+            hidden_dims = [512, 512, 256, 128]
         
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.hidden_dims = hidden_dims
         self.dropout_rate = dropout_rate
+        self.use_batch_norm = use_batch_norm
         
         # Shared feature extraction layers
         self.feature_layers = nn.ModuleList()
@@ -308,16 +335,19 @@ def create_dqn(config: Dict[str, Any], state_dim: int, action_dim: int) -> nn.Mo
         DQN model instance
     """
     network_type = config.get('network_type', 'standard')
-    hidden_dims = config.get('network_architecture', [512, 256, 128])
+    # Enhanced default architecture - deeper networks
+    hidden_dims = config.get('network_architecture', [512, 512, 256, 128])
     dropout_rate = config.get('dropout_rate', 0.2)
+    use_batch_norm = config.get('use_batch_norm', True)
     
     if network_type == 'dueling':
-        return DuelingDQN(state_dim, action_dim, hidden_dims, dropout_rate)
+        return DuelingDQN(state_dim, action_dim, hidden_dims, dropout_rate, use_batch_norm)
     elif network_type == 'noisy':
         std_init = config.get('noisy_std_init', 0.5)
+        # NoisyDQN might not support batch_norm yet
         return NoisyDQN(state_dim, action_dim, hidden_dims, std_init)
     else:  # standard
-        return DQN(state_dim, action_dim, hidden_dims, dropout_rate)
+        return DQN(state_dim, action_dim, hidden_dims, dropout_rate, use_batch_norm)
 
 
 def count_parameters(model: nn.Module) -> int:

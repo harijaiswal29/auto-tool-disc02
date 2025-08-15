@@ -31,9 +31,25 @@ class ContextDatabase:
         self.db_path = db_path
         self.logger.info(f"Context database path: {self.db_path}")
     
+    def _get_connection(self):
+        """Get a database connection with proper settings."""
+        return aiosqlite.connect(
+            self.db_path,
+            timeout=30.0,
+            isolation_level=None
+        )
+    
     async def initialize(self):
         """Create database tables if they don't exist."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with aiosqlite.connect(
+            self.db_path,
+            timeout=30.0,
+            isolation_level=None
+        ) as db:
+            # Enable WAL mode and set pragmas for better concurrency
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA busy_timeout=10000")
+            await db.execute("PRAGMA synchronous=NORMAL")
             # Enable foreign keys
             await db.execute("PRAGMA foreign_keys = ON")
             
@@ -116,7 +132,7 @@ class ContextDatabase:
                          email: Optional[str] = None, preferences: Optional[Dict] = None) -> bool:
         """Create a new user profile."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._get_connection() as db:
                 await db.execute("""
                     INSERT INTO users (user_id, username, email, preferences, last_active)
                     VALUES (?, ?, ?, ?, ?)
@@ -136,7 +152,7 @@ class ContextDatabase:
     
     async def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve user profile."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("""
                 SELECT * FROM users WHERE user_id = ?
@@ -170,7 +186,7 @@ class ContextDatabase:
         values.extend([datetime.now().isoformat(), datetime.now().isoformat()])
         values.append(user_id)
         
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute(f"""
                 UPDATE users 
                 SET {', '.join(updates)}
@@ -185,7 +201,7 @@ class ContextDatabase:
                            domain: str = 'general') -> bool:
         """Create a new session."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._get_connection() as db:
                 await db.execute("""
                     INSERT INTO sessions (session_id, user_id, domain)
                     VALUES (?, ?, ?)
@@ -199,7 +215,7 @@ class ContextDatabase:
     
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve session data."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("""
                 SELECT * FROM sessions WHERE session_id = ?
@@ -214,7 +230,7 @@ class ContextDatabase:
     
     async def update_session_context(self, session_id: str, context: Dict[str, Any]) -> bool:
         """Update session context."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute("""
                 UPDATE sessions 
                 SET context = ?
@@ -225,7 +241,7 @@ class ContextDatabase:
     
     async def end_session(self, session_id: str) -> bool:
         """Mark session as ended."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute("""
                 UPDATE sessions 
                 SET end_time = ?, is_active = FALSE
@@ -249,7 +265,7 @@ class ContextDatabase:
                                    execution_time_ms: Optional[float] = None,
                                    context: Optional[Dict[str, Any]] = None) -> int:
         """Add entry to conversation history."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute("""
                 INSERT INTO conversation_history 
                 (session_id, user_id, query, normalized_query, intent_type, 
@@ -291,7 +307,7 @@ class ContextDatabase:
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
         
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(query, params)
             rows = await cursor.fetchall()
@@ -308,7 +324,7 @@ class ContextDatabase:
     
     async def get_user_statistics(self, user_id: str) -> Dict[str, Any]:
         """Get usage statistics for a user."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Total queries
             cursor = await db.execute("""
                 SELECT COUNT(*) as total_queries

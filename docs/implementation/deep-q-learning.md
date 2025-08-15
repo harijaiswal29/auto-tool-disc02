@@ -166,7 +166,7 @@ trainer.plot_training_curves('training_curves.png')
 ## Implementation Details
 
 ### State Encoding
-The 447-dimensional state vector includes:
+The 476-dimensional state vector includes:
 - Intent embeddings from sentence transformers
 - Context features (domain, session info)
 - Tool usage history

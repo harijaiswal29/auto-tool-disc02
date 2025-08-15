@@ -29,30 +29,82 @@ class MockFinancialDatasetsMCPServer:
         logger.info("[MOCK] Mock Financial Datasets MCP Server initialized")
     
     def _define_tools(self) -> List[Dict[str, Any]]:
-        """Define available financial data tools."""
+        """Define available financial data tools matching official github.com/financial-datasets/mcp-server."""
         return [
             {
-                "name": "get_stock_price",
-                "description": "Get current or historical stock price",
+                "name": "get_income_statements",
+                "description": "Get income statements for a company",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Stock ticker symbol"
+                        },
+                        "period": {
+                            "type": "string",
+                            "description": "Period: latest, annual, quarterly",
+                            "default": "latest"
+                        }
+                    },
+                    "required": ["symbol"]
+                }
+            },
+            {
+                "name": "get_balance_sheets",
+                "description": "Get balance sheets for a company",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Stock ticker symbol"
+                        },
+                        "period": {
+                            "type": "string",
+                            "description": "Period: latest, annual, quarterly",
+                            "default": "latest"
+                        }
+                    },
+                    "required": ["symbol"]
+                }
+            },
+            {
+                "name": "get_cash_flow_statements",
+                "description": "Get cash flow statements for a company",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Stock ticker symbol"
+                        },
+                        "period": {
+                            "type": "string",
+                            "description": "Period: latest, annual, quarterly",
+                            "default": "latest"
+                        }
+                    },
+                    "required": ["symbol"]
+                }
+            },
+            {
+                "name": "get_current_stock_price",
+                "description": "Get the current / latest price of a company",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "symbol": {
                             "type": "string",
                             "description": "Stock ticker symbol (e.g., AAPL, MSFT)"
-                        },
-                        "date": {
-                            "type": "string",
-                            "description": "Optional date in YYYY-MM-DD format",
-                            "optional": True
                         }
                     },
                     "required": ["symbol"]
                 }
             },
             {
-                "name": "get_income_statement",
-                "description": "Get company income statement",
+                "name": "get_historical_stock_prices",
+                "description": "Gets historical stock prices for a company",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -60,48 +112,13 @@ class MockFinancialDatasetsMCPServer:
                             "type": "string",
                             "description": "Stock ticker symbol"
                         },
-                        "period": {
+                        "start_date": {
                             "type": "string",
-                            "description": "Period: latest, annual, quarterly",
-                            "default": "latest"
-                        }
-                    },
-                    "required": ["symbol"]
-                }
-            },
-            {
-                "name": "get_balance_sheet",
-                "description": "Get company balance sheet",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol"
+                            "description": "Start date in YYYY-MM-DD format"
                         },
-                        "period": {
+                        "end_date": {
                             "type": "string",
-                            "description": "Period: latest, annual, quarterly",
-                            "default": "latest"
-                        }
-                    },
-                    "required": ["symbol"]
-                }
-            },
-            {
-                "name": "get_cash_flow_statement",
-                "description": "Get company cash flow statement",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "symbol": {
-                            "type": "string",
-                            "description": "Stock ticker symbol"
-                        },
-                        "period": {
-                            "type": "string",
-                            "description": "Period: latest, annual, quarterly",
-                            "default": "latest"
+                            "description": "End date in YYYY-MM-DD format"
                         }
                     },
                     "required": ["symbol"]
@@ -109,7 +126,7 @@ class MockFinancialDatasetsMCPServer:
             },
             {
                 "name": "get_company_news",
-                "description": "Get latest news for a company",
+                "description": "Get news for a company",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -127,8 +144,60 @@ class MockFinancialDatasetsMCPServer:
                 }
             },
             {
-                "name": "get_crypto_price",
-                "description": "Get cryptocurrency price",
+                "name": "get_available_crypto_tickers",
+                "description": "Gets all available crypto tickers",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "get_crypto_prices",
+                "description": "Gets historical prices for a crypto currency",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Crypto symbol (e.g., BTC, ETH)"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date in YYYY-MM-DD format"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date in YYYY-MM-DD format"
+                        }
+                    },
+                    "required": ["symbol"]
+                }
+            },
+            {
+                "name": "get_historical_crypto_prices",
+                "description": "Gets historical prices for a crypto currency",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Crypto symbol (e.g., BTC, ETH)"
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date in YYYY-MM-DD format"
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date in YYYY-MM-DD format"
+                        }
+                    },
+                    "required": ["symbol"]
+                }
+            },
+            {
+                "name": "get_current_crypto_price",
+                "description": "Get the current / latest price of a crypto currency",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -143,20 +212,6 @@ class MockFinancialDatasetsMCPServer:
                         }
                     },
                     "required": ["symbol"]
-                }
-            },
-            {
-                "name": "search_companies",
-                "description": "Search for companies by name or ticker",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query"
-                        }
-                    },
-                    "required": ["query"]
                 }
             }
         ]
@@ -310,20 +365,26 @@ class MockFinancialDatasetsMCPServer:
         # Simulate network delay
         await asyncio.sleep(0.1)
         
-        if tool_name == "get_stock_price":
-            result = self._get_stock_price(arguments)
-        elif tool_name == "get_income_statement":
-            result = self._get_income_statement(arguments)
-        elif tool_name == "get_balance_sheet":
-            result = self._get_balance_sheet(arguments)
-        elif tool_name == "get_cash_flow_statement":
-            result = self._get_cash_flow(arguments)
+        if tool_name == "get_income_statements":
+            result = self._get_income_statements(arguments)
+        elif tool_name == "get_balance_sheets":
+            result = self._get_balance_sheets(arguments)
+        elif tool_name == "get_cash_flow_statements":
+            result = self._get_cash_flow_statements(arguments)
+        elif tool_name == "get_current_stock_price":
+            result = self._get_current_stock_price(arguments)
+        elif tool_name == "get_historical_stock_prices":
+            result = self._get_historical_stock_prices(arguments)
         elif tool_name == "get_company_news":
             result = self._get_company_news(arguments)
-        elif tool_name == "get_crypto_price":
-            result = self._get_crypto_price(arguments)
-        elif tool_name == "search_companies":
-            result = self._search_companies(arguments)
+        elif tool_name == "get_available_crypto_tickers":
+            result = self._get_available_crypto_tickers(arguments)
+        elif tool_name == "get_crypto_prices":
+            result = self._get_crypto_prices(arguments)
+        elif tool_name == "get_historical_crypto_prices":
+            result = self._get_historical_crypto_prices(arguments)
+        elif tool_name == "get_current_crypto_price":
+            result = self._get_current_crypto_price(arguments)
         else:
             return self._error_response(request_id, -32602, f"Unknown tool: {tool_name}")
         
@@ -333,7 +394,7 @@ class MockFinancialDatasetsMCPServer:
             "id": request_id
         }
     
-    def _get_stock_price(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_current_stock_price(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Mock stock price data."""
         symbol = args.get("symbol", "").upper()
         
@@ -353,7 +414,7 @@ class MockFinancialDatasetsMCPServer:
                 "timestamp": datetime.now().isoformat()
             }
     
-    def _get_income_statement(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_income_statements(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Mock income statement data."""
         symbol = args.get("symbol", "").upper()
         period = args.get("period", "latest")
@@ -375,7 +436,7 @@ class MockFinancialDatasetsMCPServer:
                 "currency": "USD"
             }
     
-    def _get_balance_sheet(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_balance_sheets(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Mock balance sheet data."""
         symbol = args.get("symbol", "").upper()
         
@@ -395,7 +456,7 @@ class MockFinancialDatasetsMCPServer:
                 "currency": "USD"
             }
     
-    def _get_cash_flow(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_cash_flow_statements(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Mock cash flow data."""
         symbol = args.get("symbol", "").upper()
         
@@ -434,7 +495,7 @@ class MockFinancialDatasetsMCPServer:
         
         return {"symbol": symbol, "news": news_items}
     
-    def _get_crypto_price(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_current_crypto_price(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Mock crypto price data."""
         symbol = args.get("symbol", "").upper()
         currency = args.get("currency", "USD").upper()
@@ -458,26 +519,79 @@ class MockFinancialDatasetsMCPServer:
                 "timestamp": datetime.now().isoformat()
             }
     
-    def _search_companies(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Mock company search."""
-        query = args.get("query", "").lower()
+    def _get_historical_stock_prices(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Mock historical stock prices."""
+        symbol = args.get("symbol", "AAPL")
+        start_date = args.get("start_date", "2024-01-01")
+        end_date = args.get("end_date", "2024-01-31")
         
-        results = []
-        for company in self.mock_data["companies"]:
-            if query in company["name"].lower() or query in company["symbol"].lower():
-                results.append(company)
+        # Generate mock historical data
+        prices = []
+        base_price = self.mock_data["stock_prices"].get(symbol, {"price": 100})["price"]
         
-        # Add some random results if no matches
-        if not results and query:
-            results = [
-                {
-                    "symbol": query.upper()[:4],
-                    "name": f"{query.title()} Corporation",
-                    "exchange": "NASDAQ"
-                }
-            ]
+        # Generate 30 days of mock data
+        for i in range(30):
+            date = datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=i)
+            if date > datetime.strptime(end_date, "%Y-%m-%d"):
+                break
+            
+            prices.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "open": base_price + random.uniform(-5, 5),
+                "high": base_price + random.uniform(0, 10),
+                "low": base_price + random.uniform(-10, 0),
+                "close": base_price + random.uniform(-5, 5),
+                "volume": random.randint(10000000, 100000000)
+            })
         
-        return {"query": query, "companies": results}
+        return {
+            "symbol": symbol,
+            "start_date": start_date,
+            "end_date": end_date,
+            "prices": prices
+        }
+    
+    def _get_available_crypto_tickers(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Get available crypto tickers."""
+        return {
+            "tickers": ["BTC", "ETH", "BNB", "XRP", "ADA", "SOL", "DOT", "DOGE", "AVAX", "MATIC"]
+        }
+    
+    def _get_crypto_prices(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Get historical crypto prices."""
+        symbol = args.get("symbol", "BTC")
+        start_date = args.get("start_date", "2024-01-01")
+        end_date = args.get("end_date", "2024-01-31")
+        
+        # Generate mock historical crypto data
+        prices = []
+        base_price = self.mock_data["crypto_prices"].get(symbol, {"USD": 50000})["USD"]
+        
+        for i in range(30):
+            date = datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=i)
+            if date > datetime.strptime(end_date, "%Y-%m-%d"):
+                break
+            
+            prices.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "open": base_price + random.uniform(-1000, 1000),
+                "high": base_price + random.uniform(0, 2000),
+                "low": base_price + random.uniform(-2000, 0),
+                "close": base_price + random.uniform(-1000, 1000),
+                "volume": random.uniform(1000000, 10000000)
+            })
+        
+        return {
+            "symbol": symbol,
+            "start_date": start_date,
+            "end_date": end_date,
+            "prices": prices
+        }
+    
+    def _get_historical_crypto_prices(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Get historical crypto prices - same as get_crypto_prices."""
+        return self._get_crypto_prices(args)
+    
     
     def _error_response(self, request_id: int, code: int, message: str) -> Dict[str, Any]:
         """Create error response."""

@@ -28,10 +28,11 @@ class MockFileSystemMCPServer:
         # Ensure base path exists
         self.base_path.mkdir(parents=True, exist_ok=True)
         
+        # EXACT tools from official @modelcontextprotocol/server-filesystem
         self.tools = [
             {
-                "name": "read_file",
-                "description": "Read contents of a file",
+                "name": "read_text_file",
+                "description": "Read text contents of a file",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -41,6 +42,35 @@ class MockFileSystemMCPServer:
                         }
                     },
                     "required": ["path"]
+                }
+            },
+            {
+                "name": "read_media_file",
+                "description": "Read media file as base64",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Media file path relative to base directory"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "read_multiple_files",
+                "description": "Read multiple files at once",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "paths": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Array of file paths to read"
+                        }
+                    },
+                    "required": ["paths"]
                 }
             },
             {
@@ -62,17 +92,25 @@ class MockFileSystemMCPServer:
                 }
             },
             {
-                "name": "list_directory",
-                "description": "List contents of a directory",
+                "name": "edit_file",
+                "description": "Edit a file with search and replace",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": "Directory path relative to base directory"
+                            "description": "File path to edit"
+                        },
+                        "old_string": {
+                            "type": "string",
+                            "description": "String to search for"
+                        },
+                        "new_string": {
+                            "type": "string",
+                            "description": "String to replace with"
                         }
                     },
-                    "required": ["path"]
+                    "required": ["path", "old_string", "new_string"]
                 }
             },
             {
@@ -90,14 +128,14 @@ class MockFileSystemMCPServer:
                 }
             },
             {
-                "name": "delete_file",
-                "description": "Delete a file",
+                "name": "list_directory",
+                "description": "List contents of a directory",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": "File path to delete"
+                            "description": "Directory path relative to base directory"
                         }
                     },
                     "required": ["path"]
@@ -119,6 +157,46 @@ class MockFileSystemMCPServer:
                         }
                     },
                     "required": ["source", "destination"]
+                }
+            },
+            {
+                "name": "search_files",
+                "description": "Search for files by pattern",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "Search pattern (glob or regex)"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Directory to search in"
+                        }
+                    },
+                    "required": ["pattern"]
+                }
+            },
+            {
+                "name": "get_file_info",
+                "description": "Get file metadata and information",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path to get info for"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "list_allowed_directories",
+                "description": "List directories that are allowed for access",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
                 }
             }
         ]
@@ -185,23 +263,39 @@ class MockFileSystemMCPServer:
         logger.info(f"[TOOL_CALL] Tool: {tool_name}, Args: {arguments}")
         
         try:
-            if tool_name == "read_file":
+            # Map new tool names to handler methods
+            if tool_name == "read_text_file":
                 return await self.read_file(arguments, request_id)
+            
+            elif tool_name == "read_media_file":
+                return await self.read_media_file(arguments, request_id)
+            
+            elif tool_name == "read_multiple_files":
+                return await self.read_multiple_files(arguments, request_id)
             
             elif tool_name == "write_file":
                 return await self.write_file(arguments, request_id)
             
-            elif tool_name == "list_directory":
-                return await self.list_directory(arguments, request_id)
+            elif tool_name == "edit_file":
+                return await self.edit_file(arguments, request_id)
             
             elif tool_name == "create_directory":
                 return await self.create_directory(arguments, request_id)
             
-            elif tool_name == "delete_file":
-                return await self.delete_file(arguments, request_id)
+            elif tool_name == "list_directory":
+                return await self.list_directory(arguments, request_id)
             
             elif tool_name == "move_file":
                 return await self.move_file(arguments, request_id)
+            
+            elif tool_name == "search_files":
+                return await self.search_files(arguments, request_id)
+            
+            elif tool_name == "get_file_info":
+                return await self.get_file_info(arguments, request_id)
+            
+            elif tool_name == "list_allowed_directories":
+                return await self.list_allowed_directories(arguments, request_id)
             
             else:
                 return self.error_response(request_id, -32602, f"Unknown tool: {tool_name}")
@@ -356,41 +450,7 @@ class MockFileSystemMCPServer:
         except Exception as e:
             return self.error_response(request_id, -32603, f"Error creating directory: {str(e)}")
     
-    async def delete_file(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
-        """Delete a file."""
-        file_path = arguments.get("path", "")
-        
-        # Resolve path relative to base
-        full_path = self.base_path / file_path
-        
-        # Security check
-        try:
-            full_path = full_path.resolve()
-            if not str(full_path).startswith(str(self.base_path)):
-                raise ValueError("Path traversal attempt detected")
-        except Exception as e:
-            return self.error_response(request_id, -32602, f"Invalid path: {str(e)}")
-        
-        if not full_path.exists():
-            return self.error_response(request_id, -32602, f"File not found: {file_path}")
-        
-        if not full_path.is_file():
-            return self.error_response(request_id, -32602, f"Path is not a file: {file_path}")
-        
-        try:
-            full_path.unlink()
-            
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "success": True,
-                    "path": str(file_path),
-                    "deleted": True
-                }
-            }
-        except Exception as e:
-            return self.error_response(request_id, -32603, f"Error deleting file: {str(e)}")
+    # Note: delete_file removed as it's not in official @modelcontextprotocol/server-filesystem
     
     async def move_file(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
         """Move or rename a file."""
@@ -433,6 +493,185 @@ class MockFileSystemMCPServer:
             }
         except Exception as e:
             return self.error_response(request_id, -32603, f"Error moving file: {str(e)}")
+    
+    async def read_media_file(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Read media file as base64."""
+        import base64
+        file_path = arguments.get("path", "")
+        
+        # Resolve path relative to base
+        full_path = self.base_path / file_path
+        
+        # Security check
+        try:
+            full_path = full_path.resolve()
+            if not str(full_path).startswith(str(self.base_path)):
+                raise ValueError("Path traversal attempt detected")
+        except Exception as e:
+            return self.error_response(request_id, -32602, f"Invalid path: {str(e)}")
+        
+        try:
+            with open(full_path, "rb") as f:
+                content = f.read()
+                encoded = base64.b64encode(content).decode('utf-8')
+            
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "content": encoded,
+                    "encoding": "base64",
+                    "path": str(file_path)
+                }
+            }
+        except Exception as e:
+            return self.error_response(request_id, -32603, f"Error reading media file: {str(e)}")
+    
+    async def read_multiple_files(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Read multiple files at once."""
+        paths = arguments.get("paths", [])
+        results = []
+        
+        for path in paths:
+            result = await self.read_file({"path": path}, request_id)
+            if "result" in result:
+                results.append({
+                    "path": path,
+                    "content": result["result"]["content"],
+                    "success": True
+                })
+            else:
+                results.append({
+                    "path": path,
+                    "error": result.get("error", {}).get("message", "Unknown error"),
+                    "success": False
+                })
+        
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "files": results,
+                "total": len(paths),
+                "successful": sum(1 for r in results if r["success"])
+            }
+        }
+    
+    async def edit_file(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Edit file with search and replace."""
+        file_path = arguments.get("path", "")
+        old_string = arguments.get("old_string", "")
+        new_string = arguments.get("new_string", "")
+        
+        # First read the file
+        read_result = await self.read_file({"path": file_path}, request_id)
+        if "error" in read_result:
+            return read_result
+        
+        # Replace content
+        content = read_result["result"]["content"]
+        new_content = content.replace(old_string, new_string)
+        
+        # Write back
+        write_result = await self.write_file({
+            "path": file_path,
+            "content": new_content
+        }, request_id)
+        
+        if "error" in write_result:
+            return write_result
+        
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "success": True,
+                "path": file_path,
+                "replacements": content.count(old_string)
+            }
+        }
+    
+    async def search_files(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Search for files by pattern."""
+        import glob
+        pattern = arguments.get("pattern", "")
+        search_path = arguments.get("path", ".")
+        
+        # Resolve search path
+        full_path = self.base_path / search_path
+        
+        try:
+            full_path = full_path.resolve()
+            if not str(full_path).startswith(str(self.base_path)):
+                raise ValueError("Path traversal attempt detected")
+        except Exception as e:
+            return self.error_response(request_id, -32602, f"Invalid path: {str(e)}")
+        
+        try:
+            # Use glob to find matching files
+            matches = []
+            for match in glob.glob(str(full_path / pattern), recursive=True):
+                match_path = Path(match)
+                if match_path.is_file():
+                    rel_path = match_path.relative_to(self.base_path)
+                    matches.append(str(rel_path))
+            
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "matches": matches,
+                    "count": len(matches),
+                    "pattern": pattern
+                }
+            }
+        except Exception as e:
+            return self.error_response(request_id, -32603, f"Error searching files: {str(e)}")
+    
+    async def get_file_info(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """Get file metadata."""
+        import os
+        file_path = arguments.get("path", "")
+        
+        # Resolve path
+        full_path = self.base_path / file_path
+        
+        try:
+            full_path = full_path.resolve()
+            if not str(full_path).startswith(str(self.base_path)):
+                raise ValueError("Path traversal attempt detected")
+        except Exception as e:
+            return self.error_response(request_id, -32602, f"Invalid path: {str(e)}")
+        
+        try:
+            stat = full_path.stat()
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "path": str(file_path),
+                    "exists": full_path.exists(),
+                    "is_file": full_path.is_file(),
+                    "is_directory": full_path.is_dir(),
+                    "size": stat.st_size,
+                    "modified": stat.st_mtime,
+                    "created": stat.st_ctime,
+                    "permissions": oct(stat.st_mode)[-3:]
+                }
+            }
+        except Exception as e:
+            return self.error_response(request_id, -32603, f"Error getting file info: {str(e)}")
+    
+    async def list_allowed_directories(self, arguments: Dict[str, Any], request_id: int) -> Dict[str, Any]:
+        """List allowed directories for access."""
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "directories": [str(self.base_path)],
+                "base_path": str(self.base_path)
+            }
+        }
     
     def error_response(self, request_id: int, code: int, message: str) -> Dict[str, Any]:
         """Create error response."""
@@ -489,12 +728,12 @@ async def test_mock_filesystem_server():
     })
     logger.info(f"[WRITE] Response: {write_response}")
     
-    # Test read file
+    # Test read file (using new tool name)
     read_response = await server.handle_request({
         "jsonrpc": "2.0",
         "method": "tools/call",
         "params": {
-            "name": "read_file",
+            "name": "read_text_file",
             "arguments": {
                 "path": "test.txt"
             }

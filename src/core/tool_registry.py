@@ -248,6 +248,58 @@ class ToolRegistry:
         """Async version of get_all_tools for compatibility."""
         return self.list_tools()
     
+    def remove_tool(self, tool_id: str) -> bool:
+        """Remove a tool from the registry.
+        
+        Args:
+            tool_id: Tool ID to remove
+            
+        Returns:
+            True if tool was removed, False if not found
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if tool exists
+                cursor.execute("SELECT id FROM tools WHERE id = ?", (tool_id,))
+                if not cursor.fetchone():
+                    return False
+                
+                # Remove tool relationships
+                cursor.execute("""
+                    DELETE FROM tool_relationships 
+                    WHERE tool1_id = ? OR tool2_id = ?
+                """, (tool_id, tool_id))
+                
+                # Remove tool usage records
+                cursor.execute("DELETE FROM tool_usage WHERE tool_id = ?", (tool_id,))
+                
+                # Remove the tool itself
+                cursor.execute("DELETE FROM tools WHERE id = ?", (tool_id,))
+                
+                conn.commit()
+                logger.info(f"[REGISTRY] Removed tool: {tool_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"[REGISTRY] Failed to remove tool {tool_id}: {e}")
+            return False
+    
+    def validate_tool(self, tool_id: str) -> bool:
+        """Check if a tool exists in the registry.
+        
+        Args:
+            tool_id: Tool ID to validate
+            
+        Returns:
+            True if tool exists, False otherwise
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM tools WHERE id = ?", (tool_id,))
+            return cursor.fetchone() is not None
+    
     async def get_tool_relationships(self, tool_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get tool relationships from the registry.

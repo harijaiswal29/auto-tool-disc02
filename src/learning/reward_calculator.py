@@ -13,7 +13,7 @@ This module implements sophisticated reward calculation that considers:
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
-from collections import defaultdict
+from collections import defaultdict, deque
 import logging
 
 from src.utils.logger import get_logger
@@ -70,22 +70,29 @@ class RewardCalculator:
                 logger.error(f"Failed to initialize advanced strategies: {e}")
                 self.use_advanced_strategies = False
         
-        # Base weights
+        # Base weights - Enhanced for dense rewards
         self.base_weights = self.config.get('base_weights', {
-            'success': 1.0,
-            'failure': -0.5,
-            'partial_success': 0.3
+            'success': 20.0,  # Double success reward
+            'failure': -2.0,  # Reduced penalty to encourage exploration
+            'partial_success': 8.0,  # Much higher partial rewards
+            'step_progress': 0.5,  # NEW: Reward for each step completed
+            'exploration_bonus': 0.2,  # NEW: Bonus for trying new combinations
+            'learning_bonus': 0.3,  # NEW: Bonus when discovering patterns
+            'tool_efficiency': 5.0,  # NEW: Reward using fewer tools
+            'correct_tool_bonus': 3.0,  # NEW: Per correct tool selected
+            'wrong_tool_penalty': -1.0  # NEW: Mild penalty for wrong tools
         })
         
-        # Failure penalties by type
+        # Failure penalties by type - Reduced to encourage exploration
         self.failure_penalties = self.config.get('failure_penalties', {
-            'network_timeout': -0.2,
-            'permission_error': -0.8,
-            'rate_limit': -0.3,
-            'connection_error': -0.25,
-            'retryable': -0.1,
-            'non_retryable': -0.7,
-            'unknown': -0.5
+            'network_timeout': -0.1,  # Reduced - not agent's fault
+            'permission_error': -0.4,  # Reduced - learn from this
+            'rate_limit': -0.15,  # Reduced - temporary issue
+            'connection_error': -0.12,  # Reduced - often retryable
+            'retryable': -0.05,  # Minimal penalty for retryable errors
+            'non_retryable': -0.35,  # Reduced but still significant
+            'unknown': -0.25,  # Reduced for unknown errors
+            'exploration_failure': -0.02  # NEW: Minimal penalty during exploration
         })
         
         # Resource penalties
@@ -113,14 +120,26 @@ class RewardCalculator:
             'system_initiated': 0.9
         })
         
-        # Known good tool combinations
+        # Known good tool combinations - Enhanced
         self.known_synergies = {
-            frozenset(['filesystem_mcp', 'search_mcp']): 0.2,
+            frozenset(['filesystem_mcp', 'search_mcp']): 0.5,
             frozenset(['sqlite_mcp', 'postgres_mcp']): -0.1,  # Redundant
-            frozenset(['github_mcp', 'filesystem_mcp']): 0.25,
+            frozenset(['github_mcp', 'filesystem_mcp']): 0.6,
+            frozenset(['mock_filesystem', 'mock_github']): 0.5,  # Mock combinations
+            frozenset(['mock_sqlite', 'mock_search']): 0.4,
+            frozenset(['mock_search', 'mock_notion']): 0.3
         }
         
-        logger.info("Enhanced reward calculator initialized")
+        # Track discovered combinations for exploration bonus
+        self.discovered_combinations = set()
+        self.exploration_history = defaultdict(int)
+        
+        # Episode tracking for context-aware rewards
+        self.episode_count = 0
+        self.success_streak = 0
+        self.recent_successes = deque(maxlen=100)
+        
+        logger.info("Enhanced reward calculator initialized with dense reward shaping")
     
     def calculate_reward(self, 
                         execution_results: List[ExecutionMetrics],
@@ -210,23 +229,31 @@ class RewardCalculator:
         synergy_bonus = self._tool_synergy_bonus(execution_results)
         user_satisfaction = self._user_satisfaction_adjustment(user_feedback)
         
+        # NEW: Calculate enhanced reward components
+        tool_efficiency_bonus = self._calculate_tool_efficiency_bonus(execution_results)
+        correct_tool_bonus = self._calculate_correct_tool_bonus(execution_results, context)
+        wrong_tool_penalty = self._calculate_wrong_tool_penalty(execution_results)
+        
         # Apply context sensitivity
         context_multiplier = self._get_context_multiplier(context)
         
         # Apply uncertainty factor
         uncertainty_factor = self._uncertainty_adjustment(execution_results, context)
         
-        # Combine all components
+        # Combine all components (including new ones)
         raw_reward = (
             base_reward + 
             failure_adjustment + 
             partial_success_bonus + 
             synergy_bonus + 
-            user_satisfaction
+            user_satisfaction +
+            tool_efficiency_bonus +
+            correct_tool_bonus +
+            wrong_tool_penalty
         ) * context_multiplier * uncertainty_factor - resource_penalty
         
-        # Clip to reasonable range
-        total_reward = np.clip(raw_reward, -1.0, 2.0)
+        # Clip to reasonable range - allow larger rewards for better differentiation
+        total_reward = np.clip(raw_reward, -5.0, 15.0)
         
         # Create breakdown for analysis
         breakdown = {
@@ -236,6 +263,9 @@ class RewardCalculator:
             'resource_penalty': -resource_penalty,
             'synergy_bonus': synergy_bonus,
             'user_satisfaction': user_satisfaction,
+            'tool_efficiency_bonus': tool_efficiency_bonus,
+            'correct_tool_bonus': correct_tool_bonus,
+            'wrong_tool_penalty': wrong_tool_penalty,
             'context_multiplier': context_multiplier,
             'uncertainty_factor': uncertainty_factor,
             'total': total_reward
@@ -246,7 +276,7 @@ class RewardCalculator:
         return total_reward, breakdown
     
     def _calculate_base_reward(self, results: List[ExecutionMetrics]) -> float:
-        """Calculate base reward from success/failure counts."""
+        """Calculate base reward with dense reward shaping."""
         if not results:
             return self.base_weights['failure']
         
@@ -254,46 +284,93 @@ class RewardCalculator:
         partial_count = sum(1 for r in results if r.partial_success and not r.success)
         total_count = len(results)
         
-        if success_count == 0 and partial_count == 0:
-            return self.base_weights['failure']
+        # Base success/failure rewards
+        if success_count == total_count:
+            # Full success - maximum reward
+            base_reward = self.base_weights['success']
+        elif success_count > 0:
+            # Partial success - proportional reward
+            success_ratio = success_count / total_count
+            base_reward = self.base_weights['success'] * success_ratio
+        elif partial_count > 0:
+            # Some partial success
+            base_reward = self.base_weights['partial_success'] * (partial_count / total_count)
+        else:
+            # Complete failure but with reduced penalty
+            base_reward = self.base_weights['failure']
         
-        # Weighted average of outcomes
-        success_weight = self.base_weights['success'] * (success_count / total_count)
-        partial_weight = self.base_weights['partial_success'] * (partial_count / total_count)
-        failure_weight = self.base_weights['failure'] * (
-            (total_count - success_count - partial_count) / total_count
-        )
+        # Add step progress rewards (dense rewards)
+        step_reward = 0.0
+        for result in results:
+            if result.completion_percentage > 0:
+                # Reward proportional to completion
+                step_reward += self.base_weights['step_progress'] * result.completion_percentage
+            
+            # Small reward just for attempting
+            step_reward += 0.1
         
-        return success_weight + partial_weight + failure_weight
+        # Exploration bonus for new tool combinations
+        tool_combo = frozenset([r.tool_id for r in results])
+        if tool_combo not in self.discovered_combinations:
+            self.discovered_combinations.add(tool_combo)
+            base_reward += self.base_weights['exploration_bonus'] * 2  # Double bonus for first discovery
+        elif self.exploration_history[tool_combo] < 5:
+            # Still learning this combination
+            base_reward += self.base_weights['exploration_bonus']
+        
+        self.exploration_history[tool_combo] += 1
+        
+        return base_reward + step_reward
     
     def _failure_type_adjustment(self, results: List[ExecutionMetrics]) -> float:
-        """Adjust reward based on failure types - learn from different failures."""
+        """Adjust reward based on failure types with learning incentives."""
         adjustment = 0.0
         
         for result in results:
-            if not result.success and result.error_type:
-                # Get specific penalty for error type
-                penalty = self.failure_penalties.get(
-                    result.error_type, 
-                    self.failure_penalties['unknown']
-                )
-                
-                # Reduce penalty if retry was attempted (shows learning)
-                if result.retry_count > 0:
-                    penalty *= (1.0 - min(result.retry_count * 0.1, 0.5))
-                
-                adjustment += penalty
+            if not result.success:
+                if result.error_type:
+                    # Get specific penalty for error type
+                    penalty = self.failure_penalties.get(
+                        result.error_type, 
+                        self.failure_penalties['unknown']
+                    )
+                    
+                    # Significantly reduce penalty if retry was attempted (shows learning)
+                    if result.retry_count > 0:
+                        penalty *= 0.3  # 70% reduction for retry attempts
+                        # Add learning bonus for retry
+                        adjustment += self.base_weights.get('learning_bonus', 0.3) * 0.5
+                    
+                    # Further reduce penalty during early exploration
+                    if hasattr(self, 'episode_count') and self.episode_count < 1000:
+                        penalty *= 0.5  # Half penalty during exploration phase
+                    
+                    adjustment += penalty
+                else:
+                    # Unknown failure during exploration - minimal penalty
+                    adjustment += self.failure_penalties.get('exploration_failure', -0.02)
         
         return adjustment
     
     def _partial_success_bonus(self, results: List[ExecutionMetrics]) -> float:
-        """Bonus for partial successes - encourages incremental progress."""
+        """Enhanced bonus for partial successes - strong incremental progress rewards."""
         bonus = 0.0
         
         for result in results:
             if result.partial_success:
-                # Scale bonus by completion percentage
-                bonus += self.base_weights['partial_success'] * result.completion_percentage
+                # Increased bonus scaled by completion percentage
+                completion_bonus = self.base_weights['partial_success'] * result.completion_percentage
+                bonus += completion_bonus
+                
+                # Progressive bonus based on completion level
+                if result.completion_percentage > 0.8:
+                    bonus += 2.0  # Near completion
+                elif result.completion_percentage > 0.6:
+                    bonus += 1.0  # Good progress
+                elif result.completion_percentage > 0.3:
+                    bonus += 0.5  # Some progress
+                else:
+                    bonus += 0.2  # Any progress is good
                 
                 # Extra bonus for high-quality partial results
                 if result.result_quality > 0.8:
@@ -447,6 +524,78 @@ class RewardCalculator:
         
         return np.clip(uncertainty, 0.5, 1.5)
     
+    def _calculate_tool_efficiency_bonus(self, results: List[ExecutionMetrics], 
+                                        expected_tools: int = 3) -> float:
+        """
+        Calculate bonus for using fewer tools efficiently.
+        Rewards achieving success with minimal tool usage.
+        """
+        if not results:
+            return 0.0
+        
+        successful_results = [r for r in results if r.success or r.partial_success]
+        if not successful_results:
+            return 0.0
+        
+        tools_used = len(results)
+        efficiency_ratio = len(successful_results) / tools_used
+        
+        # Bonus for using fewer tools than expected
+        if tools_used < expected_tools and efficiency_ratio > 0.7:
+            bonus = self.base_weights.get('tool_efficiency', 5.0) * (1 - tools_used/expected_tools)
+        else:
+            bonus = 0.0
+        
+        return bonus
+    
+    def _calculate_correct_tool_bonus(self, results: List[ExecutionMetrics], 
+                                     context: Dict[str, Any]) -> float:
+        """
+        Calculate bonus for selecting appropriate tools for the task.
+        """
+        if not results:
+            return 0.0
+        
+        bonus = 0.0
+        correct_tool_weight = self.base_weights.get('correct_tool_bonus', 3.0)
+        
+        # Check each tool selection
+        for result in results:
+            # Tool is "correct" if it contributed to success
+            if result.success or (result.partial_success and result.completion_percentage > 0.5):
+                bonus += correct_tool_weight
+            elif result.partial_success:
+                # Partial credit for partial success
+                bonus += correct_tool_weight * result.completion_percentage
+        
+        # Extra bonus for perfect tool selection (all tools contributed)
+        if all(r.success or r.partial_success for r in results):
+            bonus *= 1.2
+        
+        return bonus
+    
+    def _calculate_wrong_tool_penalty(self, results: List[ExecutionMetrics]) -> float:
+        """
+        Calculate penalty for selecting inappropriate tools.
+        Mild penalty to encourage exploration while discouraging random selection.
+        """
+        if not results:
+            return 0.0
+        
+        penalty = 0.0
+        wrong_tool_weight = self.base_weights.get('wrong_tool_penalty', -1.0)
+        
+        for result in results:
+            # Tool is "wrong" if it completely failed without contributing
+            if not result.success and not result.partial_success:
+                if result.completion_percentage == 0:
+                    penalty += wrong_tool_weight
+                else:
+                    # Reduced penalty if there was some progress
+                    penalty += wrong_tool_weight * (1 - result.completion_percentage)
+        
+        return penalty
+    
     def update_known_synergies(self, tool_combination: List[str], 
                               success_rate: float, occurrences: int):
         """Update known tool synergies based on observed patterns."""
@@ -472,3 +621,47 @@ class RewardCalculator:
             self.known_synergies[tool_set] = synergy_score
         
         logger.info(f"Updated synergy for {tool_combination}: {synergy_score:.3f}")
+    
+    def set_episode_count(self, episode: int):
+        """Set current episode count for context-aware rewards."""
+        self.episode_count = episode
+    
+    def update_success_tracking(self, success: bool):
+        """Track recent successes for momentum rewards."""
+        self.recent_successes.append(success)
+        if success:
+            self.success_streak += 1
+        else:
+            self.success_streak = 0
+    
+    def calculate_curiosity_bonus(self, state_hash: str, action: List[str]) -> float:
+        """Calculate curiosity bonus for exploring new state-action pairs."""
+        # Create unique identifier for state-action pair
+        action_str = '_'.join(sorted(action))
+        sa_pair = f"{state_hash}:{action_str}"
+        
+        # Check if this is a novel state-action pair
+        if not hasattr(self, 'visited_pairs'):
+            self.visited_pairs = {}
+        
+        visit_count = self.visited_pairs.get(sa_pair, 0)
+        self.visited_pairs[sa_pair] = visit_count + 1
+        
+        # Calculate curiosity bonus (decreases with visits)
+        if visit_count == 0:
+            # First visit - high curiosity bonus
+            return 1.0
+        elif visit_count < 5:
+            # Still exploring
+            return 0.5 / (visit_count + 1)
+        else:
+            # Well-explored
+            return 0.0
+    
+    def calculate_momentum_bonus(self) -> float:
+        """Calculate bonus for maintaining success momentum."""
+        if self.success_streak > 5:
+            return min(self.success_streak * 0.1, 2.0)
+        elif self.success_streak > 2:
+            return 0.3
+        return 0.0

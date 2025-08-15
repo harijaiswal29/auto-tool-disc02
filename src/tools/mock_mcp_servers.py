@@ -18,6 +18,39 @@ from src.tools.mock_zerodha_mcp import MockZerodhaMCPServer
 
 logger = get_logger(__name__)
 
+async def start_all_mock_servers():
+    """Start all mock MCP servers for testing."""
+    logger.info("Starting all mock MCP servers...")
+    
+    # Import mock servers with correct class names
+    from src.tools.mock_filesystem_mcp import MockFileSystemMCPServer
+    from src.tools.mock_sqlite_mcp import MockSQLiteMCPServer
+    from src.tools.mock_search_mcp import MockSearchMCPServer
+    from src.tools.mock_github_mcp import MockGitHubMCPServer
+    from src.tools.mock_financial_datasets_mcp import MockFinancialDatasetsMCPServer
+    from src.tools.mock_notion_mcp import MockNotionMCPServer
+    
+    # Initialize servers
+    servers = {
+        'filesystem': MockFileSystemMCPServer('/tmp'),
+        'sqlite': MockSQLiteMCPServer(':memory:'),
+        'search': MockSearchMCPServer(),
+        'github': MockGitHubMCPServer(),
+        'financial': MockFinancialDatasetsMCPServer(),
+        'notion': MockNotionMCPServer(),
+        'zerodha': MockZerodhaMCPServer()
+    }
+    
+    logger.info(f"Initialized {len(servers)} mock MCP servers")
+    
+    # In a real implementation, these would listen on ports
+    # For testing, we just return the initialized servers
+    for name, server in servers.items():
+        logger.info(f"  - {name}: Ready")
+    
+    logger.info("All mock MCP servers started successfully")
+    return servers
+
 class MockMCPServer:
     """Base class for mock MCP servers."""
     

@@ -1,0 +1,180 @@
+# Experiment Configuration for Dissertation Evaluation
+# This configuration defines all experiment parameters for reproducible results
+
+experiments:
+  # Main baseline comparison experiment
+  baseline_comparison:
+    description: "Compare Q-learning against all baseline strategies"
+    strategies:
+      - name: "random"
+        description: "Random tool selection baseline"
+        expected_performance: 0.25  # 25% task completion
+        
+      - name: "popular"
+        description: "Most frequently used tools baseline"
+        expected_performance: 0.45  # 45% task completion
+        
+      - name: "fixed_policy"
+        description: "Rule-based fixed policy baseline"
+        expected_performance: 0.65  # 65% task completion
+        
+      - name: "greedy"
+        description: "Greedy single-tool selection"
+        expected_performance: 0.55  # 55% task completion
+        
+      - name: "context_agnostic"
+        description: "Q-learning without context features"
+        expected_performance: 0.70  # 70% task completion
+        
+      - name: "q_learning_tabular"
+        description: "Q-learning with tabular Q-table"
+        expected_performance: 0.85  # 85% task completion (target)
+        
+      - name: "q_learning_dqn"
+        description: "Q-learning with Deep Q-Network"
+        expected_performance: 0.90  # 90% task completion (improved target)
+    
+    # Experiment parameters
+    episodes: 1000                    # Number of episodes per strategy
+    runs_per_strategy: 5              # Multiple runs for statistical validity
+    random_seeds: [42, 123, 456, 789, 999]  # Fixed seeds for reproducibility
+    
+    # Metrics to collect
+    metrics:
+      - task_completion_rate
+      - average_reward
+      - convergence_episodes
+      - tool_selection_accuracy
+      - execution_time
+      - resource_usage
+    
+    # Query sets to use
+    query_sets:
+      - "dissertation_core"           # Balanced set for main evaluation
+      - "simple_only"                # Test on simple queries
+      - "complex_only"               # Test on complex queries
+
+  # Convergence analysis experiment
+  convergence_test:
+    description: "Analyze Q-learning convergence characteristics"
+    max_episodes: 2000
+    convergence_threshold: 0.01       # Q-value change threshold
+    window_size: 100                  # Episodes to average for stability
+    checkpoint_interval: 50           # Save state every N episodes
+    
+    metrics:
+      - q_value_stability
+      - policy_changes
+      - exploration_rate
+      - cumulative_reward
+      - episode_rewards
+
+  # Pattern discovery experiment  
+  pattern_mining_test:
+    description: "Evaluate pattern mining effectiveness"
+    min_episodes: 500
+    pattern_metrics:
+      - patterns_discovered
+      - pattern_quality_score
+      - pattern_usage_frequency
+      - pattern_reward_improvement
+    
+    pattern_types:
+      - sequential      # Tool A followed by Tool B
+      - temporal        # Time-based patterns
+      - contextual      # Context-dependent patterns
+
+  # Statistical significance test
+  statistical_validation:
+    description: "Ensure statistical validity of results"
+    significance_level: 0.05          # p-value threshold
+    effect_size_threshold: 0.8        # Cohen's d for large effect
+    confidence_interval: 0.95         # 95% CI
+    
+    tests:
+      - t_test                        # Pairwise comparisons
+      - anova                         # Multiple group comparison
+      - bonferroni_correction         # Multiple comparison correction
+      - bootstrap                     # Non-parametric CI estimation
+
+  # Performance benchmark test
+  performance_benchmark:
+    description: "Validate performance targets"
+    targets:
+      intent_recognition:
+        metric: "processing_time_ms"
+        p95_threshold: 100            # <100ms at 95th percentile
+        
+      task_completion:
+        metric: "completion_rate"
+        threshold: 0.85               # >85% completion rate
+        
+      system_throughput:
+        metric: "queries_per_minute"
+        threshold: 100                # >100 QPM
+        
+      learning_convergence:
+        metric: "episodes_to_converge"
+        threshold: 1000               # <1000 episodes
+
+# Q-learning hyperparameters
+q_learning_params:
+  alpha: 0.1                          # Learning rate
+  gamma: 0.9                          # Discount factor
+  epsilon: 0.2                        # Exploration rate
+  epsilon_decay: 0.995                # Exploration decay
+  epsilon_min: 0.01                   # Minimum exploration
+  
+  # Experience replay
+  replay_buffer_size: 10000
+  batch_size: 32
+  
+  # State representation
+  state_features: 447                 # Total state dimensions
+  action_space: "dynamic"             # Based on available tools
+
+# Evaluation settings
+evaluation:
+  # Data collection
+  save_raw_data: true
+  save_checkpoints: true
+  checkpoint_dir: "results/checkpoints"
+  
+  # Visualization
+  generate_plots: true
+  plot_formats: ["png", "pdf"]        # For dissertation
+  
+  # Reporting
+  generate_latex_tables: true
+  summary_statistics: true
+  detailed_logs: true
+
+# Resource constraints
+resources:
+  max_memory_gb: 4                    # Memory limit
+  max_cpu_percent: 80                 # CPU usage limit
+  timeout_seconds: 3600               # 1 hour max per experiment
+  
+# Reproducibility settings
+reproducibility:
+  fix_random_seeds: true
+  deterministic_operations: true
+  log_system_info: true
+  save_environment: true              # pip freeze output
+
+# Dissertation-specific settings
+dissertation:
+  hypothesis_tests:
+    h1_improvement_threshold: 0.30    # >30% improvement
+    h2_intent_speed_ms: 100           # <100ms processing
+    h3_pattern_discovery: 50          # >50 patterns
+    h4_parallel_speedup: 0.40         # >40% speedup
+    h5_convergence_episodes: 1000     # <1000 episodes
+  
+  # Figures for dissertation
+  required_figures:
+    - learning_curves                 # Performance over episodes
+    - baseline_comparison            # Bar chart comparison
+    - convergence_analysis           # Q-value stability
+    - pattern_discovery              # Pattern visualization
+    - statistical_significance       # p-value visualization

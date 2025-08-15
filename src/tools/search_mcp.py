@@ -414,22 +414,42 @@ class SearchMCPClient:
     def register_tools_to_registry(self, registry: ToolRegistry) -> None:
         """
         Register Search tools with the tool registry.
+        Only registers tools that were discovered from the actual server.
         
         Args:
             registry: Tool registry instance
         """
+        if not self.tools:
+            logger.warning("[REGISTRY] No tools discovered from Search server, skipping registration")
+            return
+        
+        registered_count = 0
         for tool in self.tools:
+            # Validate tool has required fields
+            if 'name' not in tool:
+                logger.warning(f"[REGISTRY] Skipping tool without name: {tool}")
+                continue
+            
             tool_info = {
                 'id': f'search.{tool["name"]}',
                 'name': tool['name'],
                 'server_type': 'search',
-                'endpoint': self.server_command[1] if len(self.server_command) > 1 else 'search',
+                'endpoint': 'mock://search' if self.use_mock else (self.server_command[1] if len(self.server_command) > 1 else 'search'),
                 'description': tool.get('description', ''),
                 'capabilities': self.capabilities,
-                'input_schema': tool.get('inputSchema', {})
+                'input_schema': tool.get('inputSchema', {}),
+                'is_mock': self.use_mock  # Track if this is from mock server
             }
-            registry.register_tool(tool_info)
-            logger.info(f"[REGISTERED] Search tool: {tool_info['id']}")
+            
+            try:
+                registry.register_tool(tool_info)
+                registered_count += 1
+                logger.debug(f"[REGISTRY] Registered tool: {tool['name']}")
+            except Exception as e:
+                logger.error(f"[REGISTRY] Failed to register tool {tool['name']}: {e}")
+        
+        mode = "mock" if self.use_mock else "real"
+        logger.info(f"[REGISTRY] Registered {registered_count}/{len(self.tools)} Search tools from {mode} server")
 
 
 async def test_search_mcp():

@@ -12,7 +12,7 @@ The system consists of 5 core layers:
 
 1. **Intent Recognition Layer**: Understands user goals using keyword matching, semantic analysis (sentence-transformers), context tracking, and intent classification
 2. **Tool Discovery Layer**: Finds relevant tools via registry interface, capability matching, graph exploration (NetworkX), and discovery patterns
-3. **Tool Selection & Learning Layer**: Optimizes tool choice using epsilon-greedy multi-armed bandit, Q-learning with 447-dimensional state vectors, combination scoring, and contextual analysis
+3. **Tool Selection & Learning Layer**: Optimizes tool choice using epsilon-greedy multi-armed bandit, Q-learning with 476-dimensional state vectors, combination scoring, and contextual analysis
 4. **Execution & Monitoring Layer**: Manages MCP connections, executes tools in parallel (asyncio), monitors performance, handles errors, and tracks resource usage
 5. **Learning & Adaptation Layer**: Improves over time using enhanced Q-learning engine with failure differentiation, pattern mining, feedback processing, and model adaptation
 
@@ -169,8 +169,18 @@ For project phases and timeline, see `docs/project/phase-completion.md`
 
 For detailed performance targets and evaluation metrics, see `docs/evaluation/evaluation-targets.md`
 
-## Demo Scripts
+## Demo Scripts and Web Interface
 
+### Web Demonstration Interface
+The project includes a comprehensive web-based demonstration interface in `src/web/`:
+- **Interactive Web UI**: FastAPI-based visual demonstration of the complete 5-stage pipeline
+- **Quick Launch**: `python launch_demo.py` or navigate to http://localhost:8000
+- **Visual Features**: Real-time pipeline visualization, Q-learning metrics, performance dashboard
+- **Demo Scenarios**: Pre-configured queries for committee presentations
+
+See `src/web/README.md` for detailed web interface documentation.
+
+### Command-Line Demo Scripts
 The project includes comprehensive demonstration scripts in the `demos/` directory:
 - **A/B Testing Framework**: `demos/demo_ab_testing_framework.py` - Complete A/B testing with 6 scenarios
 - **Advanced Rewards**: `demos/demo_advanced_rewards.py` - Advanced reward strategies demonstration

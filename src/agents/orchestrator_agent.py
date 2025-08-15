@@ -275,8 +275,7 @@ class OrchestratorAgent:
             self.logger.info(f"Discovered {len(discovered_tools)} potential tools")
             
             # Update state machine with discovered tools
-            tool_ids = [tool['id'] for tool in discovered_tools]
-            await self.state_machine.discover_tools(tool_ids)
+            await self.state_machine.discover_tools(discovered_tools)
             
             # Step 3: Select best tools for execution
             selected_tools = await self.select_tools(discovered_tools, intent_result)
@@ -505,6 +504,13 @@ class OrchestratorAgent:
     async def _select_tools_traditional(self, discovered_tools: List[Dict[str, Any]], 
                                        intent_result: IntentResult) -> List[Dict[str, Any]]:
         """Traditional tool selection without Q-learning."""
+        # CRITICAL: Apply semantic filtering first
+        discovered_tools = self._filter_tools_by_intent(discovered_tools, intent_result)
+        
+        if not discovered_tools:
+            self.logger.warning("No semantically appropriate tools available after filtering")
+            return []
+        
         # Get max tools to select
         max_tools = self.config.get('orchestration', {}).get('max_tools_per_query', 3)
         
@@ -535,9 +541,173 @@ class OrchestratorAgent:
         
         return selected
     
+    def _categorize_tool(self, tool: Dict[str, Any]) -> str:
+        """Categorize a tool based on its type and capabilities.
+        
+        Returns tool category: 'search', 'code', 'database', 'filesystem', 'finance', etc.
+        """
+        tool_id = tool.get('id', '').lower()
+        tool_name = tool.get('name', '').lower()
+        server_type = tool.get('server_type', '').lower()
+        
+        # Direct server type mapping
+        category_map = {
+            'search': 'search',
+            'github': 'code',
+            'postgres': 'database',
+            'sqlite': 'database',
+            'filesystem': 'filesystem',
+            'financial': 'finance',
+            'weather': 'weather',
+            'notion': 'productivity',
+            'zerodha': 'finance'
+        }
+        
+        # Check server type first
+        if server_type in category_map:
+            return category_map[server_type]
+        
+        # Check tool ID patterns
+        if 'search' in tool_id or 'brave' in tool_id:
+            return 'search'
+        elif 'github' in tool_id or 'repo' in tool_id or 'code' in tool_id:
+            return 'code'
+        elif 'database' in tool_id or 'query' in tool_id or 'sql' in tool_id:
+            return 'database'
+        elif 'file' in tool_id or 'directory' in tool_id:
+            return 'filesystem'
+        elif 'financial' in tool_id or 'stock' in tool_id or 'market' in tool_id:
+            return 'finance'
+        
+        return 'general'
+    
+    def _get_intent_categories(self, intent_result: IntentResult) -> List[str]:
+        """Get appropriate tool categories for the given intent.
+        
+        Maps intent types to suitable tool categories.
+        """
+        # Handle both 'type' and 'intent_type' for compatibility
+        intent_type = getattr(intent_result.primary_intent, 'intent_type', None) or getattr(intent_result.primary_intent, 'type', 'general')
+        # IntentResult has 'raw_query' not 'original_query'
+        query_text = intent_result.raw_query.lower() if hasattr(intent_result, 'raw_query') else ''
+        
+        # Intent to category mapping
+        intent_category_map = {
+            'query.search': ['search'],
+            'query.retrieve': ['database', 'filesystem'],
+            'query.analyze': ['database', 'finance'],
+            'action.create': ['filesystem', 'code', 'productivity'],
+            'action.modify': ['filesystem', 'code', 'productivity'],
+            'action.delete': ['filesystem', 'database'],
+            'system.configure': ['filesystem', 'database'],
+            'system.monitor': ['database', 'finance']
+        }
+        
+        # Get base categories from intent
+        categories = intent_category_map.get(intent_type, ['general'])
+        
+        # Add context-specific categories based on query keywords
+        if any(word in query_text for word in ['news', 'latest', 'current', 'today', 'recent']):
+            if 'search' not in categories:
+                categories.insert(0, 'search')  # Prioritize search for news queries
+        
+        if any(word in query_text for word in ['code', 'repository', 'github', 'commit', 'pull request']):
+            if 'code' not in categories:
+                categories.append('code')
+        
+        if any(word in query_text for word in ['file', 'directory', 'folder', 'document']):
+            if 'filesystem' not in categories:
+                categories.append('filesystem')
+        
+        if any(word in query_text for word in ['stock', 'market', 'finance', 'trading']):
+            if 'finance' not in categories:
+                categories.append('finance')
+        
+        if any(word in query_text for word in ['database', 'table', 'query', 'sql']):
+            if 'database' not in categories:
+                categories.append('database')
+        
+        return categories
+    
+    def _filter_tools_by_intent(self, tools: List[Dict[str, Any]], 
+                                intent_result: IntentResult) -> List[Dict[str, Any]]:
+        """Filter tools to only include semantically appropriate ones for the intent.
+        
+        This prevents Q-learning from selecting obviously wrong tools.
+        """
+        # Get appropriate categories for this intent
+        appropriate_categories = self._get_intent_categories(intent_result)
+        # IntentResult has 'raw_query' not 'original_query'
+        query_lower = getattr(intent_result, 'raw_query', '').lower()
+        
+        # Always include 'general' as a fallback
+        if 'general' not in appropriate_categories:
+            appropriate_categories.append('general')
+        
+        filtered_tools = []
+        for tool in tools:
+            tool_category = self._categorize_tool(tool)
+            if tool_category in appropriate_categories:
+                # For search tools, add priority scoring based on query content
+                if tool_category == 'search':
+                    tool_name = tool.get('name', '').lower()
+                    
+                    # Prioritize based on query content
+                    if 'news' in query_lower or 'latest' in query_lower or 'recent' in query_lower:
+                        # Prefer news search for news-related queries
+                        if 'news' in tool_name:
+                            tool['priority_score'] = 1.0  # Highest priority
+                        elif 'web' in tool_name:
+                            tool['priority_score'] = 0.8  # Good alternative
+                        elif 'image' in tool_name or 'video' in tool_name:
+                            tool['priority_score'] = 0.2  # Lower priority for news
+                        else:
+                            tool['priority_score'] = 0.5
+                    elif 'image' in query_lower or 'photo' in query_lower or 'picture' in query_lower:
+                        # Prefer image search for image queries
+                        if 'image' in tool_name:
+                            tool['priority_score'] = 1.0
+                        else:
+                            tool['priority_score'] = 0.3
+                    elif 'video' in query_lower or 'watch' in query_lower:
+                        # Prefer video search for video queries
+                        if 'video' in tool_name:
+                            tool['priority_score'] = 1.0
+                        else:
+                            tool['priority_score'] = 0.3
+                    else:
+                        # Default: prefer web search
+                        if 'web' in tool_name:
+                            tool['priority_score'] = 1.0
+                        else:
+                            tool['priority_score'] = 0.5
+                else:
+                    tool['priority_score'] = 0.7  # Default priority for non-search tools
+                
+                filtered_tools.append(tool)
+                self.logger.debug(f"Tool {tool['id']} (category: {tool_category}, priority: {tool.get('priority_score', 0.5):.2f}) matches intent categories")
+            else:
+                self.logger.debug(f"Filtering out {tool['id']} (category: {tool_category}) - doesn't match intent")
+        
+        if not filtered_tools and tools:
+            # If filtering removed all tools, log warning and return top 3 original tools
+            intent_type = getattr(intent_result.primary_intent, 'intent_type', None) or getattr(intent_result.primary_intent, 'type', 'unknown')
+            self.logger.warning(f"Semantic filtering removed all tools! Intent: {intent_type}, Categories: {appropriate_categories}")
+            return tools[:3]
+        
+        self.logger.info(f"Filtered {len(tools)} tools to {len(filtered_tools)} semantically appropriate tools")
+        return filtered_tools
+    
     async def _select_tools_with_q_learning(self, discovered_tools: List[Dict[str, Any]], 
                                           intent_result: IntentResult) -> List[Dict[str, Any]]:
-        """Select tools using Q-learning engine."""
+        """Select tools using Q-learning engine with semantic filtering."""
+        # CRITICAL: Filter tools by semantic appropriateness BEFORE Q-learning
+        discovered_tools = self._filter_tools_by_intent(discovered_tools, intent_result)
+        
+        if not discovered_tools:
+            self.logger.warning("No semantically appropriate tools available after filtering")
+            return []
+        
         # Encode current state with user context
         user_context = self.context.get('user_context')
         context = {
@@ -562,6 +732,10 @@ class OrchestratorAgent:
             'retry_patterns': self.failure_metrics['retry_patterns']
         })
         
+        # Add available tool categories for state encoding
+        available_categories = list(set(self._categorize_tool(tool) for tool in discovered_tools))
+        context['available_tool_categories'] = available_categories
+        
         # Encode state
         state = self.q_learning_engine.state_encoder.encode_state(
             intent_result, context, tool_history
@@ -574,10 +748,37 @@ class OrchestratorAgent:
         # Define constraints (tool relationships)
         constraints = await self._get_tool_constraints(available_tool_ids)
         
+        # Sort tools by priority score if available
+        discovered_tools_sorted = sorted(discovered_tools, 
+                                        key=lambda t: t.get('priority_score', 0.5), 
+                                        reverse=True)
+        
+        # Apply priority scores to available tools for Q-learning
+        tool_priorities = {}
+        for tool in discovered_tools:
+            priority = tool.get('priority_score', 0.5)
+            tool_priorities[tool['id']] = priority
+        
+        # Add priority hints to context for Q-learning
+        context['tool_priorities'] = tool_priorities
+        
         # Select action (tool combination) using Q-learning with context
         selected_tool_ids = await self.q_learning_engine.select_action(
             state, available_tool_ids, constraints, context=context
         )
+        
+        # If Q-learning selected a low-priority tool, consider overriding
+        if selected_tool_ids and len(selected_tool_ids) == 1:
+            selected_id = selected_tool_ids[0]
+            selected_priority = tool_priorities.get(selected_id, 0.5)
+            
+            # If selected tool has low priority, find highest priority alternative
+            if selected_priority < 0.5 and discovered_tools_sorted:
+                best_tool = discovered_tools_sorted[0]
+                if best_tool.get('priority_score', 0) > 0.8:
+                    self.logger.info(f"Overriding Q-learning selection {selected_id} (priority: {selected_priority:.2f}) "
+                                   f"with {best_tool['id']} (priority: {best_tool.get('priority_score', 0):.2f})")
+                    selected_tool_ids = [best_tool['id']]
         
         # Map selected IDs back to tool objects
         selected_tools = []
@@ -703,6 +904,37 @@ class OrchestratorAgent:
                 'execution_time_ms': execution_time_ms
             }
             
+            # Check if the result indicates an error
+            if isinstance(result, dict) and result.get('error'):
+                # Tool execution failed - treat as an error
+                error_msg = result.get('error', 'Unknown error')
+                
+                # Record failure in database
+                if hasattr(self, 'current_session_id') and self.current_session_id:
+                    await self.db_manager.record_failure(
+                        execution_id=self.current_session_id,
+                        tool_id=tool_id,
+                        failure_type=self._classify_error_message(error_msg),
+                        error_message=error_msg,
+                        retry_count=retry_count,
+                        recovery_successful=False
+                    )
+                
+                return ToolExecutionResult(
+                    tool_id=tool_id,
+                    tool_name=tool_name,
+                    success=False,
+                    result=None,
+                    error=error_msg,
+                    execution_time_ms=execution_time_ms,
+                    partial_success=False,
+                    completion_percentage=0.0,
+                    error_type=self._classify_error_message(error_msg),
+                    retry_count=retry_count,
+                    resource_usage=resource_usage,
+                    result_quality=0.0
+                )
+            
             # Evaluate result quality
             result_quality = self._evaluate_result_quality(result, tool_type=tool.get('type'))
             
@@ -771,18 +1003,40 @@ class OrchestratorAgent:
     
     def _prepare_tool_input(self, tool: Dict[str, Any], query: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare input parameters for tool execution based on tool requirements."""
-        # This is a simplified version - in practice, this would be more sophisticated
+        tool_name = tool.get('name', '').lower()
+        tool_type = tool.get('type', '').lower()
+        server_type = tool.get('server_type', '').lower()
+        
+        # Handle Brave Search MCP tools specifically
+        # Note: Different Brave tools use different parameter names!
+        if server_type == 'search' or 'brave' in tool_name:
+            if 'brave_news_search' in tool_name:
+                # brave_news_search expects 'query' parameter
+                return {'query': query}
+            elif 'brave_web_search' in tool_name:
+                # brave_web_search expects 'searchTerm' parameter
+                return {'searchTerm': query}
+            elif 'brave_image_search' in tool_name:
+                # brave_image_search expects 'searchTerm' parameter
+                return {'searchTerm': query}
+            elif 'brave_video_search' in tool_name:
+                # brave_video_search expects 'searchTerm' parameter
+                return {'searchTerm': query}
+            elif 'brave_local_search' in tool_name:
+                # brave_local_search expects 'searchTerm' and optional 'location'
+                return {'searchTerm': query, 'location': context.get('location', '')}
+            else:
+                # Try both parameter names as fallback
+                return {'query': query, 'searchTerm': query}
+        
+        # Default tool input for other tools
         tool_input = {
             'query': query,
             'context': context
         }
         
         # Add tool-specific parameters based on tool type
-        tool_type = tool.get('type', '').lower()
-        
-        if 'search' in tool_type:
-            tool_input['search_query'] = query
-        elif 'sqlite' in tool_type:
+        if 'sqlite' in tool_type:
             tool_input['sql_query'] = self._convert_to_sql(query)
         elif 'filesystem' in tool_type:
             tool_input['path'] = context.get('working_directory', '.')
@@ -832,6 +1086,39 @@ class OrchestratorAgent:
         
         else:
             return 'other'
+    
+    def _classify_error_message(self, error_msg: str) -> str:
+        """Classify error type from error message string."""
+        error_lower = error_msg.lower()
+        
+        # Tool not found errors
+        if 'tool not found' in error_lower or 'no such tool' in error_lower:
+            return 'tool_not_found'
+        
+        # Network-related errors
+        elif any(keyword in error_lower for keyword in ['timeout', 'timed out', 'connection timeout']):
+            return 'network_timeout'
+        elif any(keyword in error_lower for keyword in ['connection', 'network', 'unreachable']):
+            return 'connection_error'
+        
+        # Permission errors
+        elif any(keyword in error_lower for keyword in ['permission', 'access denied', 'unauthorized']):
+            return 'permission_error'
+        
+        # Rate limiting
+        elif any(keyword in error_lower for keyword in ['rate limit', 'too many requests', 'throttled']):
+            return 'rate_limit'
+        
+        # Authentication errors
+        elif any(keyword in error_lower for keyword in ['authentication', 'auth failed', 'invalid token']):
+            return 'authentication_error'
+        
+        # Invalid arguments
+        elif any(keyword in error_lower for keyword in ['invalid argument', 'invalid parameter', 'bad request']):
+            return 'invalid_argument'
+        
+        else:
+            return 'unknown'
     
     def _check_partial_success(self, error: Exception, tool_id: str) -> Optional[Dict[str, Any]]:
         """Check if there was a partial success despite the error."""

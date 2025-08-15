@@ -107,6 +107,20 @@ auto-tool-disc02/
 │   │   ├── logger.py                      # Logging configuration
 │   │   └── retry.py                       # Retry logic utilities
 │   │
+│   ├── web/                    # Web demonstration interface
+│   │   ├── README.md                      # Web interface documentation
+│   │   ├── demo_app.py                    # FastAPI application
+│   │   ├── demo_app_real.py               # Real server demo app
+│   │   ├── demo_simple.py                 # Simplified demo
+│   │   ├── init_demo_tools.py             # Demo tool initialization
+│   │   ├── model_helper.py                # Model utilities
+│   │   ├── static/                        # Static web assets
+│   │   │   ├── demo.html                  # Main UI template
+│   │   │   ├── demo_enhanced.html         # Enhanced UI version
+│   │   │   ├── demo.css                   # Styling
+│   │   │   └── demo.js                    # Client-side logic
+│   │   └── data/                          # Web app data directory
+│   │
 │   ├── models/                 # Data models
 │   │   ├── __init__.py
 │   │   └── intent.py                      # Intent model

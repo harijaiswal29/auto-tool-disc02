@@ -118,6 +118,14 @@ class PatternMiner:
         
         logger.info(f"PatternMiner initialized with support={min_support}, confidence={min_confidence}")
     
+    def _get_connection(self):
+        """Get a database connection with proper settings."""
+        return aiosqlite.connect(
+            self.db_path,
+            timeout=30.0,
+            isolation_level=None
+        )
+    
     async def extract_sequences(self, time_window: Optional[timedelta] = None) -> List[ExecutionSequence]:
         """Extract execution sequences from database.
         
@@ -133,7 +141,7 @@ class PatternMiner:
         cutoff_time = datetime.now() - time_window
         sequences = []
         
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Check if context columns exist
             cursor = await db.execute("PRAGMA table_info(execution_history)")
             columns = await cursor.fetchall()
@@ -189,7 +197,7 @@ class PatternMiner:
         Returns:
             Metadata value or None if not found
         """
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute(
                 "SELECT value FROM pattern_mining_metadata WHERE key = ?",
                 (key,)
@@ -204,7 +212,7 @@ class PatternMiner:
             key: Metadata key
             value: Metadata value
         """
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             await db.execute(
                 """
                 INSERT OR REPLACE INTO pattern_mining_metadata (key, value, last_updated)
@@ -230,7 +238,7 @@ class PatternMiner:
         sequences = []
         last_id = None
         
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Check if context columns exist
             cursor = await db.execute("PRAGMA table_info(execution_history)")
             columns = await cursor.fetchall()
@@ -310,7 +318,7 @@ class PatternMiner:
             Dictionary mapping pattern hash to statistics
         """
         stats = {}
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             cursor = await db.execute("""
                 SELECT pattern_hash, pattern_type, tool_sequence, occurrence_count,
                        success_count, total_support, total_confidence, last_seen
@@ -345,7 +353,7 @@ class PatternMiner:
             support_delta: Change in support
             confidence_delta: Change in confidence
         """
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Try to update existing record
             cursor = await db.execute("""
                 UPDATE pattern_statistics
@@ -1386,7 +1394,7 @@ class PatternMiner:
         if not patterns:
             return
             
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Clear old patterns
             await db.execute("DELETE FROM discovered_patterns WHERE discovered_at < datetime('now', '-90 days')")
             
@@ -1418,7 +1426,7 @@ class PatternMiner:
         """Load patterns from database into memory."""
         self.discovered_patterns.clear()
         
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             query = """
                 SELECT pattern_type, tool_sequence, support, confidence, lift, 
                        contexts, discovered_at, usage_count, temporal_metadata
@@ -1835,7 +1843,7 @@ class PatternMiner:
             pattern.usage_count += 1
             
             # Update in database
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._get_connection() as db:
                 await db.execute("""
                     UPDATE discovered_patterns 
                     SET usage_count = usage_count + 1
@@ -1950,7 +1958,7 @@ class PatternMiner:
         pruned_count = 0
         cutoff_date = datetime.now() - timedelta(days=max_age_days)
         
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._get_connection() as db:
             # Remove old patterns
             cursor = await db.execute("""
                 DELETE FROM discovered_patterns
