@@ -84,6 +84,7 @@ models/
 
 # Demo results and images
 *.png
+!dissertation_results/figures/*.png
 *_demo_results.md
 *_DEMO_*.md
 
@@ -102,7 +103,6 @@ data/cache/*.pkl
 
 # Results directories
 results/
-dissertation_results/
 test_new_rewards/
 
 # Backup files
