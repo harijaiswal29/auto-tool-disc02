@@ -189,7 +189,8 @@ class FixedPolicyBaseline(BaselineStrategy):
     
     def __init__(self, config: Dict[str, Any]):
         super().__init__("FixedPolicy", config)
-        self.state_representation = StateRepresentation()
+        # Disable PCA to maintain full 476 dimensions
+        self.state_representation = StateRepresentation(use_pca=False)
         
         # Define fixed policies for different intent patterns
         self.intent_policies = {

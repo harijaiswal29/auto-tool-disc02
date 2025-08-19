@@ -1,0 +1,99 @@
+{
+  "description": "Configuration optimized for tool selection accuracy",
+  "mode": "tool_accuracy_optimization",
+  
+  "reward_calculation": {
+    "use_tool_optimized": true,
+    "base_weights": {
+      "task_success": 10.0,
+      "partial_success": 1.0,
+      "task_failure": -2.0,
+      "optimal_tool_match": 15.0,
+      "exact_match_bonus": 10.0,
+      "suboptimal_tool_penalty": -5.0,
+      "tool_distance_penalty": -3.0,
+      "unnecessary_tool_penalty": -8.0,
+      "tool_efficiency": 5.0,
+      "execution_speed_bonus": 2.0,
+      "exploration_bonus": 0.5,
+      "pattern_discovery": 3.0
+    },
+    "strict_evaluation": true,
+    "partial_credit_threshold": 0.8,
+    "require_exact_tools": false,
+    "debug_rewards": true
+  },
+  
+  "evaluation": {
+    "primary_metric": "tool_selection_accuracy",
+    "secondary_metric": "task_completion_rate",
+    "track_metrics": [
+      "tool_selection_accuracy",
+      "exact_match_rate",
+      "partial_match_rate",
+      "tool_distance",
+      "task_completion_rate",
+      "average_reward",
+      "convergence_episodes"
+    ],
+    "strict_mode": true,
+    "require_exact_tools": false,
+    "partial_credit_threshold": 0.8,
+    "tool_accuracy_targets": {
+      "minimum": 0.20,
+      "target": 0.275,
+      "stretch": 0.35
+    }
+  },
+  
+  "q_learning": {
+    "learning_rate": 0.2,
+    "discount_factor": 0.95,
+    "exploration_rate": 0.3,
+    "exploration_decay": 0.998,
+    "min_exploration_rate": 0.05,
+    "adaptive_decay": true,
+    "performance_based_decay": true,
+    "reward_focus": "tool_accuracy"
+  },
+  
+  "dqn": {
+    "enabled": true,
+    "learning_rate": 0.0005,
+    "discount_factor": 0.95,
+    "exploration_rate": 0.3,
+    "exploration_decay": 0.998,
+    "min_exploration_rate": 0.05,
+    "prioritized_replay": true,
+    "prioritized_replay_alpha": 0.7,
+    "prioritized_replay_beta": 0.5,
+    "reward_focus": "tool_accuracy"
+  },
+  
+  "training": {
+    "episodes": 10,
+    "checkpoint_interval": 5,
+    "log_interval": 5,
+    "query_set": "hard_evaluation",
+    "curriculum_learning": false,
+    "early_stopping": {
+      "enabled": true,
+      "patience": 50,
+      "min_improvement": 0.01,
+      "metric": "tool_selection_accuracy"
+    }
+  },
+  
+  "experiment": {
+    "name": "tool_accuracy_optimization",
+    "repetitions": 3,
+    "random_seeds": [42, 123, 456],
+    "compare_with_standard": true,
+    "generate_report": true,
+    "visualization": {
+      "plot_learning_curves": true,
+      "plot_accuracy_comparison": true,
+      "plot_reward_breakdown": true
+    }
+  }
+}

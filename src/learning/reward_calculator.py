@@ -70,17 +70,20 @@ class RewardCalculator:
                 logger.error(f"Failed to initialize advanced strategies: {e}")
                 self.use_advanced_strategies = False
         
-        # Base weights - Enhanced for dense rewards
+        # Base weights - Enhanced for dense rewards with stricter partial credit
         self.base_weights = self.config.get('base_weights', {
-            'success': 20.0,  # Double success reward
-            'failure': -2.0,  # Reduced penalty to encourage exploration
-            'partial_success': 8.0,  # Much higher partial rewards
-            'step_progress': 0.5,  # NEW: Reward for each step completed
-            'exploration_bonus': 0.2,  # NEW: Bonus for trying new combinations
-            'learning_bonus': 0.3,  # NEW: Bonus when discovering patterns
-            'tool_efficiency': 5.0,  # NEW: Reward using fewer tools
-            'correct_tool_bonus': 3.0,  # NEW: Per correct tool selected
-            'wrong_tool_penalty': -1.0  # NEW: Mild penalty for wrong tools
+            'success': 25.0,  # Increased full success reward
+            'failure': -3.0,  # Slightly higher penalty for complete failure
+            'partial_success': 2.0,  # REDUCED from 8.0 - stricter partial credit
+            'step_progress': 0.5,  # Reward for each step completed
+            'exploration_bonus': 0.2,  # Bonus for trying new combinations
+            'learning_bonus': 0.3,  # Bonus when discovering patterns
+            'tool_efficiency': 8.0,  # INCREASED - stronger efficiency bonus
+            'correct_tool_bonus': 4.0,  # Per correct tool selected
+            'wrong_tool_penalty': -2.0,  # INCREASED penalty for wrong tools
+            'unnecessary_tool_penalty': -3.0,  # NEW: Penalty for redundant tools
+            'tool_order_bonus': 2.0,  # NEW: Bonus for correct tool ordering
+            'progress_multiplier': 1.5  # NEW: Multiplier for incremental progress
         })
         
         # Failure penalties by type - Reduced to encourage exploration
@@ -147,7 +150,8 @@ class RewardCalculator:
                         user_feedback: Optional[Dict[str, Any]] = None,
                         state: Optional[np.ndarray] = None,
                         action: Optional[List[str]] = None,
-                        next_state: Optional[np.ndarray] = None) -> Tuple[float, Dict[str, float]]:
+                        next_state: Optional[np.ndarray] = None,
+                        optimal_tools: Optional[List[str]] = None) -> Tuple[float, Dict[str, float]]:
         """
         Calculate comprehensive reward based on execution results and context.
         
@@ -353,21 +357,20 @@ class RewardCalculator:
         return adjustment
     
     def _partial_success_bonus(self, results: List[ExecutionMetrics]) -> float:
-        """Enhanced bonus for partial successes - strong incremental progress rewards."""
+        """Stricter bonus for partial successes - only reward significant progress."""
         bonus = 0.0
         
         for result in results:
             if result.partial_success:
-                # Increased bonus scaled by completion percentage
-                completion_bonus = self.base_weights['partial_success'] * result.completion_percentage
-                bonus += completion_bonus
-                
-                # Progressive bonus based on completion level
-                if result.completion_percentage > 0.8:
-                    bonus += 2.0  # Near completion
-                elif result.completion_percentage > 0.6:
-                    bonus += 1.0  # Good progress
-                elif result.completion_percentage > 0.3:
+                # STRICTER: Only give partial credit for >80% completion
+                if result.completion_percentage >= 0.8:
+                    # Near completion - moderate bonus
+                    completion_bonus = self.base_weights['partial_success'] * result.completion_percentage
+                    bonus += completion_bonus + 1.0
+                elif result.completion_percentage >= 0.6:
+                    # Good progress - small bonus
+                    bonus += self.base_weights['partial_success'] * 0.5
+                elif result.completion_percentage >= 0.4:
                     bonus += 0.5  # Some progress
                 else:
                     bonus += 0.2  # Any progress is good

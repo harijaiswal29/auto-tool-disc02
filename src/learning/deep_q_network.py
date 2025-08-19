@@ -103,7 +103,8 @@ class DQN(nn.Module):
             if isinstance(layer, nn.Linear):
                 x = layer(x)
                 # Apply batch norm after linear layer if enabled
-                if self.use_batch_norm and bn_idx < len(self.batch_norms):
+                # Skip batch norm if batch size is 1 (inference mode)
+                if self.use_batch_norm and bn_idx < len(self.batch_norms) and x.size(0) > 1:
                     x = self.batch_norms[bn_idx](x)
                     bn_idx += 1
             else:
@@ -163,15 +164,16 @@ class DuelingDQN(nn.Module):
         self.use_batch_norm = use_batch_norm
         
         # Shared feature extraction layers
-        self.feature_layers = nn.ModuleList()
-        
+        layers = []
         prev_dim = state_dim
         for i, hidden_dim in enumerate(hidden_dims[:-1]):  # Use all but last hidden dim
-            self.feature_layers.append(nn.Linear(prev_dim, hidden_dim))
-            self.feature_layers.append(nn.ReLU())
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            layers.append(nn.ReLU())
             if dropout_rate > 0:
-                self.feature_layers.append(nn.Dropout(dropout_rate))
+                layers.append(nn.Dropout(dropout_rate))
             prev_dim = hidden_dim
+        
+        self.feature_layers = nn.Sequential(*layers)
         
         # Value stream
         self.value_stream = nn.Sequential(
@@ -195,7 +197,7 @@ class DuelingDQN(nn.Module):
     def _initialize_weights(self):
         """Initialize network weights."""
         # Feature layers
-        for layer in self.feature_layers:
+        for layer in self.feature_layers.modules():
             if isinstance(layer, nn.Linear):
                 nn.init.xavier_uniform_(layer.weight)
                 nn.init.constant_(layer.bias, 0)
@@ -218,9 +220,7 @@ class DuelingDQN(nn.Module):
             Q-values for all actions, shape (batch_size, action_dim)
         """
         # Feature extraction
-        features = state
-        for layer in self.feature_layers:
-            features = layer(features)
+        features = self.feature_layers(state)
         
         # Compute value and advantages
         value = self.value_stream(features)

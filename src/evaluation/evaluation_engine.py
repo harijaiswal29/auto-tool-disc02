@@ -65,12 +65,23 @@ class EvaluationEngine:
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.state_representation = StateRepresentation()
+        # Disable PCA to maintain full 476 dimensions for DQN
+        self.state_representation = StateRepresentation(use_pca=False)
         self.metrics_collector = MetricsCollector(config)
         self.strategies = {}
         self.test_scenarios = []
         self.evaluation_results = defaultdict(list)
         self.comparison_results = {}
+        
+        # ENHANCED: Strict evaluation mode
+        self.strict_mode = config.get('strict_evaluation', False)
+        self.require_exact_tools = config.get('require_exact_tools', False)
+        self.partial_credit_threshold = config.get('partial_credit_threshold', 0.8)
+        
+        # Tool-optimized reward calculator selection
+        self.use_tool_optimized = config.get('reward_calculation', {}).get('use_tool_optimized', False)
+        self.reward_calculator = None
+        self._initialize_reward_calculator()
         
         # Real-time monitoring components
         self.regression_detector = PerformanceRegressionDetector(
@@ -90,6 +101,17 @@ class EvaluationEngine:
         
         # Setup metric observers
         self._setup_metric_observers()
+    
+    def _initialize_reward_calculator(self):
+        """Initialize the appropriate reward calculator based on configuration."""
+        if self.use_tool_optimized:
+            from src.learning.tool_optimized_reward_calculator import ToolOptimizedRewardCalculator
+            self.reward_calculator = ToolOptimizedRewardCalculator(self.config)
+            logger.info("Using Tool-Optimized Reward Calculator for evaluation")
+        else:
+            from src.learning.reward_calculator import RewardCalculator
+            self.reward_calculator = RewardCalculator(self.config)
+            logger.info("Using Standard Reward Calculator for evaluation")
         
     def _initialize_strategies(self):
         """Initialize all evaluation strategies."""
@@ -109,15 +131,16 @@ class EvaluationEngine:
             self.strategies['greedy'] = GreedySingleToolBaseline(self.config)
         if 'context_agnostic' in baselines:
             self.strategies['context_agnostic'] = ContextAgnosticQLearningBaseline(self.config)
-            
-        # Add both Q-learning strategies (tabular and DQN)
-        # These will run as separate strategies in the same experiment
-        self.strategies['q_learning_tabular'] = QLearningTabularStrategy(self.config)
-        self.strategies['q_learning_dqn'] = QLearningDQNStrategy(self.config)
         
-        # Keep backward compatibility with 'q_learning' name
-        # This will use whatever is configured in config.json (dqn.enabled)
-        self.strategies['q_learning'] = QLearningEngine(self.config)
+        # Add Q-learning strategies only if requested
+        if 'q_learning_tabular' in baselines:
+            self.strategies['q_learning_tabular'] = QLearningTabularStrategy(self.config)
+        if 'q_learning_dqn' in baselines:
+            self.strategies['q_learning_dqn'] = QLearningDQNStrategy(self.config)
+        if 'q_learning' in baselines:
+            # Keep backward compatibility with 'q_learning' name
+            # This will use whatever is configured in config.json (dqn.enabled)
+            self.strategies['q_learning'] = QLearningEngine(self.config)
             
         logger.info(f"Initialized {len(self.strategies)} strategies for evaluation")
         
@@ -324,8 +347,8 @@ class EvaluationEngine:
         This now actually executes tools (or simulates realistic execution)
         and calculates proper rewards using ExecutionMetrics.
         """
-        # Import here to avoid circular dependency
-        from src.learning.reward_calculator import ExecutionMetrics, RewardCalculator
+        # Import ExecutionMetrics (common to both calculators)
+        from src.learning.reward_calculator import ExecutionMetrics
         
         # Create ExecutionMetrics for each tool
         execution_metrics = []
@@ -363,12 +386,21 @@ class EvaluationEngine:
                 )
             else:
                 # Failed execution
-                partial = random.random() < 0.3
+                # STRICTER: In strict mode, reduce partial success probability
+                partial_prob = 0.1 if self.strict_mode else 0.3
+                partial = random.random() < partial_prob
+                
+                # STRICTER: Higher threshold for partial credit
+                if self.strict_mode and partial:
+                    completion = random.uniform(0.7, 0.9) if random.random() < 0.2 else 0.0
+                else:
+                    completion = random.uniform(0.1, 0.5) if partial else 0.0
+                
                 metrics = ExecutionMetrics(
                     tool_id=tool,
                     success=False,
-                    partial_success=partial,
-                    completion_percentage=random.uniform(0.1, 0.5) if partial else 0.0,
+                    partial_success=partial and completion >= self.partial_credit_threshold,
+                    completion_percentage=completion,
                     execution_time_ms=random.uniform(100, 500),
                     error_type=random.choice(['timeout', 'permission_error', 'not_found']),
                     retry_count=random.randint(0, 2),
@@ -381,15 +413,24 @@ class EvaluationEngine:
             
             execution_metrics.append(metrics)
         
-        # Calculate reward using the real RewardCalculator
-        calc = RewardCalculator(self.config)
+        # Calculate reward using the configured calculator
         context = {
             'scenario_id': scenario.scenario_id,
             'intent': scenario.description,
             'constraints': scenario.constraints
         }
         
-        reward, breakdown = calc.calculate_reward(execution_metrics, context)
+        # Use tool-optimized calculator if configured, passing optimal tools
+        if self.use_tool_optimized:
+            # Get optimal tools from scenario if available
+            optimal_tools = getattr(scenario, 'optimal_tools', scenario.available_tools)
+            reward, breakdown = self.reward_calculator.calculate_reward(
+                execution_metrics, context, optimal_tools
+            )
+        else:
+            reward, breakdown = self.reward_calculator.calculate_reward(
+                execution_metrics, context
+            )
         
         # Log for debugging
         if self.config.get('debug_rewards', False):

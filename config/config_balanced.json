@@ -1,0 +1,48 @@
+{
+  "reward_calculation": {
+    "base_weights": {
+      "task_success": 15.0,
+      "optimal_tool_match": 12.0,
+      "exact_match_bonus": 8.0,
+      "partial_success": 5.0,
+      "tool_efficiency": 3.0,
+      "exploration_bonus": 2.0,
+      "task_failure": -5.0,
+      "suboptimal_tool_penalty": -3.0,
+      "unnecessary_tool_penalty": -4.0,
+      "tool_distance_penalty": -2.0
+    },
+    "context_multipliers": {
+      "simple_query": {
+        "tool_match": 1.5,
+        "task": 0.8
+      },
+      "complex_query": {
+        "tool_match": 0.8,
+        "task": 1.2
+      },
+      "novel_query": {
+        "tool_match": 1.0,
+        "task": 1.0
+      }
+    },
+    "curriculum_schedule": {
+      "episodes_0_200": {
+        "tool_weight": 0.6,
+        "task_weight": 1.4
+      },
+      "episodes_200_500": {
+        "tool_weight": 1.0,
+        "task_weight": 1.0
+      },
+      "episodes_500_1000": {
+        "tool_weight": 1.3,
+        "task_weight": 0.8
+      },
+      "episodes_1000+": {
+        "tool_weight": 1.1,
+        "task_weight": 1.0
+      }
+    }
+  }
+}

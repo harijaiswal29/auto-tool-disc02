@@ -118,6 +118,7 @@ For troubleshooting common issues and solutions, see `docs/troubleshooting.md`
 - `docs/architecture/workflows.md` - Key system workflows and processes
 - `docs/architecture/database-schema.md` - Complete database schema and tables
 - `docs/architecture/retry-architecture.md` - Retry and resilience patterns
+- `docs/architecture/result-caching.md` - Result caching architecture
 
 ### Implementation Details
 - `docs/implementation/implementation-status.md` - Detailed implementation tracking
@@ -146,6 +147,7 @@ For troubleshooting common issues and solutions, see `docs/troubleshooting.md`
 - `docs/evaluation/evaluation-targets.md` - Performance targets and baselines
 - `docs/evaluation/baseline-comparisons.md` - Baseline strategy comparisons
 - `docs/evaluation/ab-testing-framework.md` - A/B testing documentation
+- `docs/evaluation/strategy-details.md` - Detailed strategy implementation
 
 ### Testing & Deployment
 - `tests/README.md` - **Comprehensive test suite documentation and ALL test commands**
@@ -161,6 +163,9 @@ For troubleshooting common issues and solutions, see `docs/troubleshooting.md`
 - `docs/deployment/security.md` - Security architecture and best practices
 - `docs/deployment/configuration.md` - Configuration guide for learning system
 
+### Monitoring
+- `docs/monitoring/cache-monitoring.md` - Cache monitoring and optimization
+
 ## Development Timeline
 
 For project phases and timeline, see `docs/project/phase-completion.md`
@@ -168,6 +173,13 @@ For project phases and timeline, see `docs/project/phase-completion.md`
 ## Performance Targets
 
 For detailed performance targets and evaluation metrics, see `docs/evaluation/evaluation-targets.md`
+
+## Dissertation Results
+
+The completed dissertation research results and findings are available in:
+- `dissertation_results/DISSERTATION_RESULTS.md` - Comprehensive experimental results, analysis, and summary
+- `dissertation_results/figures/` - Visualization of learning curves, performance metrics, and hypothesis validation
+- `dissertation_results/generate_visualizations.py` - Script to regenerate result visualizations
 
 ## Demo Scripts and Web Interface
 

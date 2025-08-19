@@ -1,0 +1,88 @@
+{
+  "description": "200-episode tool accuracy experiment configuration",
+  "inherit_from": "config/config_tool_optimized.json",
+  
+  "training": {
+    "episodes": 200,
+    "checkpoint_interval": 20,
+    "log_interval": 20,
+    "save_checkpoints": true,
+    "checkpoint_dir": "checkpoints/tool_accuracy_200ep",
+    "warm_start": false,
+    "curriculum_learning": false
+  },
+  
+  "evaluation": {
+    "baselines": [
+      "random",
+      "popular", 
+      "fixed_policy",
+      "greedy",
+      "q_learning_tabular"
+    ],
+    "num_episodes_per_strategy": 200,
+    "parallel_evaluation": false,
+    "track_tool_accuracy": true,
+    "strict_mode": true,
+    "require_exact_tools": false,
+    "partial_credit_threshold": 0.8
+  },
+  
+  "reward_calculation": {
+    "use_tool_optimized": true,
+    "debug_rewards": false
+  },
+  
+  "q_learning": {
+    "learning_rate": 0.2,
+    "discount_factor": 0.95,
+    "exploration_rate": 0.3,
+    "exploration_decay": 0.998,
+    "min_exploration_rate": 0.05,
+    "adaptive_decay": true,
+    "performance_based_decay": true
+  },
+  
+  "dqn": {
+    "enabled": false,
+    "comment": "Disabled for this run to focus on tabular Q-learning"
+  },
+  
+  "mcp_servers": {
+    "use_real_servers": true,
+    "fallback_to_mock": true,
+    "servers": {
+      "filesystem_mcp": {
+        "type": "real",
+        "fallback": "mock"
+      },
+      "sqlite_mcp": {
+        "type": "real",
+        "fallback": "mock"
+      },
+      "github_mcp": {
+        "type": "mock",
+        "reason": "API key not configured"
+      },
+      "search_mcp": {
+        "type": "mock",
+        "reason": "API key not configured"
+      },
+      "postgres_mcp": {
+        "type": "mock",
+        "reason": "Database not configured"
+      },
+      "weather_mcp": {
+        "type": "mock",
+        "reason": "API key not configured"
+      }
+    }
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "suppress_verbose": ["learning", "evaluation.baseline_strategies", "src.tools"],
+    "checkpoint_logging": true,
+    "progress_updates": true
+  }
+}

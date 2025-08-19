@@ -280,6 +280,119 @@ COMPLEX_QUERIES = [
         complexity=QueryComplexity.COMPLEX,
         intents=["database.extract", "report.create"],
         domain="data_analysis"
+    ),
+    # New challenging multi-tool queries (3-4 tools required)
+    TestQuery(
+        query="Analyze code repository, find security issues, search for fixes, and document findings",
+        optimal_tools=["github_mcp", "filesystem_mcp", "search_mcp", "notion_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["code.analyze", "security.scan", "search.solution", "document.create"],
+        domain="security",
+        expected_success_rate=0.6
+    ),
+    TestQuery(
+        query="Collect weather data for multiple cities, store in database, and create visualization report",
+        optimal_tools=["weather_mcp", "sqlite_mcp", "filesystem_mcp", "search_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["weather.multi", "database.store", "report.visualize", "search.tools"],
+        domain="data_analysis",
+        expected_success_rate=0.5
+    ),
+    TestQuery(
+        query="Monitor system performance, query historical metrics, find optimization guides, and apply fixes",
+        optimal_tools=["system_mcp", "postgres_mcp", "search_mcp", "filesystem_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["system.monitor", "metrics.history", "search.optimize", "config.update"],
+        domain="system_optimization",
+        expected_success_rate=0.55
+    ),
+    TestQuery(
+        query="Analyze stock portfolio, search market news, update database, and create investment report",
+        optimal_tools=["zerodha_mcp", "search_mcp", "sqlite_mcp", "notion_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["finance.analyze", "news.search", "database.update", "report.create"],
+        domain="finance",
+        expected_success_rate=0.5
+    ),
+    TestQuery(
+        query="Find all test files, run tests, analyze failures, and search for debugging solutions",
+        optimal_tools=["filesystem_mcp", "github_mcp", "search_mcp", "sqlite_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["test.find", "test.run", "failure.analyze", "debug.search"],
+        domain="testing",
+        expected_success_rate=0.6
+    ),
+    TestQuery(
+        query="Extract API logs, analyze error patterns, search documentation, and create incident report",
+        optimal_tools=["filesystem_mcp", "postgres_mcp", "search_mcp", "notion_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["log.extract", "error.analyze", "docs.search", "incident.report"],
+        domain="troubleshooting",
+        expected_success_rate=0.55
+    ),
+    TestQuery(
+        query="Compare code branches, identify conflicts, search merge strategies, and update documentation",
+        optimal_tools=["github_mcp", "filesystem_mcp", "search_mcp", "notion_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["git.compare", "conflict.find", "strategy.search", "docs.update"],
+        domain="development",
+        expected_success_rate=0.6
+    ),
+    TestQuery(
+        query="Query customer data, analyze trends, search competitors, and prepare market report",
+        optimal_tools=["postgres_mcp", "sqlite_mcp", "search_mcp", "filesystem_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["customer.query", "trend.analyze", "competitor.search", "report.prepare"],
+        domain="business_analysis",
+        expected_success_rate=0.5
+    ),
+    TestQuery(
+        query="Scan infrastructure configs, check compliance rules, search regulations, and generate audit report",
+        optimal_tools=["filesystem_mcp", "postgres_mcp", "search_mcp", "notion_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["config.scan", "compliance.check", "regulation.search", "audit.report"],
+        domain="compliance",
+        expected_success_rate=0.55
+    ),
+    TestQuery(
+        query="Analyze database performance, find slow queries, search optimization tips, and implement indexes",
+        optimal_tools=["sqlite_mcp", "postgres_mcp", "search_mcp", "filesystem_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["db.analyze", "query.profile", "optimize.search", "index.create"],
+        domain="database_optimization",
+        expected_success_rate=0.5
+    ),
+    TestQuery(
+        query="Extract deployment logs, identify failures, search solutions, and update runbooks",
+        optimal_tools=["filesystem_mcp", "github_mcp", "search_mcp", "notion_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["deploy.logs", "failure.identify", "solution.search", "runbook.update"],
+        domain="operations",
+        expected_success_rate=0.6
+    ),
+    TestQuery(
+        query="Monitor API usage, query billing data, find cost optimization guides, and create budget report",
+        optimal_tools=["system_mcp", "postgres_mcp", "search_mcp", "filesystem_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["api.monitor", "billing.query", "cost.optimize", "budget.report"],
+        domain="cost_management",
+        expected_success_rate=0.55
+    ),
+    TestQuery(
+        query="Analyze code dependencies, find vulnerabilities, search patches, and update packages",
+        optimal_tools=["github_mcp", "filesystem_mcp", "search_mcp", "system_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["dependency.analyze", "vuln.scan", "patch.search", "package.update"],
+        domain="security",
+        expected_success_rate=0.5
+    ),
+    TestQuery(
+        query="Collect performance metrics, compare with baselines, search best practices, and optimize configuration",
+        optimal_tools=["system_mcp", "sqlite_mcp", "search_mcp", "filesystem_mcp"],
+        complexity=QueryComplexity.COMPLEX,
+        intents=["metrics.collect", "baseline.compare", "practice.search", "config.optimize"],
+        domain="performance",
+        expected_success_rate=0.55
     )
 ]
 
@@ -518,7 +631,10 @@ def get_evaluation_sets() -> Dict[str, List[TestQuery]]:
         "complex_only": COMPLEX_QUERIES,
         "ambiguous_only": AMBIGUOUS_QUERIES,
         "full_evaluation": get_all_queries(),
-        "dissertation_core": SIMPLE_QUERIES[:10] + COMPLEX_QUERIES[:10] + AMBIGUOUS_QUERIES[:5]
+        # Updated: Reduced simple queries, increased complex queries for harder evaluation
+        "dissertation_core": SIMPLE_QUERIES[:5] + COMPLEX_QUERIES[:15] + AMBIGUOUS_QUERIES[:5],
+        # New: Hard evaluation set with 80% complex queries
+        "hard_evaluation": SIMPLE_QUERIES[:3] + COMPLEX_QUERIES[-15:] + AMBIGUOUS_QUERIES[:2]
     }
 
 

@@ -168,25 +168,39 @@ class StateRepresentation:
         return features
     
     def _encode_history(self, history: List[str]) -> np.ndarray:
-        """Encode tool usage history."""
+        """Enhanced encoding of tool usage history with sequence and temporal information."""
         features = np.zeros(self.state_dimensions['tool_history'], dtype=np.float32)
         
-        # Frequency encoding for recent tools
+        # ENHANCED: Track last 5 tools in sequence with positional encoding
+        last_5_tools = history[-5:] if history else []
+        
+        # Encode tool sequence (features 0-9: 2 features per tool)
+        for i, tool in enumerate(last_5_tools):
+            if i * 2 < 10:
+                # Recency weight (more recent = higher weight)
+                features[i * 2] = 1.0 / (len(last_5_tools) - i)
+                # Tool identifier (simple hash encoding)
+                features[i * 2 + 1] = (hash(tool) % 100) / 100.0
+        
+        # Frequency encoding for recent tools (features 10-14)
         tool_counts = defaultdict(int)
         for tool in history[-20:]:  # Last 20 tools
             tool_counts[tool] += 1
         
-        # Common tools get dedicated features
-        common_tools = ['filesystem_mcp', 'sqlite_mcp', 'search_mcp', 
-                       'postgres_mcp', 'github_mcp']
+        # Most frequent tools
+        sorted_tools = sorted(tool_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+        for i, (tool, count) in enumerate(sorted_tools):
+            if 10 + i < 13:
+                features[10 + i] = min(count / 5.0, 1.0)
         
-        for i, tool in enumerate(common_tools[:10]):
-            if tool in tool_counts:
-                features[i] = min(tool_counts[tool] / 5.0, 1.0)
-        
-        # General statistics
-        features[10] = len(set(history[-10:])) / 10.0  # Diversity
-        features[11] = len(history) / 50.0 if history else 0  # Volume
+        # Tool pattern features (features 13-19)
+        features[13] = len(set(history[-10:])) / 10.0 if history else 0  # Diversity
+        features[14] = len(history) / 50.0 if history else 0  # Volume
+        features[15] = 1.0 if len(last_5_tools) > 1 and last_5_tools[-1] == last_5_tools[-2] else 0.0  # Repetition
+        features[16] = len([t for t in last_5_tools if 'search' in t.lower()]) / max(len(last_5_tools), 1)  # Search tools ratio
+        features[17] = len([t for t in last_5_tools if 'database' in t.lower() or 'sql' in t.lower()]) / max(len(last_5_tools), 1)  # DB tools ratio
+        features[18] = 1.0 if any('github' in t or 'filesystem' in t for t in last_5_tools) else 0.0  # Code tools used
+        features[19] = min(len(history) / 10.0, 1.0) if history else 0.0  # Experience level
         
         # Pattern features
         if len(history) >= 2:
@@ -540,7 +554,7 @@ class QTable:
             self.initial_q_value = 0.0
         
         self.update_count = defaultdict(int)
-        self.state_encoder = StateRepresentation()
+        self.state_encoder = StateRepresentation(use_pca=False)
         self.action_space = ActionSpace()
         self.lock = asyncio.Lock()
     
@@ -780,7 +794,9 @@ class QLearningEngine:
         q_config = config.get('q_learning', {})
         self.learning_rate = q_config.get('learning_rate', q_config.get('alpha', 0.1))
         self.discount_factor = q_config.get('discount_factor', q_config.get('gamma', 0.9))
-        self.exploration_rate = q_config.get('exploration_rate', q_config.get('epsilon', 0.2))
+        # ENHANCED: Start with higher exploration for better initial learning
+        self.exploration_rate = q_config.get('exploration_rate', q_config.get('epsilon', 0.5))
+        self.initial_exploration_rate = self.exploration_rate
         self.exploration_decay = q_config.get('exploration_decay', 0.995)
         self.min_exploration_rate = q_config.get('min_exploration_rate', 0.01)
         
@@ -793,7 +809,8 @@ class QLearningEngine:
         self.recent_performance = deque(maxlen=100)  # Track recent rewards
         
         # Initialize components
-        self.state_encoder = StateRepresentation()
+        # Disable PCA for DQN to maintain full state dimensions (476)
+        self.state_encoder = StateRepresentation(use_pca=False)
         self.action_space = ActionSpace(max_tools=q_config.get('max_tools', 3))
         
         # Check if DQN is enabled
@@ -1307,16 +1324,21 @@ class QLearningEngine:
     def _apply_adaptive_decay(self):
         """Apply adaptive epsilon decay based on schedule and performance."""
         if self.decay_schedule == 'exponential':
-            # Standard exponential decay with milestone adjustments
-            base_decay = self.exploration_rate * self.exploration_decay
+            # ENHANCED: More aggressive exponential decay for better exploitation
+            # Start at 0.5, decay to 0.01 over episodes
+            initial_epsilon = 0.5
+            decay_rate = 0.995  # Faster decay rate
+            
+            # Calculate new epsilon with exponential decay
+            new_epsilon = initial_epsilon * (decay_rate ** self.episode_count)
             
             # Check for milestone adjustments
             if self.episode_count in self.decay_milestones:
                 # Stronger decay at milestones
-                base_decay *= 0.5
-                logger.info(f"Milestone {self.episode_count}: Extra decay applied, ε={base_decay:.4f}")
+                new_epsilon *= 0.7
+                logger.info(f"Milestone {self.episode_count}: Extra decay applied, ε={new_epsilon:.4f}")
             
-            self.exploration_rate = max(base_decay, self.min_exploration_rate)
+            self.exploration_rate = max(new_epsilon, self.min_exploration_rate)
             
         elif self.decay_schedule == 'linear':
             # Linear decay over total episodes
