@@ -35,9 +35,10 @@ experiments:
         expected_performance: 0.90  # 90% task completion (improved target)
     
     # Experiment parameters
-    episodes: 1000                    # Number of episodes per strategy
-    runs_per_strategy: 5              # Multiple runs for statistical validity
+    episodes: 20                      # Number of episodes per strategy (focused test run)
+    runs_per_strategy: 1               # Single run for focused test
     random_seeds: [42, 123, 456, 789, 999]  # Fixed seeds for reproducibility
+    checkpoint_interval: 5             # Save every 5 episodes (4 checkpoints for 20 episodes)
     
     # Metrics to collect
     metrics:

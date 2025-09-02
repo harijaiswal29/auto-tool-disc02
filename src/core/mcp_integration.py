@@ -65,6 +65,10 @@ class MCPIntegration:
         self.servers: Dict[str, Any] = {}
         self.active_connections: Dict[str, Any] = {}
         
+        # Load tool-to-server mappings
+        self.tool_mappings = self._load_tool_mappings()
+        self.server_configs = self._load_server_configs()
+        
         # Initialize retry manager with configuration
         retry_config = config.get('retry_policies', {})
         circuit_breaker_config = config.get('circuit_breaker', {})
@@ -108,6 +112,165 @@ class MCPIntegration:
                 'tool_registry': 'data/registry/tools.db'
             }
         }
+    
+    def _load_tool_mappings(self) -> Dict[str, Any]:
+        """Load tool-to-server mapping configuration."""
+        mapping_path = Path(__file__).parent.parent.parent / 'config' / 'tool_server_mapping.json'
+        
+        if mapping_path.exists():
+            with open(mapping_path, 'r') as f:
+                mappings = json.load(f)
+                logger.info(f"[MAPPING] Loaded tool mappings from {mapping_path}")
+                return mappings
+        
+        logger.warning("[MAPPING] Tool mapping file not found, using empty mappings")
+        return {
+            'tool_mappings': {},
+            'server_types': {},
+            'fallback_strategy': {
+                'use_mock_on_failure': True,
+                'retry_real_server': True,
+                'max_retries': 3
+            }
+        }
+    
+    def _load_server_configs(self) -> Dict[str, Any]:
+        """Load MCP server configurations."""
+        config_path = Path(__file__).parent.parent.parent / 'config' / 'mcp_servers_config.json'
+        
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                configs = json.load(f)
+                logger.info(f"[CONFIG] Loaded server configs from {config_path}")
+                return configs
+        
+        logger.warning("[CONFIG] Server config file not found, using empty configs")
+        return {'servers': {}}
+    
+    def get_server_for_tool(self, tool_id: str) -> Optional[str]:
+        """
+        Get the server ID for a given tool ID using mapping configuration.
+        
+        Args:
+            tool_id: Tool identifier
+            
+        Returns:
+            Server ID or None if not found
+        """
+        # Check direct mapping first
+        tool_mappings = self.tool_mappings.get('tool_mappings', {})
+        if tool_id in tool_mappings:
+            return tool_mappings[tool_id]
+        
+        # Check pattern-based mapping
+        server_types = self.tool_mappings.get('server_types', {})
+        for server_type, config in server_types.items():
+            patterns = config.get('patterns', [])
+            for pattern in patterns:
+                # Simple wildcard matching
+                if pattern.endswith('*'):
+                    prefix = pattern[:-1]
+                    if tool_id.startswith(prefix):
+                        return config.get('default_server')
+                elif pattern == tool_id:
+                    return config.get('default_server')
+        
+        # Try to find by server type from registry
+        tool_info = self.registry.get_tool(tool_id)
+        if tool_info:
+            server_type = tool_info.get('server_type')
+            if server_type in server_types:
+                return server_types[server_type].get('default_server')
+        
+        logger.warning(f"[MAPPING] No server mapping found for tool: {tool_id}")
+        return None
+    
+    async def initialize_from_config(self) -> Dict[str, bool]:
+        """
+        Initialize all servers based on configuration.
+        
+        Returns:
+            Dictionary of server_id -> success status
+        """
+        results = {}
+        server_configs = self.server_configs.get('servers', {})
+        init_order = self.server_configs.get('initialization_order', list(server_configs.keys()))
+        
+        for server_id in init_order:
+            if server_id not in server_configs:
+                logger.warning(f"[INIT] Server {server_id} in init order but not in configs")
+                continue
+            
+            config = server_configs[server_id]
+            if not config.get('auto_initialize', True):
+                logger.info(f"[INIT] Skipping {server_id} (auto_initialize=false)")
+                continue
+            
+            # Check for required environment variables
+            import os
+            required_env = config.get('real_server', {}).get('required_env', [])
+            env_available = all(os.getenv(var) for var in required_env)
+            
+            # Determine whether to use real or mock
+            use_mock = not env_available or self.server_configs.get('mock_settings', {}).get('always_use_mock', False)
+            
+            # Initialize based on server type
+            server_type = config.get('type')
+            success = False
+            
+            try:
+                if server_type == 'search':
+                    api_key = os.getenv('BRAVE_API_KEY') if not use_mock else None
+                    success = await self.add_search_server(
+                        config={'api_key': api_key} if api_key else None,
+                        server_id=server_id,
+                        use_mock=use_mock
+                    )
+                elif server_type == 'github':
+                    token = os.getenv('GITHUB_TOKEN') if not use_mock else None
+                    success = await self.add_github_server(
+                        github_token=token,
+                        server_id=server_id,
+                        use_mock=use_mock
+                    )
+                elif server_type == 'sqlite':
+                    db_path = config.get('config', {}).get('default_db_path', 'data/test.db')
+                    success = await self.add_sqlite_server(
+                        db_path=db_path,
+                        server_id=server_id,
+                        use_mock=use_mock
+                    )
+                elif server_type == 'postgres':
+                    conn_str = os.getenv('POSTGRES_CONNECTION_STRING') if not use_mock else None
+                    if conn_str:
+                        success = await self.add_postgres_server(
+                            connection_string=conn_str,
+                            server_id=server_id,
+                            use_mock=use_mock
+                        )
+                elif server_type == 'filesystem':
+                    base_path = config.get('config', {}).get('default_base_path', '.')
+                    success = await self.add_filesystem_server(
+                        base_path=base_path,
+                        server_id=server_id,
+                        use_mock=use_mock
+                    )
+                elif server_type == 'weather':
+                    success = await self.add_weather_server(
+                        server_id=server_id,
+                        use_mock=use_mock
+                    )
+                else:
+                    logger.warning(f"[INIT] Unknown server type: {server_type}")
+                
+                results[server_id] = success
+                logger.info(f"[INIT] {server_id}: {'SUCCESS' if success else 'FAILED'} (mock={use_mock})")
+                
+            except Exception as e:
+                logger.error(f"[INIT] Error initializing {server_id}: {e}")
+                results[server_id] = False
+        
+        return results
     
     async def add_sqlite_server(self, db_path: str, server_id: str = "sqlite_default", use_mock: bool = False) -> bool:
         """
@@ -564,17 +727,20 @@ class MCPIntegration:
             logger.error(f"[ERROR] Tool not found in registry: {tool_id}")
             return {"error": f"Tool not found: {tool_id}", "success": False}
         
-        # Find the appropriate server
-        server_type = tool_info['server_type']
-        server_id = None
+        # Find the appropriate server using mapping configuration
+        server_id = self.get_server_for_tool(tool_id)
         
-        for sid, server in self.servers.items():
-            if server['type'] == server_type and server['status'] == 'active':
-                server_id = sid
-                break
+        # Fallback to old method if mapping not found
+        if not server_id:
+            server_type = tool_info['server_type']
+            for sid, server in self.servers.items():
+                if server['type'] == server_type and server['status'] == 'active':
+                    server_id = sid
+                    break
         
         if not server_id:
-            logger.error(f"[ERROR] No active server for type: {server_type}")
+            server_type = tool_info.get('server_type', 'unknown')
+            logger.error(f"[ERROR] No active server for tool: {tool_id} (type: {server_type})")
             return {"error": f"No active server for type: {server_type}"}
         
         # Execute through the appropriate client
@@ -582,6 +748,9 @@ class MCPIntegration:
         if not client:
             logger.error(f"[ERROR] No active connection for server: {server_id}")
             return {"error": f"No active connection for server: {server_id}"}
+        
+        # Get server type for retry policy
+        server_type = self.servers.get(server_id, {}).get('type', 'unknown')
         
         # Extract tool name (remove prefix)
         if '.' in tool_id:

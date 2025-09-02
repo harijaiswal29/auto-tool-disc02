@@ -1,591 +1,506 @@
-# Autonomous Tool Discovery and Integration System
+# Autonomous Tool Discovery and Integration Through Model Context Protocol (MCP)
 
-An AI dissertation project implementing autonomous tool discovery and integration through Model Context Protocol (MCP). The system uses Q-learning and sentence transformers to enable agents to discover, learn, and optimize tool usage autonomously.
+## 🎓 M.Tech Dissertation Project
 
-## Overview
+An AI system that enables autonomous agents to discover, learn, and optimize tool usage through reinforcement learning. This research demonstrates how Q-learning agents can achieve **50.33% task completion rate** with **7.5% improvement over baseline strategies**, validating the feasibility of autonomous tool discovery.
 
-This system provides an intelligent framework for:
-- **Intent Recognition**: Understanding user queries through NLP and semantic analysis
-- **Tool Discovery**: Finding relevant tools based on capabilities and relationships
-- **Learning & Optimization**: Improving tool selection through Q-learning
-- **Execution & Monitoring**: Managing tool execution with performance tracking
-- **Continuous Adaptation**: Learning from patterns and user feedback
+## 📊 Key Research Achievements
 
-## High-Level Architecture
+- **50.33%** task completion rate achieved by Q-learning agents
+- **7.5%** improvement over baseline strategy average
+- **3x** better tool selection accuracy than random selection
+- **p < 0.001** statistical significance across all hypotheses
+- **600** training episodes with curriculum learning
+- **476-dimensional** state vectors for comprehensive context representation
 
-The system consists of 5 core layers:
+## 🏗️ System Architecture
 
-1. **Intent Recognition Layer**: Understands user goals using keyword matching, semantic analysis (sentence-transformers), context tracking, and intent classification
-2. **Tool Discovery Layer**: Finds relevant tools via registry interface, capability matching, graph exploration (NetworkX), and discovery patterns
-3. **Tool Selection & Learning Layer**: Optimizes tool choice using epsilon-greedy multi-armed bandit, Q-learning with 476-dimensional state vectors, combination scoring, and contextual analysis
-4. **Execution & Monitoring Layer**: Manages MCP connections, executes tools in parallel (asyncio), monitors performance, handles errors, and tracks resource usage
-5. **Learning & Adaptation Layer**: Improves over time using enhanced Q-learning engine with failure differentiation, pattern mining, feedback processing, and model adaptation
+The system implements a 5-layer architecture for autonomous tool discovery:
 
-## Features
+1. **Intent Recognition Layer** - Natural language understanding with sentence-transformers
+2. **Tool Discovery Layer** - Graph-based exploration and capability matching
+3. **Tool Selection & Learning Layer** - Q-learning with neural network approximation
+4. **Execution & Monitoring Layer** - Asynchronous parallel execution with performance tracking
+5. **Learning & Adaptation Layer** - Pattern mining and continuous improvement
 
-- **Interactive Web Interface**: Professional web UI for visual demonstration of the complete pipeline
-- **Modular Pipeline Architecture**: 7-stage processing pipeline with pluggable components
-- **Real-time Performance Monitoring**: Comprehensive metrics collection and analysis
-- **Conversation State Management**: Intelligent state machine for user interactions
-- **Multi-Intent Query Support**: Handle complex queries with multiple intents
-- **Context Persistence**: User profiles and session management
-- **Semantic Understanding**: Using sentence-transformers (all-MiniLM-L6-v2)
-- **Comprehensive Testing**: >90% test coverage with unit and integration tests
-- **Asynchronous Execution**: High-performance async/await architecture
-- **Retry and Resilience System**: Exponential backoff, circuit breakers, and connection pooling
-- **Fault Tolerance**: Automatic retry with jitter and intelligent failure handling
-- **Connection Pool Management**: Health checks and efficient resource utilization
-- **Retry Metrics & Alerting**: Comprehensive monitoring of retry patterns and failures
-- **Extensible Design**: Easy to add new tools and capabilities
+## ⚙️ Prerequisites
 
-## Technology Stack
+### System Requirements
+- **Python**: 3.8 or higher (tested with 3.12.3)
+- **Operating System**: Linux, macOS, or Windows with WSL2
+- **Memory**: Minimum 8GB RAM (16GB recommended for training)
+- **Storage**: 2GB free space for models and data
 
-- **Language**: Python 3.8+
-- **Database**: SQLite (with aiosqlite for async operations)
-- **ML Libraries**: scikit-learn, sentence-transformers (all-MiniLM-L6-v2), numpy/pandas
-- **Async**: asyncio
-- **Graph**: NetworkX
-- **Web Framework**: FastAPI
-- **MCP Integration**: Official Model Context Protocol SDK, JSON-RPC 2.0
-
-## Architecture
-
-The system consists of 5 core layers:
-
-1. **Intent Recognition Layer** - 7-stage NLP pipeline with semantic understanding
-   - Text preprocessing and normalization
-   - Tokenization with question detection
-   - Feature extraction using sentence-transformers
-   - Intent classification with confidence scoring
-   - Context enrichment and state management
-   
-2. **Tool Discovery Layer** - Graph-based tool exploration and matching
-   - Semantic search with embedding similarity
-   - Capability-based matching
-   - Tool relationship graph traversal
-   
-3. **Tool Selection & Learning Layer** - Q-learning optimization
-   - Epsilon-greedy exploration strategy
-   - Experience replay buffer
-   - Pattern mining for tool combinations
-   
-4. **Execution & Monitoring Layer** - Parallel execution with resilience
-   - Asynchronous tool execution with connection pooling
-   - Real-time performance tracking and metrics
-   - Exponential backoff retry with configurable policies
-   - Circuit breakers for fault tolerance
-   - Connection health checking and reuse
-   - Comprehensive retry metrics and alerting
-   
-5. **Learning & Adaptation Layer** - Pattern mining and model adaptation
-   - Continuous learning from feedback
-   - Performance-based reward calculation
-   - Model persistence and versioning
-
-## Current Implementation Status
-
-**Phase Status**: Phase 4 - Learning System (Weeks 9-11)
-
-### ✅ Implemented
-
-#### Recent Accomplishments (Phase 3 Completion)
-- **Intent Recognition Pipeline**: Modular 7-stage architecture with >90% test coverage
-- **Testing Infrastructure**: Unit, integration, performance, and edge case tests
-- **Retry and Resilience System**: Exponential backoff, circuit breakers, connection pooling
-- **Documentation**: Complete API docs, architecture diagrams, performance requirements
-
-#### Core Components
-- **Core Infrastructure**: MCP Integration, Tool Registry, Configuration System
-- **MCP Client Implementations**: SQLite, Search, Weather, Filesystem, PostgreSQL, GitHub, Financial Datasets, Zerodha, Notion MCP
-- **AI Agent Implementations**: Intent Recognition, Tool Discovery, Orchestrator Agents
-- **Integration Features**: Complete pipeline from natural language query to tool execution
-- **Testing Infrastructure**: >80% overall coverage, >90% for core components
-- **Monitoring & Metrics**: Real-time metrics, performance tracking, retry monitoring
-
-#### Learning System (Phase 4 - In Progress)
-- **Q-Learning Engine**: ✅ Core implementation with experience replay
-- **Enhanced State Representation**: ✅ 439-dimensional vectors with failure tracking
-- **Action Space Management**: ✅ With constraint validation
-- **Epsilon-greedy Exploration**: ✅ With decay
-- **Model Persistence**: ✅ Database integration
-- **Enhanced Reward Calculator**: ✅ Sophisticated failure differentiation
-- **Pattern Miner**: ✅ Sequential and combination pattern mining
-- **Deep Q-Learning**: ✅ Neural network architectures (Standard, Dueling, Noisy DQN)
-- **Advanced Reward Strategies**: ✅ Four sophisticated strategies for nuanced rewards
-  - Temporal Difference (TD): Eligibility traces and n-step returns
-  - Hierarchical Goal-Based: Multi-level goals with milestone bonuses
-  - Adaptive Shaping: Curriculum learning with dynamic weights
-  - Information-Theoretic: Curiosity-driven exploration bonuses
-
-### ⏳ Not Yet Implemented
-- Automated baseline comparisons
-- Real-time monitoring dashboard UI
-- Multi-tenant support
-
-### Performance Achievements:
-- Intent Recognition: <50ms average, <100ms p95
-- Test Coverage: >90%
-- Cache Hit Rate: >70%
-- Classification Accuracy: >90%
-- Retry Success Rate: >90% (with exponential backoff)
-- Circuit Breaker Effectiveness: Prevents cascading failures
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.8+
-- Virtual environment (recommended)
+### Required Software
+- Git for version control
 - SQLite (included with Python)
+- Virtual environment support (venv or conda)
 
-### Key Dependencies
+## 🚀 Quick Start Setup
 
-- `sentence-transformers` - For semantic understanding (all-MiniLM-L6-v2 model)
-- `asyncio` - For asynchronous execution
-- `aiosqlite` - For async database operations
-- `networkx` - For tool relationship graphs
-- `scikit-learn` - For machine learning utilities
-- `pytest` - For testing framework
-- `black`, `flake8`, `mypy` - For code quality
-
-### Installation
-
+### 1. Clone the Repository
 ```bash
-# Clone the repository
-git clone https://github.com/harijaiswal29/auto-tool-disc
-cd auto-tool-disc
+git clone https://github.com/yourusername/auto-tool-disc02.git
+cd auto-tool-disc02
+```
 
-# Create and activate virtual environment
+### 2. Create Virtual Environment
+```bash
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# Activate virtual environment
+# On Linux/macOS:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+```bash
+# Upgrade pip
+pip install --upgrade pip
+
+# Install all requirements
 pip install -r requirements.txt
 
-# Verify setup
-python verify_setup.py
+# Download sentence-transformer model (happens automatically on first run)
+# Model: all-MiniLM-L6-v2 (~80MB)
 ```
 
-### Running the System
-
-#### Web Interface (Recommended for Demos)
+### 4. Configure Environment
 ```bash
-# Launch the interactive web demonstration
-python launch_demo.py
-# Then open http://localhost:8000 in your browser
+# Copy example environment file
+cp .env.example .env
+
+# Edit .env file with your API keys (optional for testing)
+# The system works with mock servers if API keys are not provided
+nano .env  # or use any text editor
 ```
 
-#### Command Line
+### 5. Configure MCP Servers (Optional)
 ```bash
-# Run the main application
+# Automatic setup of MCP servers based on available API keys
+python scripts/setup_mcp_servers.py
+
+# Test the configured servers
+python scripts/setup_mcp_servers.py --test
+
+# Force mock servers for testing
+python scripts/setup_mcp_servers.py --use-mock
+```
+
+The system includes comprehensive configuration for tool-to-server mapping:
+- **Automatic routing**: Tools are routed to appropriate MCP servers
+- **Fallback support**: Gracefully falls back to mock servers when APIs unavailable
+- **Configuration files**: `config/tool_server_mapping.json` and `config/mcp_servers_config.json`
+
+### 6. Verify Installation
+```bash
+# Test the installation by importing key modules
+python -c "import src.main; print('✓ Core modules installed')"
+python -c "from sentence_transformers import SentenceTransformer; print('✓ Sentence transformers available')"
+python -c "import asyncio, aiosqlite; print('✓ Async libraries installed')"
+python -c "import networkx, sklearn; print('✓ ML libraries installed')"
+
+# Check if configuration exists
+python -c "import json; json.load(open('config/config.json')); print('✓ Configuration loaded')"
+```
+
+### Command Line Interface
+```bash
+# Run the main system (interactive mode)
 python src/main.py
+# Then type your query when prompted, e.g.: "Find weather information for New York"
 
-# Run integrated demo
-python test_integration_demo.py
+### Testing Without API Keys
+The system includes mock servers for all MCP tools, allowing full functionality testing without external API keys:
+```bash
+# Tests automatically use mock servers if API keys are not set
+pytest tests/unit/ -v
 
-# Run all tests
-pytest tests/ -v
-
-# Test retry and resilience system
-python demo_retry_logic.py
-pytest tests/test_retry_logic.py -v
-
-# Test Q-Learning
-pytest tests/unit/test_q_learning_engine.py -v
-python src/learning/test_q_learning.py  # Run Q-learning demo
-python demos/demo_q_learning_orchestration.py  # Demo with orchestrator
-
-# Test Pattern Mining
-pytest tests/unit/test_pattern_miner.py -v
-python demos/demo_pattern_mining.py  # Run pattern mining demo
-
-# Test Advanced Reward Strategies
-pytest tests/unit/test_advanced_rewards.py -v
-python demos/demo_advanced_rewards.py  # Demo advanced reward strategies
-
-# Monitor retry metrics
-python -c "from src.monitoring.retry_metrics import RetryMetricsCollector; from src.core.tool_registry import ToolRegistry; collector = RetryMetricsCollector(ToolRegistry()); print(collector.get_retry_statistics())"
-
-# Monitor Performance
-python -c "from src.agents.intent_recognition_agent import IntentRecognitionAgent; agent = IntentRecognitionAgent(); print(agent.get_metrics_summary())"
+# Run integration tests
+pytest tests/integration/ -v
 ```
 
-## Testing
-
-The project includes comprehensive test suites:
-
-### Unit Tests
+### Learning System Tests
 ```bash
-# Test individual pipeline stages
-pytest tests/unit/test_intent_pipeline_stages.py -v
-
-# Test state machine components
-pytest tests/unit/test_conversation_state_machine.py -v
-```
-
-### Integration Tests
-```bash
-# Test Intent Recognition integration
-pytest tests/integration/test_intent_recognition_integration.py -v
-
-# Test complete system integration
-pytest tests/test_integration.py -v
-```
-
-### Coverage Report
-```bash
-pytest --cov=src tests/ --cov-report=html
-# Open htmlcov/index.html in browser
-```
-
-## Demo Scripts
-
-The project includes comprehensive demonstration scripts showcasing various features:
-
-### A/B Testing Framework Demo
-```bash
-# Run complete A/B testing demonstration (6 scenarios)
-python demos/demo_ab_testing_framework.py
-```
-
-Demonstrates:
-- Basic A/B testing with conversion rates
-- Multi-variant experiments with weighted assignment
-- Bayesian statistical analysis
-- Multi-armed bandits for adaptive optimization
-- Reward strategy comparison with actual calculations
-- Full lifecycle management with persistence
-
-### Other Key Demos
-```bash
-# Advanced reward strategies
-python demos/demo_advanced_rewards.py
-
-# Pattern mining
-python demos/demo_pattern_mining.py
-
-# Q-learning with orchestrator
+# Test Q-Learning with orchestrator
 python demos/demo_q_learning_orchestration.py
 
-# Deep Q-learning comparison
+# Test pattern mining
+python demos/demo_pattern_mining.py
+
+# Test advanced rewards
+python demos/demo_advanced_rewards.py
+
+# Test DQN implementation
 python demos/demo_dqn_learning.py
-
-# Baseline evaluation
-python demos/demo_baseline_evaluation.py --mode quick
 ```
 
-See `demos/README.md` for detailed documentation of all available demos.
+## 📈 Training and Evaluation
 
-## Performance Monitoring
+### Training with State Vector Collection
 
-The system includes comprehensive performance monitoring:
+State vector collection is essential for training the supervised encoder that reduces dimensionality from 476 to 50 dimensions. This optimized training configuration collects diverse examples from all strategies with appropriate sampling rates.
 
-### Intent Recognition Metrics
-- Processing time (avg, p50, p95, p99)
-- Classification accuracy
-- Cache hit rates
-- Pipeline stage performance
-- Error rates and types
+#### Configuration Setup
 
-### Retry and Resilience Metrics
-- Total retry attempts and success rates
-- Circuit breaker states and transitions
-- Retry delay statistics (avg, p95, p99)
-- Failure pattern analysis
-- Per-service retry performance
-
-### Accessing Metrics
-```python
-from src.agents.intent_recognition_agent import IntentRecognitionAgent
-from src.monitoring.retry_metrics import RetryMetricsCollector
-from src.core.tool_registry import ToolRegistry
-
-# Intent Recognition metrics
-agent = IntentRecognitionAgent()
-# Process queries...
-metrics = agent.get_metrics_summary()
-agent.export_metrics("metrics_report.json")
-
-# Retry metrics
-collector = RetryMetricsCollector(ToolRegistry())
-retry_stats = collector.get_retry_statistics()
-alerts = collector.check_alerts()
-```
-
-## Performance Benchmarks
-
-### Achieved Performance Metrics
-
-| Metric | Target | Achieved | Status |
-|--------|--------|----------|--------|
-| Intent Recognition (p95) | <100ms | <100ms | ✅ |
-| Intent Recognition (avg) | <50ms | ~45ms | ✅ |
-| Classification Accuracy | >90% | >92% | ✅ |
-| Cache Hit Rate | >70% | ~78% | ✅ |
-| Test Coverage | >90% | >90% | ✅ |
-| Pipeline Stage Overhead | <25ms | <20ms | ✅ |
-
-### Performance by Pipeline Stage
-
-- Text Preprocessing: <5ms
-- Tokenization: <2ms
-- Feature Extraction: <50ms (with caching)
-- Intent Classification: <20ms
-- Context Enrichment: <5ms
-- Confidence Scoring: <3ms
-
-## Configuration
-
-Edit `config/config.json` to customize:
-- Intent recognition thresholds
-- Learning parameters
-- Tool discovery weights
-- Performance limits
-- Monitoring settings
-
-Key configuration options:
+1. **Update `config/config.json`** with the following evaluation settings:
 ```json
 {
-  "intent_recognition": {
-    "model": "all-MiniLM-L6-v2",
-    "similarity_threshold": 0.7,
-    "confidence_threshold": 0.7,
-    "cache_size": 1000,
-    "enable_state_tracking": true,
-    "enable_persistence": true,
-    "collect_metrics": true,
-    "text_preprocessor": {
-      "expand_contractions": true,
-      "remove_special_chars": true
+  "evaluation": {
+    "save_state_vectors": true,
+    "state_sampling_rate": 1,
+    "max_states_per_checkpoint": 5000,
+    "checkpoint_interval": 50,
+    "state_collection_strategies": [
+      "q_learning_tabular", "q_learning_dqn", "random",
+      "popular", "fixed_policy", "greedy", "context_agnostic"
+    ],
+    "strategy_sampling_rates": {
+      "q_learning_tabular": 1.0,    // Collect 100% for positive examples
+      "q_learning_dqn": 1.0,         // Collect 100% for positive examples
+      "random": 0.1,                 // Sample 10% for negative examples
+      "popular": 0.1,                // Sample 10% for baseline
+      "fixed_policy": 0.2,           // Sample 20% for comparison
+      "greedy": 0.2,                 // Sample 20% for comparison
+      "context_agnostic": 0.2,       // Sample 20% for comparison
+      "others": 0.2                  // Default for unlisted strategies
     },
-    "confidence_scorer": {
-      "feature_weights": {
-        "semantic_similarity": 0.4,
-        "keyword_match": 0.3,
-        "context_relevance": 0.2,
-        "historical_accuracy": 0.1
-      }
-    }
-  },
-  "learning": {
-    "algorithm": "q_learning",
-    "parameters": {
-      "learning_rate": 0.1,
-      "discount_factor": 0.9,
-      "epsilon": 0.2
-    }
-  },
-  "retry_config": {
-    "default": {
-      "retry_policy": {
-        "type": "exponential_backoff",
-        "max_attempts": 5,
-        "base_delay": 1.0,
-        "max_delay": 16.0,
-        "jitter_factor": 0.2
-      },
-      "circuit_breaker": {
-        "failure_threshold": 5,
-        "recovery_timeout": 30.0,
-        "half_open_test_requests": 3
-      }
-    },
-    "services": {
-      "filesystem_mcp": {
-        "retry_policy": {
-          "type": "fixed_delay",
-          "max_attempts": 3,
-          "delay": 0.5
-        }
-      },
-      "external_api": {
-        "retry_policy": {
-          "type": "exponential_backoff",
-          "max_attempts": 10,
-          "base_delay": 2.0,
-          "max_delay": 60.0
-        }
-      }
+    "strategy_configs": {
+      "random": {"requires_intent_processing": false, "embedding_mode": "mock"},
+      "popular": {"requires_intent_processing": false, "embedding_mode": "mock"},
+      "fixed_policy": {"requires_intent_processing": false, "embedding_mode": "mock"},
+      "greedy": {"requires_intent_processing": false, "embedding_mode": "mock"},
+      "context_agnostic": {"requires_intent_processing": false, "embedding_mode": "fast_real"},
+      "q_learning_tabular": {"requires_intent_processing": true, "embedding_mode": "full_real"},
+      "q_learning_dqn": {"requires_intent_processing": true, "embedding_mode": "full_real"}
     }
   }
 }
 ```
 
-## Project Structure
+2. **Update `tests/dissertation_test_suite/data/experiment_config.yaml`**:
+```yaml
+baseline_comparison:
+  episodes: 20                    # Use 20 for testing, 200+ for full training
+  checkpoint_interval: 5          # Save every 5 episodes
+  runs_per_strategy: 1            # Single run for state collection
+```
+
+#### Running the Training
+
+Execute the optimized baseline comparison with state vector collection:
+
+```bash
+# Full command with all parameters
+python tests/dissertation_test_suite/scripts/run_baseline_comparison_optimized.py \
+    --episodes 20 \
+    --checkpoint-dir tests/state_vector_training_20ep \
+    --checkpoint-interval 5 \
+    --success-criteria strict \
+    --use-graded-rewards \
+    --use-real-servers \
+    --query-set dissertation_core
+
+# Parameters explained:
+# --episodes 20: Number of training episodes (use 200+ for full training)
+# --checkpoint-dir: Directory to save checkpoints with state vectors
+# --checkpoint-interval 5: Save checkpoint every 5 episodes
+# --success-criteria strict: All optimal tools must be selected for success
+# --use-graded-rewards: Use sophisticated reward calculation
+# --use-real-servers: Attempt to use real MCP servers (falls back to mock if unavailable)
+# --query-set dissertation_core: Use balanced set of 25 core queries
+```
+
+#### Verifying State Vector Collection
+
+After training, verify that state vectors are being collected:
+
+```bash
+# Check checkpoint files
+ls -lh tests/state_vector_training_20ep/checkpoint_*.pkl
+
+# Verify state vectors in a checkpoint
+python -c "
+import pickle
+with open('tests/state_vector_training_20ep/checkpoint_q_learning_dqn_ep20_*.pkl', 'rb') as f:
+    checkpoint = pickle.load(f)
+print(f'States collected: {len(checkpoint.get(\"episode_states\", []))}')
+print(f'State dimensions: {checkpoint.get(\"state_dimensions\", 0)}')
+"
+```
+
+#### Expected Output
+
+- **Checkpoint Files**: One per strategy per checkpoint interval
+  - Format: `checkpoint_{strategy}_ep{episode}_{timestamp}.pkl`
+  - Size: ~350KB for Q-learning strategies (with 100 states)
+  
+- **State Vector Structure**: Each state contains:
+  - `state_vector`: 476-dimensional numpy array
+  - `intent_embedding`: 384-dimensional sentence transformer embedding
+  - `tools_selected`: List of selected tools
+  - `optimal_tools`: Ground truth tools
+  - `success`: Boolean outcome
+  - `reward`: Calculated reward value
+  - `episode`, `query_idx`: Training position
+
+- **Collection Statistics** (for 20 episodes):
+  - Q-learning strategies: ~100 states each (100% sampling)
+  - Random/Popular: ~50-60 states (10% sampling)
+  - Other strategies: ~100 states (20% sampling)
+  - Total: ~600+ states across all strategies
+
+#### Using Collected Data for Encoder Training (Optional)
+
+Extract and prepare the collected state vectors for encoder training:
+
+```bash
+# Extract data from checkpoints
+python src/learning/encoder_data_extractor.py \
+    --checkpoint-dir tests/state_vector_training_20ep \
+    --strategy episode \
+    --balance \
+    --output data/encoder_training_data.npz
+
+# Train the supervised encoder
+python scripts/train_supervised_encoder.py \
+    --data data/encoder_training_data.npz \
+    --epochs 100 \
+    --save-dir models/supervised_encoder_real
+```
+
+## 🔧 Configuration
+
+### Main Configuration File
+Edit `config/config.json` to customize:
+
+```json
+{
+  "learning": {
+    "algorithm": "dqn",
+    "parameters": {
+      "learning_rate": 0.3,
+      "discount_factor": 0.99,
+      "epsilon": 0.5,
+      "epsilon_decay": 0.995,
+      "epsilon_min": 0.005
+    }
+  },
+  "intent_recognition": {
+    "model": "all-MiniLM-L6-v2",
+    "similarity_threshold": 0.7,
+    "cache_size": 1000
+  }
+}
+```
+
+### MCP Server Configuration
+The system includes advanced configuration for tool-to-server mapping:
+
+**`config/tool_server_mapping.json`** - Maps tools to servers:
+- Direct tool ID to server ID mappings
+- Pattern-based matching for tool families
+- Fallback strategies for handling failures
+
+**`config/mcp_servers_config.json`** - Server specifications:
+- Real server commands and requirements
+- Mock server implementations
+- Auto-initialization settings
+- Priority and capability definitions
+
+### Environment Variables
+Required API keys (optional for testing with mock servers):
+- `GITHUB_TOKEN` - GitHub API access
+- `BRAVE_API_KEY` - Brave Search API
+- `POSTGRES_CONNECTION_STRING` - PostgreSQL database
+- `OPENWEATHER_API_KEY` - Weather data
+- `FINANCIAL_DATASETS_API_KEY` - Financial data
+
+
+## 📁 Project Structure
 
 ```
-auto-tool-disc/
-├── src/
-│   ├── agents/             # AI agent implementations
-│   │   ├── intent_recognition_agent.py
-│   │   ├── tool_discovery_agent.py
-│   │   └── orchestrator_agent.py
-│   ├── core/               # Core MCP integration
-│   │   └── mcp_integration.py
-│   ├── database/           # Data models and persistence
-│   ├── learning/           # Q-learning algorithms
-│   │   ├── q_learning_engine.py
-│   │   ├── pattern_miner.py
-│   │   ├── reward_calculator.py
-│   │   ├── deep_q_network.py
-│   │   ├── dqn_agent.py
-│   │   ├── advanced_rewards/  # Advanced reward strategies
-│   │   │   ├── temporal_rewards.py
-│   │   │   ├── hierarchical_rewards.py
-│   │   │   ├── adaptive_shaping.py
-│   │   │   ├── information_theoretic.py
-│   │   │   └── strategy_manager.py
-│   │   └── test_q_learning.py
-│   ├── monitoring/         # Performance monitoring
-│   ├── pipeline/           # Modular pipeline architecture
-│   │   └── stages/
-│   ├── services/           # Service layer
-│   ├── state_machine/      # Conversation state management
-│   ├── tools/              # Tool implementations and wrappers
-│   └── utils/              # Utilities
-├── tests/
+auto-tool-disc02/
+├── src/                      # Source code
+│   ├── agents/              # AI agent implementations
+│   ├── core/                # Core MCP integration
+│   ├── learning/            # Q-learning and DQN implementations
+│   ├── pipeline/            # Processing pipeline stages
+│   ├── tools/               # Tool implementations and mocks
+│   └── web/                 # Web interface (FastAPI)
+├── tests/                    # Test suites
 │   ├── unit/               # Unit tests
 │   ├── integration/        # Integration tests
-│   ├── e2e/               # End-to-end tests
-│   ├── performance/        # Performance tests
-│   └── demos/              # Demonstration scripts
-├── data/                   # Runtime data
-│   ├── logs/              # Application logs
-│   ├── metrics/           # Performance metrics
-│   ├── patterns/          # Discovered patterns
-│   └── registry/          # Tool registry database
-├── config/                 # Configuration files
-│   └── config.json        # Main configuration
-├── docs/                   # Documentation
-│   ├── architecture/      # System design docs
-│   ├── implementation/    # Implementation details
-│   ├── api/              # API documentation
-│   └── deployment/       # Deployment guides
-├── requirements.txt       # Python dependencies
-├── README.md             # This file
-└── CLAUDE.md            # AI assistant guidance
+│   └── dissertation_test_suite/  # Research validation
+├── scripts/                  # Training and utility scripts
+├── demos/                    # Demonstration scripts
+├── config/                   # Configuration files
+├── data/                     # Training data and models
+├── dissertation_results/     # Research findings and analysis
+├── docs/                     # Documentation
+├── requirements.txt          # Python dependencies
+├── .env.example             # Environment variables template
+└── README.md                # This file
 ```
 
-## Documentation
+## 🐛 Troubleshooting
 
-For detailed documentation, see:
-- [Architecture Overview](docs/architecture/system-architecture.md)
-- [Retry and Resilience Architecture](docs/architecture/retry-architecture.md)
-- [Intent Recognition](docs/implementation/intent-recognition.md)
-- [Tool Discovery](docs/implementation/tool-discovery.md)
-- [Learning System](docs/implementation/learning-system.md)
-- [API Reference](docs/api/rest-api.md)
+### Common Issues and Solutions
 
-## Important Conventions
-
-- **MCP Communication**: Follow JSON-RPC 2.0 spec strictly
-- **Logging**: All modules must integrate with existing logging system
-- **Mock Servers**: Temporary until official MCP servers available
-- **Configuration**: Q-learning parameters (α=0.1, γ=0.9, ε=0.2) in config.json
-- **Pipeline Architecture**: All stages must implement PipelineStage interface
-- **Testing**: Maintain >80% overall coverage (>90% for core components)
-- **Performance**: Intent recognition must complete within 100ms (p95)
-
-## Development
-
-### Code Quality
+#### 1. Import Errors
 ```bash
-# Format code
-black src/ tests/
+# Ensure virtual environment is activated
+which python  # Should show venv path
 
-# Lint code
-flake8 src/ tests/
-
-# Type checking
-mypy src/
+# Reinstall dependencies
+pip install -r requirements.txt --force-reinstall
 ```
 
-### Adding New Features
-1. Write tests first (TDD approach)
-2. Implement feature following existing patterns
-3. Update documentation
-4. Run full test suite
-5. Check code quality
+#### 2. Model Download Issues
+```bash
+# Manually download sentence-transformer model
+python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+```
 
-## Development Timeline
+#### 3. Database Errors
+```bash
+# Reset database
+rm -rf data/registry/tool_registry.db
+# Database will be recreated automatically on next run
+python src/main.py
+```
 
-- **Phase 1**: Foundation (Weeks 1-3) ✅
-- **Phase 2**: Tool Ecosystem (Weeks 4-5) ✅
-- **Phase 3**: Core Intelligence (Weeks 6-8) ✅
-- **Phase 4**: Learning System (Weeks 9-11) - Current
-- **Phase 5**: Optimization & Testing (Weeks 12-13)
-- **Phase 6**: Documentation & Submission (Weeks 14-16)
+#### 4. Memory Issues During Training
+```bash
+# Reduce batch size in config.json
+# Or use lighter model:
+python scripts/run_training_with_states.py --batch-size 16
+```
 
-## Evaluation Target
+#### 5. Port Already in Use (Web Interface)
+```bash
+# Kill the process using port 8000
+lsof -ti:8000 | xargs kill -9
 
-Demonstrate measurable improvement in tool selection accuracy and task completion rate over 16-week development period compared to random selection baseline.
+# Or use a different port
+uvicorn src.web.demo_app:app --port 8001
+```
 
-## Contributing
+## 📚 Documentation
 
-We welcome contributions to improve the Autonomous Tool Discovery system!
+Comprehensive documentation is available in the `docs/` directory:
 
-### Development Guidelines
+### Setup Guides
+- [Zerodha MCP Setup](docs/setup/zerodha-mcp-setup.md) - Zerodha trading platform MCP setup
+- [Notion Integration Setup](docs/setup/notion-mcp-setup.md) - Notion integration MCP setup
+- [PostgreSQL Setup Guide](docs/setup/postgresql-setup-guide.md) - PostgreSQL database setup for MCP testing
 
-1. **Code Style**
-   - Follow PEP 8 guidelines
-   - Use `black` for code formatting
-   - Run `flake8` for linting
-   - Use type hints where appropriate
+### Architecture & Design
+- [System Architecture](docs/architecture/system-architecture.md) - Component architecture and design principles
+- [MCP Communication](docs/architecture/mcp-communication.md) - MCP protocol details and message formats
+- [Workflows](docs/architecture/workflows.md) - Key system workflows and processes
+- [Database Schema](docs/architecture/database-schema.md) - Complete database schema and tables
+- [Retry Architecture](docs/architecture/retry-architecture.md) - Retry and resilience patterns
+- [Result Caching](docs/architecture/result-caching.md) - Result caching architecture
 
-2. **Testing Requirements**
-   - Write tests for all new features
-   - Maintain >90% test coverage
-   - Include both unit and integration tests
-   - Test edge cases and error conditions
+### Implementation Details
+- [Implementation Status](docs/implementation/implementation-status.md) - Detailed implementation tracking
+- [Learning System](docs/implementation/learning-system.md) - Q-learning, rewards, pattern mining
+- [Q-Learning Implementation](docs/implementation/q_learning_implementation.md) - Q-learning engine implementation
+- [Deep Q-Learning](docs/implementation/deep-q-learning.md) - Deep Q-Learning with neural networks
+- [Intent Recognition](docs/implementation/intent-recognition.md) - NLP pipeline and classification
+- [Tool Discovery](docs/implementation/tool-discovery.md) - Discovery algorithms and caching
+- [Execution Engine](docs/implementation/execution-engine.md) - Task management and monitoring
+- [Learning System Updates](docs/implementation/learning-system-updates.md) - Summary of learning system enhancements
+- [Advanced Reward Strategies](docs/implementation/advanced-reward-strategies.md) - Advanced reward calculation strategies
 
-3. **Pull Request Process**
-   - Fork the repository
-   - Create a feature branch (`git checkout -b feature/amazing-feature`)
-   - Commit your changes (`git commit -m 'Add amazing feature'`)
-   - Push to the branch (`git push origin feature/amazing-feature`)
-   - Open a Pull Request with detailed description
+### API & Data Models
+- [REST API](docs/api/rest-api.md) - RESTful endpoints and specifications
+- [WebSocket API](docs/api/websocket-api.md) - Real-time communication protocols
+- [Data Models](docs/api/data-models.md) - Core data models and schemas
 
-4. **Commit Message Convention**
-   - Use clear, descriptive commit messages
-   - Start with a verb (Add, Update, Fix, Remove)
-   - Reference issue numbers when applicable
+### Project Management
+- [Phase Completion](docs/project/phase-completion.md) - Development phases and accomplishments
+- [Project Structure](docs/project/project-structure.md) - Complete directory structure
 
-### Areas for Contribution
+### Development
+- [Commands Reference](docs/development/commands-reference.md) - Development commands and scripts
 
-- Implement additional MCP tool integrations
-- Enhance the Q-learning algorithm
-- Add new pipeline stages
-- Improve documentation
-- Add more comprehensive tests
-- Optimize performance
-- Create visualization tools
+### Evaluation
+- [Evaluation Targets](docs/evaluation/evaluation-targets.md) - Performance targets and baselines
+- [Baseline Comparisons](docs/evaluation/baseline-comparisons.md) - Baseline strategy comparisons
+- [A/B Testing Framework](docs/evaluation/ab-testing-framework.md) - A/B testing documentation
+- [Strategy Details](docs/evaluation/strategy-details.md) - Detailed strategy implementation
 
-## Security Notes
+### Testing & Deployment
+- [Test Suite Documentation](tests/README.md) - Comprehensive test suite documentation and ALL test commands
+- [Dissertation Test Suite](tests/dissertation_test_suite/) - Dissertation-focused test suite for validating research hypotheses
+  - [Testing Strategy](tests/dissertation_test_suite/dissertation-testing-strategy.md) - Pragmatic testing strategy for dissertation goals
+- [Test Summary](docs/testing/test-summary.md) - Test coverage summary and metrics
+- [Coverage Summary](docs/testing/coverage_summary.md) - Detailed test coverage report
+- [Deployment Requirements](docs/deployment/requirements.md) - Non-functional requirements and SLOs
+- [Infrastructure](docs/deployment/infrastructure.md) - Container specs and CI/CD pipelines
+- [Security](docs/deployment/security.md) - Security architecture and best practices
+- [Deployment Configuration](docs/deployment/configuration.md) - Configuration guide for learning system
 
-- Implement Zero Trust principles for tool access
-- Validate all MCP server responses
-- Sandbox untrusted tool executions
-- Log all tool invocations for audit
-- Use temporary tokens for external API access
-- Input validation: Sanitize all user queries in Intent Recognition
-- Embedding cache security: No sensitive data in cached embeddings
-- Context persistence: Implement user privacy controls
-- Rate limiting: Prevent abuse of Intent Recognition API
+### Configuration
+- [MCP Server Configuration Guide](docs/configuration/mcp-server-configuration-guide.md) - Tool-to-server mapping setup
 
-## Performance Targets
+### Monitoring
+- [Cache Monitoring](docs/monitoring/cache-monitoring.md) - Cache monitoring and optimization
 
-- **Intent Recognition Accuracy**: >90%
-- **Processing Time**: <100ms (p95) for intent recognition
-- **Cache Hit Rate**: >70% for embedding cache
-- **Tool Selection Accuracy**: >80% (improvement from baseline)
-- **Task Completion Rate**: >85%
-- **Learning Convergence**: Within 1000 episodes
-- **System Availability**: 99.9% uptime
+### Troubleshooting
+- [Troubleshooting Guide](docs/troubleshooting.md) - Common issues and solutions
 
-## License
+### Web Interface
+- [Web Interface Guide](src/web/README.md) - FastAPI-based demonstration interface
 
-[Your License Here]
+### Dissertation Results
+- [Dissertation Results](dissertation_results/DISSERTATION_RESULTS.md) - Comprehensive experimental results, analysis, and summary
+- [Result Visualizations](dissertation_results/figures/) - Learning curves, performance metrics, and hypothesis validation
+- [Visualization Generator](dissertation_results/generate_visualizations.py) - Script to regenerate result visualizations
 
-## Author
+### Demo Scripts
+- [Demo Scripts README](demos/README.md) - Detailed documentation of all available demos
 
-[Your Name] - AI Dissertation Project
+
+
+## 📖 Citation
+
+If you use this work in your research, please cite:
+
+```bibtex
+@mastersthesis{autonomous_tool_discovery_2024,
+  title={Autonomous Tool Discovery Through Model Context Protocol Using Reinforcement Learning},
+  author={[Hari Jaiswal]},
+  school={Birla Institute of Technology and Science},
+  year={2025},
+  type={M.Tech Dissertation}
+}
+```
+
+## 📝 License
+
+This project is part of an M.Tech dissertation at BITS Pilani. All rights reserved.
+
+## 👤 Author
+
+**[Your Name]**
+- M.Tech Student, BITS Pilani
+- Email: [2023aa05106@wilp.bits-pilani.ac.in]
+- GitHub: [@harijaiswal29](https://github.com/harijaiswal29)
+- LinkedIn: [Hari Jaiswal](https://www.linkedin.com/in/harijaiswal/)
+
+## 🙏 Acknowledgments
+
+- Dr. D Venkata Subramanian
+- Mr. Mohan Singh Arora
+- Anthropic for Model Context Protocol specification
+- Open source community for tools and libraries
+
+---
+
+*This project demonstrates the feasibility of autonomous tool discovery through reinforcement learning, achieving statistically significant improvements over traditional approaches.*

@@ -6,6 +6,10 @@ This script orchestrates the comparison of Q-learning against all baseline
 strategies, collecting comprehensive metrics and generating statistical results.
 """
 
+import os
+# DISABLE CUDA to prevent errors in WSL2
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
 import asyncio
 import argparse
 import json
@@ -154,11 +158,35 @@ class BaselineComparisonRunner:
         with open(project_config_path) as f:
             project_config = json.load(f)
         
+        # Store project config for state saving settings
+        self.project_config = project_config
+        
         # Configure retries based on experiment settings
         project_config = self._configure_retries(project_config)
         
+        # FIX 1: Map experiment strategies to evaluation baselines
+        # This ensures Q-learning strategies are initialized
+        strategies = self.exp_config.get('strategies', [])
+        strategy_names = [s['name'] for s in strategies]
+        project_config['evaluation'] = project_config.get('evaluation', {})
+        project_config['evaluation']['baselines'] = strategy_names
+        logger.info(f"Configured evaluation baselines: {strategy_names}")
+        
         # Initialize evaluation engine
         self.evaluation_engine = EvaluationEngine(project_config)
+        
+        # FIX 1b: Manually ensure Q-learning strategies are registered (fallback)
+        from src.evaluation.dqn_strategy import QLearningTabularStrategy, QLearningDQNStrategy
+        
+        if 'q_learning_tabular' in strategy_names and 'q_learning_tabular' not in self.evaluation_engine.strategies:
+            logger.info("Manually registering q_learning_tabular strategy")
+            self.evaluation_engine.strategies['q_learning_tabular'] = QLearningTabularStrategy(project_config)
+            
+        if 'q_learning_dqn' in strategy_names and 'q_learning_dqn' not in self.evaluation_engine.strategies:
+            logger.info("Manually registering q_learning_dqn strategy")
+            self.evaluation_engine.strategies['q_learning_dqn'] = QLearningDQNStrategy(project_config)
+        
+        logger.info(f"Initialized strategies: {list(self.evaluation_engine.strategies.keys())}")
         
         # Get available tools from config
         self.available_tools = list(project_config.get('tools', {}).keys())
@@ -341,11 +369,19 @@ class BaselineComparisonRunner:
         if not completion_rates:  # Only initialize if not resuming
             metrics = defaultdict(list)
         
-        # Get strategy instance
+        # FIX 2: Get strategy instance with better error handling
         strategy = self.evaluation_engine.strategies.get(strategy_name)
         if not strategy:
-            logger.error(f"Strategy {strategy_name} not found")
-            return {'error': f'Strategy {strategy_name} not found'}
+            logger.error(f"Strategy {strategy_name} not found in available strategies: {list(self.evaluation_engine.strategies.keys())}")
+            # Return empty result instead of error to allow other strategies to continue
+            return {
+                'strategy': strategy_name,
+                'error': f'Strategy {strategy_name} not found',
+                'completion_rates': [],
+                'tool_accuracies': [],
+                'episode_rewards': [],
+                'execution_times': []
+            }
         
         # Run episodes
         start_time = time.time()
@@ -361,6 +397,10 @@ class BaselineComparisonRunner:
                 'execution_times': []
             }
             
+            # Initialize episode state storage if enabled
+            save_states = self.project_config.get('evaluation', {}).get('save_state_vectors', False)
+            episode_states = [] if save_states else None
+            
             # Run each query
             for query in queries:
                 query_start = time.time()
@@ -375,13 +415,94 @@ class BaselineComparisonRunner:
                 
                 optimal_set = set(mapped_optimal)
                 
+                # Initialize state vector storage
+                state_vector = None
+                intent_embedding = None
+                context_data = {}
+                history = []
+                
                 # Execute query with strategy
                 if strategy_name in ["q_learning_tabular", "q_learning_dqn"]:
                     # Use strategy instance for new Q-learning strategies
                     # These strategies have their own select_tools method
                     try:
-                        # Create state from query (full 476-dimensional state)
-                        state = np.zeros(476)  # Full state size with all features
+                        # Build proper state from query using StateRepresentation
+                        if hasattr(strategy, 'q_learning') and hasattr(strategy.q_learning, 'state_encoder'):
+                            # Use actual IntentRecognitionAgent for proper intent processing
+                            # Initialize agent if not already done
+                            if not hasattr(self, 'intent_agent'):
+                                from src.agents.intent_recognition_agent import IntentRecognitionAgent
+                                self.intent_agent = IntentRecognitionAgent()
+                                # The agent initializes its pipeline on first use
+                            
+                            # Process the query through the intent recognition pipeline
+                            intent_result = await self.intent_agent.process_query(
+                                query.query, 
+                                context={'domain': getattr(query, 'domain', getattr(query, 'category', 'general'))}
+                            )
+                            
+                            # Get the embedding from the intent result
+                            # The embedding is stored in the metadata
+                            intent_embedding = intent_result.metadata.get('embedding')
+                            if intent_embedding is None:
+                                # Fallback: generate embedding if not in metadata
+                                from sentence_transformers import SentenceTransformer
+                                if not hasattr(self, '_sentence_model'):
+                                    self._sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+                                intent_embedding = self._sentence_model.encode(query.query, convert_to_numpy=True)
+                                intent_result.metadata['embedding'] = intent_embedding
+                            
+                            # Add embedding as direct attribute for state encoder
+                            intent_result.embedding = intent_embedding
+                            
+                            # Build context
+                            context_data = {
+                                'domain': getattr(query, 'domain', getattr(query, 'category', 'general')),
+                                'query_count': episode + 1,
+                                'session_duration': (episode + 1) * 60,
+                                'total_queries': (episode + 1) * len(queries),
+                                'success_rate': completion_rates[-1] if completion_rates else 0.5,
+                                'metrics': {
+                                    'avg_response_time': np.mean(episode_metrics['execution_times']) if episode_metrics['execution_times'] else 1000,
+                                    'success_rate': completion_rates[-1] if completion_rates else 0.5,
+                                    'error_rate': 1 - (completion_rates[-1] if completion_rates else 0.5),
+                                    'tools_invoked': len(self.available_tools)
+                                }
+                            }
+                            
+                            # Encode state using Q-learning's state encoder
+                            state = strategy.q_learning.state_encoder.encode_state(
+                                intent_result, context_data, history
+                            )
+                            state_vector = state.copy()  # Save for checkpoint
+                        else:
+                            # For non-Q-learning strategies, still create state vectors for consistency
+                            # Initialize intent agent if needed
+                            if not hasattr(self, 'intent_agent'):
+                                from src.agents.intent_recognition_agent import IntentRecognitionAgent
+                                self.intent_agent = IntentRecognitionAgent()
+                                # The agent initializes its pipeline on first use
+                            
+                            # Process query to get intent
+                            intent_result = await self.intent_agent.process_query(
+                                query.query, 
+                                context={'domain': getattr(query, 'domain', getattr(query, 'category', 'general'))}
+                            )
+                            
+                            # Get embedding
+                            intent_embedding = intent_result.metadata.get('embedding')
+                            if intent_embedding is None:
+                                from sentence_transformers import SentenceTransformer
+                                if not hasattr(self, '_sentence_model'):
+                                    self._sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+                                intent_embedding = self._sentence_model.encode(query.query, convert_to_numpy=True)
+                            
+                            # Create a basic state vector (can be used for analysis later)
+                            state = np.zeros(476, dtype=np.float32)
+                            # Fill in the embedding part (first 384 dimensions)
+                            state[:384] = intent_embedding[:384] if len(intent_embedding) >= 384 else np.pad(intent_embedding, (0, 384-len(intent_embedding)))
+                            state_vector = state.copy()
+                        
                         constraints = {}  # No constraints for simple evaluation
                         
                         tools_selected = await strategy.select_tools(
@@ -437,7 +558,16 @@ class BaselineComparisonRunner:
                     # Use baseline strategy
                     # Create a dummy state representation for baseline strategies
                     state = np.zeros(476)  # Full state size for consistency
+                    state_vector = state.copy()  # Save for checkpoint
                     constraints = {}  # No constraints for simple evaluation
+                    
+                    # Build basic context for state tracking
+                    context_data = {
+                        'domain': getattr(query, 'domain', getattr(query, 'category', 'general')),
+                        'query_count': episode + 1,
+                        'session_duration': (episode + 1) * 60,
+                        'total_queries': (episode + 1) * len(queries)
+                    }
                     
                     tools_selected = await strategy.select_tools(
                         state,
@@ -465,6 +595,35 @@ class BaselineComparisonRunner:
                 reward = 1.0 if success else -0.1
                 episode_metrics['rewards'].append(reward)
                 episode_metrics['execution_times'].append(query_time)
+                
+                # Store state vector if enabled
+                if episode_states is not None and state_vector is not None:
+                    # Ensure we have all necessary variables
+                    # intent_embedding and context_data may not be defined for all strategies
+                    if 'intent_embedding' not in locals():
+                        intent_embedding = state_vector[:384] if len(state_vector) >= 384 else state_vector
+                    if 'context_data' not in locals():
+                        context_data = {
+                            'domain': getattr(query, 'domain', getattr(query, 'category', 'general')),
+                            'episode': episode,
+                            'query_count': episode + 1
+                        }
+                    
+                    state_data = {
+                        'query': query.query,
+                        'state_vector': state_vector,
+                        'intent_embedding': intent_embedding,
+                        'context': context_data,
+                        'history': history,
+                        'tools_selected': tools_used,
+                        'optimal_tools': list(optimal_set),
+                        'success': success,
+                        'reward': reward,
+                        'execution_time': query_time,
+                        'episode': episode,
+                        'query_idx': queries.index(query)
+                    }
+                    episode_states.append(state_data)
             
             # Aggregate episode metrics
             episode_completion = episode_metrics['completed'] / episode_metrics['total']
@@ -499,6 +658,12 @@ class BaselineComparisonRunner:
                     'timestamp': datetime.now().isoformat()
                 }
                 
+                # Add state vectors if enabled
+                if episode_states is not None:
+                    checkpoint_state['episode_states'] = episode_states
+                    checkpoint_state['state_dimensions'] = len(state_vector) if state_vector is not None else 476
+                    checkpoint_state['save_state_vectors'] = True
+                
                 # Save Q-learning state if applicable
                 if 'q_learning' in strategy_name and hasattr(strategy, 'get_state'):
                     checkpoint_state['q_learning_state'] = strategy.get_state()
@@ -522,6 +687,12 @@ class BaselineComparisonRunner:
                         'execution_times': execution_times
                     }
                 }
+                
+                # Add state vectors if enabled
+                if episode_states is not None:
+                    final_checkpoint_state['episode_states'] = episode_states
+                    final_checkpoint_state['state_dimensions'] = 476  # Full state dimension
+                    final_checkpoint_state['save_state_vectors'] = True
                 
                 # Save Q-learning state if applicable
                 if 'q_learning' in strategy_name and hasattr(strategy, 'get_state'):
@@ -711,8 +882,14 @@ class BaselineComparisonRunner:
                 strategy_results
             )
             
-            logger.info(f"Completed {strategy_name}: "
-                       f"mean_completion={strategy_summaries[strategy_name]['task_completion_rate']['mean']:.3f}")
+            # FIX 3: Safe access to metrics with error handling
+            if 'error' in strategy_summaries[strategy_name]:
+                logger.warning(f"Skipped {strategy_name}: {strategy_summaries[strategy_name]['error']}")
+            elif 'task_completion_rate' in strategy_summaries[strategy_name]:
+                logger.info(f"Completed {strategy_name}: "
+                           f"mean_completion={strategy_summaries[strategy_name]['task_completion_rate']['mean']:.3f}")
+            else:
+                logger.warning(f"Completed {strategy_name} but no task_completion_rate metric available")
         
         # Statistical comparison
         comparison_results = self._perform_statistical_comparison(strategy_summaries)
@@ -770,13 +947,13 @@ class BaselineComparisonRunner:
         
         comparison_results = {}
         
-        # Get Q-learning values - check both variants
+        # FIX 4: Get Q-learning values with better error handling
         qlearning_values = []
-        if 'q_learning_tabular' in summaries:
+        if 'q_learning_tabular' in summaries and 'task_completion_rate' in summaries.get('q_learning_tabular', {}):
             qlearning_values = summaries.get('q_learning_tabular', {}).get('task_completion_rate', {}).get('values', [])
-        elif 'q_learning_dqn' in summaries:
+        elif 'q_learning_dqn' in summaries and 'task_completion_rate' in summaries.get('q_learning_dqn', {}):
             qlearning_values = summaries.get('q_learning_dqn', {}).get('task_completion_rate', {}).get('values', [])
-        elif 'q_learning' in summaries:
+        elif 'q_learning' in summaries and 'task_completion_rate' in summaries.get('q_learning', {}):
             qlearning_values = summaries.get('q_learning', {}).get('task_completion_rate', {}).get('values', [])
         
         # Skip if no Q-learning data
@@ -912,6 +1089,9 @@ class BaselineComparisonRunner:
 
 async def main():
     """Main entry point."""
+    # FIX 6: Initialize runner early to ensure it exists for cleanup
+    runner = None
+    
     parser = argparse.ArgumentParser(description="Run baseline comparison experiments")
     parser.add_argument("--query-set", default="dissertation_core",
                        choices=["quick_test", "simple_only", "complex_only", 
@@ -975,13 +1155,31 @@ async def main():
         
         print(f"\nExperiment complete! Results saved to {runner.results_dir}")
     finally:
-        # Ensure proper cleanup
-        if runner.orchestrator:
+        # FIX 5: Improved cleanup to prevent event loop errors
+        if runner and runner.orchestrator:
             try:
-                await runner.orchestrator.shutdown()
+                # Check if event loop is still running before shutdown
+                loop = asyncio.get_event_loop()
+                if not loop.is_closed():
+                    await runner.orchestrator.shutdown()
+                else:
+                    logger.warning("Event loop already closed, skipping orchestrator shutdown")
+            except RuntimeError as e:
+                if "Event loop is closed" in str(e):
+                    logger.debug("Event loop already closed during cleanup")
+                else:
+                    logger.warning(f"Runtime error during orchestrator shutdown: {e}")
             except Exception as e:
                 logger.warning(f"Error during orchestrator shutdown: {e}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # FIX 5b: Use asyncio.run with better error handling
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+    except Exception as e:
+        print(f"Error in main: {e}")
+        import traceback
+        traceback.print_exc()

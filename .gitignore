@@ -115,3 +115,24 @@ config/*.backup
 
 # Test execution scripts (temporary)
 tests/dissertation_test_suite/scripts/tmp_scripts/
+
+# Test files in project root (should be in tests/)
+/quick_test.py
+/run_integration_tests.py
+/run_test_queries.py
+/test_queries.py
+/test_system_queries.py
+/integration_test_*.log
+/integration_test_*.json
+/integration_test_*.txt
+/query_test_*.log
+/query_test_*.json
+/test_results*.json
+/training_log.txt
+
+# Coverage files with hostname
+.coverage.*
+
+# Node.js files (not needed for Python project)
+package.json
+package-lock.json

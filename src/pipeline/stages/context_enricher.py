@@ -114,13 +114,13 @@ class ContextEnricherStage(PipelineStage):
                 # Extract context components from persistent data (handle None case)
                 if enriched_from_db:
                     history_context = enriched_from_db.get('history', [])
-                    domain_context = {'name': enriched_from_db.get('domain', 'general')}
+                    domain_context = enriched_from_db.get('domain', 'general')
                     user_context = enriched_from_db.get('user_profile', {})
                     session_context = enriched_from_db.get('session', {})
                 else:
                     # Fallback if persistence returns None
                     history_context = []
-                    domain_context = {'name': 'general'}
+                    domain_context = 'general'
                     user_context = {}
                     session_context = {}
             else:
@@ -207,17 +207,15 @@ class ContextEnricherStage(PipelineStage):
         
         return history[-self.max_history_length:]  # Limit history length
     
-    def _extract_domain_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_domain_context(self, context: Dict[str, Any]) -> str:
         """Extract domain-specific context."""
-        domain = context.get('domain', {})
+        domain = context.get('domain', 'general')
         
-        # If domain is a string, convert to dict
-        if isinstance(domain, str):
-            domain = {'name': domain}
-        
-        # Add default domain info if not present
-        if 'name' not in domain:
-            domain['name'] = 'general'
+        # Handle case where domain might still be a dict from old code
+        if isinstance(domain, dict) and 'name' in domain:
+            domain = domain['name']
+        elif not isinstance(domain, str):
+            domain = 'general'
         
         return domain
     
@@ -247,7 +245,7 @@ class ContextEnricherStage(PipelineStage):
         
         return session
     
-    def _calculate_context_relevance(self, history: List[Dict], domain: Dict,
+    def _calculate_context_relevance(self, history: List[Dict], domain: str,
                                    user: Dict, session: Dict) -> float:
         """
         Calculate overall context relevance score.
@@ -263,7 +261,7 @@ class ContextEnricherStage(PipelineStage):
         """
         scores = {
             'history': 1.0 if history else 0.0,
-            'domain': 1.0 if domain and domain.get('name') != 'general' else 0.5,
+            'domain': 1.0 if domain and isinstance(domain, str) and domain != 'general' else 0.5,
             'user_profile': 1.0 if user and user.get('preferences') else 0.5,
             'session': 1.0 if session and session.get('id') != 'default' else 0.5
         }
@@ -277,7 +275,7 @@ class ContextEnricherStage(PipelineStage):
         return min(relevance_score, 1.0)
     
     def _enrich_intents_with_context(self, intents: List[Any], 
-                                    history: List[Dict], domain: Dict) -> List[Any]:
+                                    history: List[Dict], domain: str) -> List[Any]:
         """
         Enrich intents with contextual information.
         
@@ -311,7 +309,7 @@ class ContextEnricherStage(PipelineStage):
             
             # Check if intent matches domain
             domain_boost = 0.0
-            if domain.get('name') and domain.get('name') in intent_type:
+            if domain and domain != 'general' and domain in intent_type:
                 domain_boost = 0.1  # 10% boost for domain match
             
             # Apply boosts safely
@@ -377,7 +375,7 @@ class ContextEnricherStage(PipelineStage):
             'intent_type': self._safe_get_intent_attribute(intents[0] if intents else None, 'type', 'unknown'),
             'confidence': self._safe_get_intent_attribute(intents[0] if intents else None, 'confidence', 0.0),
             'timestamp': datetime.now().isoformat(),
-            'domain': context.get('domain', {}).get('name', 'general') if context else 'general'
+            'domain': context.get('domain', 'general') if context else 'general'
         }
         
         # Always update in-memory history

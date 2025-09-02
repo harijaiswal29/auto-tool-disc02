@@ -1,0 +1,238 @@
+{
+  "servers": {
+    "search_main": {
+      "type": "search",
+      "name": "Brave Search MCP Server",
+      "description": "Web search using Brave Search API",
+      "real_server": {
+        "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
+        "args": [],
+        "required_env": ["BRAVE_API_KEY"],
+        "optional_env": [],
+        "timeout": 30000
+      },
+      "mock_server": {
+        "class": "SearchMCPClient",
+        "module": "src.tools.search_mcp"
+      },
+      "capabilities": ["web_search", "news_search", "image_search"],
+      "mock_fallback": true,
+      "auto_initialize": true,
+      "priority": 0.9
+    },
+    
+    "github_main": {
+      "type": "github",
+      "name": "GitHub MCP Server",
+      "description": "GitHub API operations for repositories, issues, and PRs",
+      "real_server": {
+        "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+        "args": [],
+        "required_env": ["GITHUB_TOKEN"],
+        "optional_env": ["GITHUB_API_URL"],
+        "timeout": 45000
+      },
+      "mock_server": {
+        "class": "GitHubMCPClient",
+        "module": "src.tools.github_mcp"
+      },
+      "capabilities": ["repository_management", "issue_tracking", "pull_requests", "code_search"],
+      "mock_fallback": true,
+      "auto_initialize": true,
+      "priority": 0.7
+    },
+    
+    "sqlite_main": {
+      "type": "sqlite",
+      "name": "SQLite MCP Server",
+      "description": "Local SQLite database operations",
+      "real_server": {
+        "command": ["npx", "-y", "@modelcontextprotocol/server-sqlite"],
+        "args": ["${DB_PATH}"],
+        "required_env": [],
+        "optional_env": ["SQLITE_DB_PATH"],
+        "timeout": 20000
+      },
+      "mock_server": {
+        "class": "SQLiteMCPClient",
+        "module": "src.tools.sqlite_mcp"
+      },
+      "capabilities": ["query", "execute", "schema_inspection"],
+      "mock_fallback": true,
+      "auto_initialize": true,
+      "priority": 0.8,
+      "config": {
+        "default_db_path": "data/test.db"
+      }
+    },
+    
+    "postgres_main": {
+      "type": "postgres",
+      "name": "PostgreSQL MCP Server",
+      "description": "PostgreSQL database operations",
+      "real_server": {
+        "command": ["npx", "-y", "@modelcontextprotocol/server-postgres"],
+        "args": ["${POSTGRES_CONNECTION_STRING}"],
+        "required_env": ["POSTGRES_CONNECTION_STRING"],
+        "optional_env": ["POSTGRES_SSL_MODE"],
+        "timeout": 30000
+      },
+      "mock_server": {
+        "class": "PostgresMCPClient",
+        "module": "src.tools.postgres_mcp"
+      },
+      "capabilities": ["query", "execute", "transactions", "schema_management"],
+      "mock_fallback": true,
+      "auto_initialize": true,
+      "priority": 0.7
+    },
+    
+    "filesystem_main": {
+      "type": "filesystem",
+      "name": "Filesystem MCP Server",
+      "description": "Local filesystem operations",
+      "real_server": {
+        "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem"],
+        "args": ["${BASE_PATH}"],
+        "required_env": [],
+        "optional_env": ["FILESYSTEM_BASE_PATH"],
+        "timeout": 15000
+      },
+      "mock_server": {
+        "class": "FileSystemMCPClient",
+        "module": "src.tools.filesystem_mcp"
+      },
+      "capabilities": ["read", "write", "list", "delete", "directory_operations"],
+      "mock_fallback": true,
+      "auto_initialize": true,
+      "priority": 0.6,
+      "config": {
+        "default_base_path": ".",
+        "allowed_operations": ["read", "write", "list", "delete"]
+      }
+    },
+    
+    "weather_main": {
+      "type": "weather",
+      "name": "Weather MCP Server",
+      "description": "Weather data and forecasts",
+      "real_server": {
+        "command": ["npx", "-y", "@modelcontextprotocol/server-weather"],
+        "args": [],
+        "required_env": ["OPENWEATHER_API_KEY"],
+        "optional_env": ["WEATHER_UNITS"],
+        "timeout": 20000
+      },
+      "mock_server": {
+        "class": "WeatherMCPClient",
+        "module": "src.tools.custom_wrappers.weather_mcp"
+      },
+      "capabilities": ["current_weather", "forecast", "historical_data"],
+      "mock_fallback": true,
+      "auto_initialize": true,
+      "priority": 0.5
+    },
+    
+    "financial_main": {
+      "type": "financial_datasets",
+      "name": "Financial Datasets MCP Server",
+      "description": "Financial market data and analysis",
+      "real_server": {
+        "endpoint": "https://api.financialdatasets.ai/mcp/v1",
+        "auth_type": "api_key",
+        "required_env": ["FINANCIAL_DATASETS_API_KEY"],
+        "optional_env": [],
+        "timeout": 30000
+      },
+      "mock_server": {
+        "class": "FinancialDatasetsMCPClient",
+        "module": "src.tools.financial_datasets_mcp"
+      },
+      "capabilities": ["stock_prices", "financial_statements", "market_news", "analysis"],
+      "mock_fallback": true,
+      "auto_initialize": false,
+      "priority": 0.6
+    },
+    
+    "zerodha_main": {
+      "type": "zerodha",
+      "name": "Zerodha Trading MCP Server",
+      "description": "Trading operations via Zerodha Kite API",
+      "real_server": {
+        "endpoint": "https://api.kite.trade/mcp/v1",
+        "auth_type": "oauth",
+        "required_env": ["ZERODHA_API_KEY", "ZERODHA_API_SECRET", "ZERODHA_ACCESS_TOKEN"],
+        "optional_env": ["ZERODHA_USE_SANDBOX"],
+        "timeout": 45000
+      },
+      "mock_server": {
+        "class": "ZerodhaMCPClient",
+        "module": "src.tools.zerodha_mcp"
+      },
+      "capabilities": ["trading", "portfolio", "market_data", "order_management"],
+      "mock_fallback": true,
+      "auto_initialize": false,
+      "priority": 0.5,
+      "config": {
+        "use_sandbox": false,
+        "sandbox_endpoint": "https://sandbox.kite.trade/mcp/v1"
+      }
+    },
+    
+    "notion_main": {
+      "type": "notion",
+      "name": "Notion MCP Server",
+      "description": "Notion workspace operations",
+      "real_server": {
+        "command": ["npx", "-y", "@notionhq/notion-mcp-server"],
+        "args": [],
+        "required_env": ["NOTION_INTEGRATION_TOKEN"],
+        "optional_env": ["NOTION_API_VERSION"],
+        "timeout": 30000
+      },
+      "mock_server": {
+        "class": "NotionMCPClient",
+        "module": "src.tools.notion_mcp"
+      },
+      "capabilities": ["page_management", "database_operations", "content_creation", "search"],
+      "mock_fallback": true,
+      "auto_initialize": false,
+      "priority": 0.4
+    }
+  },
+  
+  "initialization_order": [
+    "sqlite_main",
+    "search_main",
+    "github_main",
+    "filesystem_main",
+    "weather_main",
+    "postgres_main",
+    "financial_main",
+    "zerodha_main",
+    "notion_main"
+  ],
+  
+  "connection_settings": {
+    "max_retries": 3,
+    "retry_delay_ms": 1000,
+    "connection_timeout_ms": 10000,
+    "health_check_interval_ms": 30000,
+    "auto_reconnect": true
+  },
+  
+  "mock_settings": {
+    "always_use_mock": false,
+    "prefer_mock_in_tests": true,
+    "mock_response_delay_ms": 100,
+    "simulate_failures": false,
+    "failure_rate": 0.1
+  },
+  
+  "api_key_sources": {
+    "environment": true,
+    "dotenv_file": true,
+    "config_file": false,
+    "secrets_manager": false
+  }
+}

@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 class StateRepresentation:
     """Encodes states from intent vectors, context, and history with dimensionality reduction."""
     
-    def __init__(self, use_pca=True, target_dim=128):
+    def __init__(self, use_pca=True, target_dim=128, use_encoder=False, encoder_path=None):
         self.state_dimensions = {
             'intent_vector': 384,      # Sentence transformer output
             'context_features': 10,    # Domain, user history, etc.
@@ -52,6 +52,15 @@ class StateRepresentation:
         self.pca_fitted = False
         self.pca_components = None
         self.feature_importance = None
+        
+        # Supervised encoder settings
+        self.use_encoder = use_encoder
+        self.encoder = None
+        self.encoder_dim = 50  # Default encoder output dimension
+        
+        # Load encoder if specified
+        if use_encoder and encoder_path:
+            self._load_encoder(encoder_path)
         
         # Initialize feature importance weights
         self._initialize_feature_importance()
@@ -136,8 +145,12 @@ class StateRepresentation:
         if self.feature_importance is not None:
             state_vector = state_vector * self.feature_importance
         
-        # Apply dimensionality reduction if enabled
-        if self.use_pca and self.target_dim < len(state_vector):
+        # Apply dimensionality reduction
+        if self.use_encoder and self.encoder is not None:
+            # Use supervised encoder for dimensionality reduction
+            state_vector = self._encode_with_supervised_encoder(state_vector)
+        elif self.use_pca and self.target_dim < len(state_vector):
+            # Fall back to PCA if encoder not available
             state_vector = self._apply_pca(state_vector)
         
         return state_vector
@@ -300,12 +313,25 @@ class StateRepresentation:
         """Encode domain context as one-hot vector."""
         features = np.zeros(self.state_dimensions['domain_context'], dtype=np.float32)
         
+        # Ensure domain is a string
+        if not isinstance(domain, str):
+            logger.warning(f"Domain is not a string: {domain} (type: {type(domain)}), converting to 'general'")
+            domain = 'general'
+        
+        # Updated domain map to match actual test query domains
+        # Map similar domains to the same category
         domain_map = {
             'general': 0,
-            'engineering': 1,
-            'data_science': 2,
-            'web_dev': 3,
-            'devops': 4
+            'file_operations': 1,  # File/system operations
+            'information_retrieval': 2,  # Search/info tasks
+            'web_search': 2,  # Group with info retrieval
+            'data_analysis': 3,  # Data/analysis tasks
+            'data_collection': 3,  # Group with data analysis
+            'business_analysis': 3,  # Group with analysis
+            'development': 4,  # Dev/engineering tasks
+            'engineering': 4,  # Group with development
+            'web_dev': 4,  # Group with development
+            'devops': 4  # Group with development
         }
         
         if domain in domain_map:
@@ -407,6 +433,50 @@ class StateRepresentation:
             features[:] = 0.1
         
         return features
+    
+    def _load_encoder(self, encoder_path: str):
+        """Load the supervised encoder model."""
+        try:
+            import torch
+            from src.learning.state_encoder import load_encoder
+            
+            self.encoder = load_encoder(encoder_path, device='cpu')
+            self.encoder.eval()
+            
+            # Get encoder output dimension from model
+            if hasattr(self.encoder, 'latent_dim'):
+                self.encoder_dim = self.encoder.latent_dim
+            
+            logger.info(f"Loaded encoder from {encoder_path}, output dim: {self.encoder_dim}")
+        except Exception as e:
+            logger.error(f"Failed to load encoder from {encoder_path}: {e}")
+            logger.warning("Falling back to raw state representation")
+            self.use_encoder = False
+            self.encoder = None
+    
+    def _encode_with_supervised_encoder(self, state_vector: np.ndarray) -> np.ndarray:
+        """Apply supervised encoder for dimensionality reduction."""
+        if self.encoder is None:
+            logger.warning("Encoder not loaded, returning raw state")
+            return state_vector
+        
+        try:
+            import torch
+            
+            # Convert to tensor
+            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0)  # Add batch dimension
+            
+            # Encode
+            with torch.no_grad():
+                encoded = self.encoder(state_tensor)
+                encoded_np = encoded.squeeze(0).numpy()  # Remove batch dimension
+            
+            return encoded_np
+            
+        except Exception as e:
+            logger.error(f"Error encoding state: {e}")
+            logger.warning("Falling back to raw state")
+            return state_vector
     
     def _initialize_feature_importance(self):
         """Initialize feature importance weights for weighted state representation."""
@@ -809,8 +879,25 @@ class QLearningEngine:
         self.recent_performance = deque(maxlen=100)  # Track recent rewards
         
         # Initialize components
-        # Disable PCA for DQN to maintain full state dimensions (476)
-        self.state_encoder = StateRepresentation(use_pca=False)
+        # Check for encoder configuration
+        encoder_config = config.get('state_encoder', {})
+        use_encoder = encoder_config.get('enabled', False)
+        encoder_path = encoder_config.get('model_path', None)
+        
+        # Initialize state encoder with supervised encoder if configured
+        if use_encoder and encoder_path and os.path.exists(encoder_path):
+            logger.info(f"Initializing with supervised encoder from {encoder_path}")
+            self.state_encoder = StateRepresentation(
+                use_pca=False,
+                use_encoder=True,
+                encoder_path=encoder_path
+            )
+        else:
+            # Disable PCA for DQN to maintain full state dimensions (476)
+            self.state_encoder = StateRepresentation(use_pca=False)
+            if use_encoder:
+                logger.warning(f"Encoder enabled but model not found at {encoder_path}")
+        
         self.action_space = ActionSpace(max_tools=q_config.get('max_tools', 3))
         
         # Check if DQN is enabled
@@ -822,9 +909,18 @@ class QLearningEngine:
             # Get maximum possible action space size
             # This is an upper bound - actual valid actions may be fewer
             max_action_combinations = self._estimate_max_actions(q_config.get('max_tools', 3))
+            
+            # Get actual state dimension (either encoder output or raw)
+            if self.state_encoder.use_encoder and self.state_encoder.encoder:
+                state_dim = self.state_encoder.encoder_dim
+                logger.info(f"DQN using encoded state dimension: {state_dim}")
+            else:
+                state_dim = self.state_encoder.total_dimensions
+                logger.info(f"DQN using raw state dimension: {state_dim}")
+            
             self.dqn_agent = DQNAgent(
                 config, 
-                self.state_encoder.total_dimensions,
+                state_dim,
                 max_action_combinations
             )
             # DQN uses its own experience replay
@@ -1216,11 +1312,22 @@ class QLearningEngine:
                     model_data = json.loads(row[0])
                     
                     if self.use_dqn:
-                        # Load DQN model
+                        # Load DQN model with backward compatibility
                         if 'checkpoint_path' in model_data:
                             checkpoint_path = model_data['checkpoint_path']
                             if os.path.exists(checkpoint_path):
-                                self.dqn_agent.load_checkpoint(checkpoint_path)
+                                try:
+                                    self.dqn_agent.load_checkpoint(checkpoint_path)
+                                    logger.info(f"Successfully loaded DQN checkpoint from {checkpoint_path}")
+                                except RuntimeError as e:
+                                    if "Error(s) in loading state_dict" in str(e):
+                                        logger.warning(f"Model architecture mismatch when loading checkpoint: {e}")
+                                        logger.warning("This usually happens when the saved model has a different architecture.")
+                                        logger.warning("Creating new model with current architecture. Training will start fresh.")
+                                        # Model is already initialized, just don't load the old weights
+                                    else:
+                                        # Re-raise if it's a different error
+                                        raise
                             else:
                                 logger.warning(f"DQN checkpoint not found: {checkpoint_path}")
                     else:

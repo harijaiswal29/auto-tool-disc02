@@ -273,7 +273,7 @@ class ToolRegistry:
                 """, (tool_id, tool_id))
                 
                 # Remove tool usage records
-                cursor.execute("DELETE FROM tool_usage WHERE tool_id = ?", (tool_id,))
+                cursor.execute("DELETE FROM usage_history WHERE tool_id = ?", (tool_id,))
                 
                 # Remove the tool itself
                 cursor.execute("DELETE FROM tools WHERE id = ?", (tool_id,))

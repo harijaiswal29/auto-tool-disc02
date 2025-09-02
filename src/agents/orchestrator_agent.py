@@ -241,8 +241,41 @@ class OrchestratorAgent:
         
         try:
             # Step 0: Update state machine - receive query
+            # Reset state machine if it's in an invalid state
+            current_state = self.state_machine.get_current_state()
+            
+            # Handle CLARIFICATION_NEEDED state specially
+            if current_state and current_state.name == 'CLARIFICATION_NEEDED':
+                self.logger.info("Treating new query as clarification for previous query")
+                # Reset to IDLE to accept new query
+                await self.state_machine.return_to_idle()
+            elif current_state and current_state.name not in ['IDLE', 'QUERY_RECEIVED']:
+                self.logger.warning(f"State machine in unexpected state: {current_state}, resetting to IDLE")
+                # First transition to ERROR state if needed, then to IDLE
+                if current_state.name != 'ERROR':
+                    try:
+                        await self.state_machine.handle_error(
+                            Exception(f"Invalid state: {current_state}"),
+                            {'reason': 'State reset required'}
+                        )
+                    except:
+                        pass  # Ignore if error transition fails
+                # Now return to IDLE from ERROR state
+                await self.state_machine.return_to_idle()
+            
             if not await self.state_machine.receive_query(query, context):
-                raise ValueError("Failed to receive query in state machine")
+                # Try once more after reset
+                self.logger.warning("Failed to receive query, resetting state machine and retrying")
+                try:
+                    await self.state_machine.handle_error(
+                        Exception("Failed to receive query"),
+                        {'reason': 'Query reception failed'}
+                    )
+                except:
+                    pass
+                await self.state_machine.return_to_idle()
+                if not await self.state_machine.receive_query(query, context):
+                    raise ValueError("Failed to receive query in state machine after reset")
             
             # Step 1: Recognize intent
             intent_result = await self.intent_agent.process_query(query, context)
@@ -378,8 +411,12 @@ class OrchestratorAgent:
             self.logger.error(f"Error processing query: {e}")
             total_time_ms = (time.time() - start_time) * 1000
             
-            # Update state machine with error
-            await self.state_machine.handle_error(e, {'stage': 'orchestration', 'query': query})
+            # Update state machine with error - handle state machine errors gracefully
+            try:
+                await self.state_machine.handle_error(e, {'stage': 'orchestration', 'query': query})
+            except Exception as sm_error:
+                self.logger.warning(f"State machine error handling failed: {sm_error}, resetting to IDLE")
+                await self.state_machine.return_to_idle()
             
             result = OrchestrationResult(
                 query=query,
@@ -780,12 +817,22 @@ class OrchestratorAgent:
                                    f"with {best_tool['id']} (priority: {best_tool.get('priority_score', 0):.2f})")
                     selected_tool_ids = [best_tool['id']]
         
-        # Map selected IDs back to tool objects
+        # Map selected IDs back to tool objects and filter out invalid mock tools
         selected_tools = []
         for tool_id in selected_tool_ids:
+            # Skip invalid mock tool names
+            if 'mock_' in tool_id and tool_id not in [t['id'] for t in discovered_tools]:
+                self.logger.warning(f"Skipping invalid tool ID: {tool_id}")
+                continue
+                
             tool = next((t for t in discovered_tools if t['id'] == tool_id), None)
             if tool:
                 selected_tools.append(tool)
+        
+        # If no valid tools selected, try to select from discovered tools
+        if not selected_tools and discovered_tools:
+            self.logger.warning("No valid tools selected by Q-learning, using top discovered tool")
+            selected_tools = [discovered_tools[0]]
         
         self.logger.info(f"Q-learning selected tools: {[t['name'] for t in selected_tools]}")
         
@@ -1328,8 +1375,16 @@ class OrchestratorAgent:
                 await self.q_learning_engine.db_manager.initialize()
                 await self.q_learning_engine.load_model()
                 self.logger.info("Q-learning model loaded successfully")
+            except RuntimeError as e:
+                if "Error(s) in loading state_dict" in str(e):
+                    self.logger.info("Model architecture has changed - starting with fresh model")
+                    self.logger.debug(f"Architecture mismatch details: {e}")
+                else:
+                    self.logger.warning(f"Failed to load Q-learning model: {e}")
+            except FileNotFoundError as e:
+                self.logger.info("No saved Q-learning model found - starting fresh")
             except Exception as e:
-                self.logger.warning(f"Failed to load Q-learning model: {e}")
+                self.logger.warning(f"Unexpected error loading Q-learning model: {e}")
     
     def _calculate_success_rate(self) -> float:
         """Calculate success rate from execution history."""

@@ -1,0 +1,132 @@
+{
+  "tool_mappings": {
+    "// Search tools": "",
+    "search.web": "search_main",
+    "search.brave": "search_main", 
+    "search.news": "search_main",
+    "search.query": "search_main",
+    
+    "// GitHub tools": "",
+    "github.list_repositories": "github_main",
+    "github.create_issue": "github_main",
+    "github.get_repository": "github_main",
+    "github.search_repositories": "github_main",
+    "github.get_issues": "github_main",
+    "github.create_pull_request": "github_main",
+    
+    "// SQLite database tools": "",
+    "sqlite.query": "sqlite_main",
+    "sqlite.execute": "sqlite_main",
+    "sqlite.list_tables": "sqlite_main",
+    "sqlite.describe_table": "sqlite_main",
+    
+    "// PostgreSQL database tools": "",
+    "postgres.query": "postgres_main",
+    "postgres.execute": "postgres_main",
+    "postgres.list_tables": "postgres_main",
+    "postgres.describe_table": "postgres_main",
+    
+    "// Filesystem tools": "",
+    "filesystem.read": "filesystem_main",
+    "filesystem.write": "filesystem_main",
+    "filesystem.list": "filesystem_main",
+    "filesystem.delete": "filesystem_main",
+    "filesystem.create_directory": "filesystem_main",
+    "fs.read_file": "filesystem_main",
+    "fs.write_file": "filesystem_main",
+    "fs.list_directory": "filesystem_main",
+    
+    "// Weather tools": "",
+    "weather.get_current": "weather_main",
+    "weather.get_forecast": "weather_main",
+    "weather.get_by_location": "weather_main",
+    
+    "// Financial tools": "",
+    "financial_datasets_stock_prices": "financial_main",
+    "financial_datasets_financial_statements": "financial_main",
+    "financial_datasets_news": "financial_main",
+    "financial.get_stock_price": "financial_main",
+    "financial.get_market_data": "financial_main",
+    
+    "// Zerodha trading tools": "",
+    "zerodha_get_positions": "zerodha_main",
+    "zerodha_place_order": "zerodha_main",
+    "zerodha_get_holdings": "zerodha_main",
+    "zerodha_get_margins": "zerodha_main",
+    "zerodha.get_portfolio": "zerodha_main",
+    "zerodha.execute_trade": "zerodha_main",
+    
+    "// Notion tools": "",
+    "notion.create_page": "notion_main",
+    "notion.update_page": "notion_main",
+    "notion.query_database": "notion_main",
+    "notion.get_page": "notion_main",
+    "notion.search": "notion_main"
+  },
+  
+  "server_types": {
+    "search": {
+      "patterns": ["search.*", "brave.*"],
+      "default_server": "search_main",
+      "capabilities": ["web_search", "news_search", "image_search"]
+    },
+    "github": {
+      "patterns": ["github.*", "gh.*"],
+      "default_server": "github_main",
+      "capabilities": ["repository_management", "issue_tracking", "pull_requests", "code_search"]
+    },
+    "sqlite": {
+      "patterns": ["sqlite.*", "sql.*"],
+      "default_server": "sqlite_main",
+      "capabilities": ["query", "execute", "schema_inspection"]
+    },
+    "postgres": {
+      "patterns": ["postgres.*", "pg.*", "postgresql.*"],
+      "default_server": "postgres_main",
+      "capabilities": ["query", "execute", "transactions", "schema_management"]
+    },
+    "filesystem": {
+      "patterns": ["filesystem.*", "fs.*", "file.*", "dir.*"],
+      "default_server": "filesystem_main",
+      "capabilities": ["read", "write", "list", "delete", "directory_operations"]
+    },
+    "weather": {
+      "patterns": ["weather.*", "forecast.*", "temperature.*"],
+      "default_server": "weather_main",
+      "capabilities": ["current_weather", "forecast", "historical_data"]
+    },
+    "financial_datasets": {
+      "patterns": ["financial_datasets_*", "financial.*", "stock.*", "market.*"],
+      "default_server": "financial_main",
+      "capabilities": ["stock_prices", "financial_statements", "market_news", "analysis"]
+    },
+    "zerodha": {
+      "patterns": ["zerodha_*", "zerodha.*", "trading.*", "kite.*"],
+      "default_server": "zerodha_main",
+      "capabilities": ["trading", "portfolio", "market_data", "order_management"]
+    },
+    "notion": {
+      "patterns": ["notion.*", "workspace.*", "page.*"],
+      "default_server": "notion_main",
+      "capabilities": ["page_management", "database_operations", "content_creation", "search"]
+    }
+  },
+  
+  "fallback_strategy": {
+    "use_mock_on_failure": true,
+    "retry_real_server": true,
+    "max_retries": 3,
+    "fallback_order": ["real", "mock", "error"]
+  },
+  
+  "tool_categories": {
+    "search": ["search", "information_retrieval", "web"],
+    "code": ["github", "repository", "version_control"],
+    "database": ["sqlite", "postgres", "data_storage"],
+    "filesystem": ["file_operations", "directory_management"],
+    "weather": ["weather", "climate", "forecast"],
+    "finance": ["financial_datasets", "zerodha", "trading", "market"],
+    "productivity": ["notion", "workspace", "documentation"],
+    "general": ["utility", "misc"]
+  }
+}

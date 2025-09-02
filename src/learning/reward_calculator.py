@@ -127,10 +127,7 @@ class RewardCalculator:
         self.known_synergies = {
             frozenset(['filesystem_mcp', 'search_mcp']): 0.5,
             frozenset(['sqlite_mcp', 'postgres_mcp']): -0.1,  # Redundant
-            frozenset(['github_mcp', 'filesystem_mcp']): 0.6,
-            frozenset(['mock_filesystem', 'mock_github']): 0.5,  # Mock combinations
-            frozenset(['mock_sqlite', 'mock_search']): 0.4,
-            frozenset(['mock_search', 'mock_notion']): 0.3
+            frozenset(['github_mcp', 'filesystem_mcp']): 0.6
         }
         
         # Track discovered combinations for exploration bonus

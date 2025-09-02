@@ -143,7 +143,7 @@ class IntentClassifierStage(PipelineStage):
             
             # Apply context-based adjustments for specific scenarios
             try:
-                domain = context_info.get('domain', {})
+                domain = context_info.get('domain', 'general')
                 domain_name = domain.get('name') if isinstance(domain, dict) else str(domain)
                 
                 if domain_name == 'engineering':
@@ -447,7 +447,7 @@ class IntentClassifierStage(PipelineStage):
                             break
                 
                 # Domain boost: check if intent matches current domain
-                domain = context_info.get('domain', {})
+                domain = context_info.get('domain', 'general')
                 domain_name = domain.get('name', '') if isinstance(domain, dict) else str(domain)
                 if domain_name and domain_name != 'general':
                     # Check if domain name appears in intent type

@@ -45,7 +45,14 @@ class DQNAgent:
         # Device selection
         device_config = self.dqn_config.get('device', 'auto')
         if device_config == 'auto':
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            # Force CPU in WSL environments to avoid CUDA errors
+            import platform
+            is_wsl = 'microsoft' in platform.uname().release.lower()
+            if is_wsl:
+                self.device = torch.device('cpu')
+                logger.info("WSL environment detected - forcing CPU device to avoid CUDA errors")
+            else:
+                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = torch.device(device_config)
         logger.info(f"Using device: {self.device}")
@@ -229,10 +236,24 @@ class DQNAgent:
             weights = torch.ones(self.batch_size).to(self.device)
         
         # Prepare batch tensors
-        states = torch.FloatTensor([t['state'] for t in batch]).to(self.device)
-        actions = torch.LongTensor([t['action'] for t in batch]).to(self.device)
+        states = torch.FloatTensor(np.array([t['state'] for t in batch])).to(self.device)
+        
+        # Validate and clip actions to valid range
+        raw_actions = [t['action'] for t in batch]
+        clipped_actions = []
+        for action in raw_actions:
+            if action >= self.action_space_size:
+                logger.warning(f"Action {action} exceeds action space size {self.action_space_size}, clipping to {self.action_space_size - 1}")
+                clipped_actions.append(self.action_space_size - 1)
+            elif action < 0:
+                logger.warning(f"Negative action {action}, clipping to 0")
+                clipped_actions.append(0)
+            else:
+                clipped_actions.append(action)
+        
+        actions = torch.LongTensor(clipped_actions).to(self.device)
         rewards = torch.FloatTensor([t['reward'] for t in batch]).to(self.device)
-        next_states = torch.FloatTensor([t['next_state'] for t in batch]).to(self.device)
+        next_states = torch.FloatTensor(np.array([t['next_state'] for t in batch])).to(self.device)
         dones = torch.FloatTensor([t['done'] for t in batch]).to(self.device)
         
         # Current Q values

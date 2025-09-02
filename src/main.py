@@ -66,30 +66,105 @@ class AutonomousToolDiscoveryApp:
     
     async def _setup_default_servers(self):
         """Setup default MCP servers."""
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        
         self.logger.info("Setting up default MCP servers...")
+        
+        # Check for API keys
+        brave_api = os.getenv('BRAVE_API_KEY')
+        github_token = os.getenv('GITHUB_TOKEN')
+        postgres_conn = os.getenv('POSTGRES_CONNECTION_STRING')
         
         # Try to add SQLite server
         db_path = "data/test.db"
         success = await self.mcp_integration.add_sqlite_server(
             db_path=db_path,
             server_id="sqlite_main",
-            use_mock=True  # Use mock by default for demo
+            use_mock=True  # Always mock for SQLite
         )
         if success:
             self.logger.info("✓ SQLite server added")
         
-        # Try to add Search server
-        success = await self.mcp_integration.add_search_server(
-            server_id="search_main",
-            use_mock=True  # Use mock by default for demo
-        )
-        if success:
-            self.logger.info("✓ Search server added")
+        # Try to add Search server with real API if available
+        if brave_api and brave_api not in ['placeholder_brave_api_key_here', 'your_brave_api_key_here']:
+            self.logger.info(f"Using real Brave Search API (key: {brave_api[:10]}...)")
+            config = {"api_key": brave_api}
+            success = await self.mcp_integration.add_search_server(
+                config=config,
+                server_id="search_main",
+                use_mock=False  # Use real server
+            )
+            if success:
+                self.logger.info("✓ Search server added (REAL Brave API)")
+            else:
+                # Fallback to mock if real server fails
+                success = await self.mcp_integration.add_search_server(
+                    server_id="search_main",
+                    use_mock=True
+                )
+                if success:
+                    self.logger.info("✓ Search server added (mock - real server failed)")
+        else:
+            success = await self.mcp_integration.add_search_server(
+                server_id="search_main",
+                use_mock=True
+            )
+            if success:
+                self.logger.info("✓ Search server added (mock)")
+        
+        # Try to add GitHub server with real API if available
+        if github_token and github_token not in ['ghp_placeholder_token_here', 'your_github_token_here']:
+            self.logger.info(f"Using real GitHub API (token: {github_token[:10]}...)")
+            success = await self.mcp_integration.add_github_server(
+                github_token=github_token,
+                server_id="github_main",
+                use_mock=False  # Use real server
+            )
+            if success:
+                self.logger.info("✓ GitHub server added (REAL API)")
+            else:
+                # Fallback to mock if real server fails
+                success = await self.mcp_integration.add_github_server(
+                    server_id="github_main",
+                    use_mock=True
+                )
+                if success:
+                    self.logger.info("✓ GitHub server added (mock - real server failed)")
+        else:
+            success = await self.mcp_integration.add_github_server(
+                server_id="github_main",
+                use_mock=True
+            )
+            if success:
+                self.logger.info("✓ GitHub server added (mock)")
+        
+        # Try to add PostgreSQL server if connection string available
+        if postgres_conn and postgres_conn != "postgresql://auto_tool_user:auto_tool_pass@localhost:5432/auto_tool_disc":
+            self.logger.info("Attempting PostgreSQL connection...")
+            try:
+                success = await self.mcp_integration.add_postgres_server(
+                    connection_string=postgres_conn,
+                    server_id="postgres_main",
+                    use_mock=False  # Try real connection
+                )
+                if success:
+                    self.logger.info("✓ PostgreSQL server added (REAL)")
+            except Exception as e:
+                self.logger.warning(f"PostgreSQL connection failed: {e}")
+                success = await self.mcp_integration.add_postgres_server(
+                    connection_string=postgres_conn,
+                    server_id="postgres_main",
+                    use_mock=True
+                )
+                if success:
+                    self.logger.info("✓ PostgreSQL server added (mock - real connection failed)")
         
         # Try to add Weather server
         success = await self.mcp_integration.add_weather_server(
             server_id="weather_main",
-            use_mock=True  # Use mock by default for demo
+            use_mock=True  # Always mock for weather (no API key provided)
         )
         if success:
             self.logger.info("✓ Weather server added")
@@ -98,7 +173,7 @@ class AutonomousToolDiscoveryApp:
         success = await self.mcp_integration.add_filesystem_server(
             base_path=".",
             server_id="filesystem_main",
-            use_mock=True  # Use mock by default for demo
+            use_mock=True  # Always mock for filesystem
         )
         if success:
             self.logger.info("✓ Filesystem server added")
@@ -123,8 +198,11 @@ class AutonomousToolDiscoveryApp:
             result = await self.orchestrator.process_user_query(query)
             
             # Display results
-            print(f"\nIntent: {result.intent.primary_intent.type} "
-                  f"(confidence: {result.intent.primary_intent.confidence:.2f})")
+            if result.intent and hasattr(result.intent, 'primary_intent'):
+                print(f"\nIntent: {result.intent.primary_intent.type} "
+                      f"(confidence: {result.intent.primary_intent.confidence:.2f})")
+            else:
+                print(f"\nIntent: Unable to recognize intent")
             
             print(f"\nDiscovered {len(result.discovered_tools)} tools:")
             for tool in result.discovered_tools[:3]:  # Show top 3

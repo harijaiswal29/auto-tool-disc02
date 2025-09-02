@@ -12,6 +12,8 @@ Key optimizations:
 """
 
 import os
+# DISABLE CUDA to prevent errors in WSL2
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 import sys
 import subprocess
 import json
@@ -22,6 +24,9 @@ import pickle
 import glob
 import re
 import shutil
+import threading
+import queue
+import signal
 from datetime import datetime
 from pathlib import Path
 
@@ -30,8 +35,8 @@ logging.basicConfig(level=logging.WARNING)
 for logger_name in ['src', 'learning', 'evaluation', 'PatternMiner', '__main__']:
     logging.getLogger(logger_name).setLevel(logging.WARNING)
 
-# Add project root to path
-project_root = Path(__file__).parent.absolute()
+# Add project root to path (go up one level from scripts/)
+project_root = Path(__file__).parent.parent.absolute()
 sys.path.insert(0, str(project_root))
 
 # Parse command-line arguments
@@ -50,6 +55,11 @@ parser.add_argument('--output-dir', type=str,
                     help='Custom output directory (default: auto-generated)')
 parser.add_argument('--log-interval', type=int, default=5,
                     help='Report progress every N episodes (default: 5)')
+parser.add_argument('--use-encoder', action='store_true',
+                    help='Use supervised encoder for state dimensionality reduction')
+parser.add_argument('--encoder-path', type=str, 
+                    default='models/supervised_encoder/best_encoder.pth',
+                    help='Path to trained encoder model (default: models/supervised_encoder/best_encoder.pth)')
 
 # Parse arguments
 args = parser.parse_args()
@@ -58,6 +68,14 @@ args = parser.parse_args()
 TOTAL_EPISODES = args.episodes
 CHECKPOINT_INTERVAL = args.checkpoint_interval
 LOG_INTERVAL = args.log_interval
+
+# Timeout configuration for different query sets
+STAGE_TIMEOUT = {
+    'simple_only': 900,      # 15 minutes for simple queries (increased for Q-learning)
+    'quick_test': 900,       # 15 minutes for mixed complexity
+    'dissertation_core': 1200  # 20 minutes for complex queries
+}
+DEFAULT_STAGE_TIMEOUT = 900  # 15 minutes default
 
 # Curriculum stages (adjusted for 50 episodes)
 CURRICULUM_STAGES = [
@@ -312,7 +330,7 @@ if __name__ == "__main__":
     return runner_script
 
 def run_curriculum_stage(stage_info, start_episode, end_episode):
-    """Run a single curriculum stage with optimized logging."""
+    """Run a single curriculum stage with non-blocking I/O and timeout protection."""
     stage_name = stage_info["name"]
     query_set = stage_info["query_set"]
     
@@ -328,12 +346,34 @@ def run_curriculum_stage(stage_info, start_episode, end_episode):
     env = os.environ.copy()
     env['PYTHONWARNINGS'] = 'ignore'
     env['LOG_LEVEL'] = 'WARNING'
+    # DISABLE CUDA to prevent errors in WSL2
+    env['CUDA_VISIBLE_DEVICES'] = ''
     
-    # Check if script exists
-    script_path = "tests/dissertation_test_suite/scripts/run_baseline_comparison.py"
+    # Check if script exists - prioritize optimized version
+    script_path = "tests/dissertation_test_suite/scripts/run_baseline_comparison_optimized_sync.py"
+    if not os.path.exists(script_path):
+        # Try direct optimized version
+        script_path = "tests/dissertation_test_suite/scripts/run_baseline_comparison_optimized.py"
+    if not os.path.exists(script_path):
+        # Fallback to pattern-enabled version
+        script_path = "tests/dissertation_test_suite/scripts/run_baseline_comparison_with_patterns.py"
+    if not os.path.exists(script_path):
+        # Final fallback to original script
+        script_path = "tests/dissertation_test_suite/scripts/run_baseline_comparison.py"
+    
     if not os.path.exists(script_path):
         print(f"❌ Script not found: {script_path}")
         return False
+    else:
+        if "optimized" in script_path:
+            print(f"🚀 Using OPTIMIZED baseline comparison with performance improvements")
+            print(f"  - Intent caching enabled")
+            print(f"  - Smart state collection for relevant strategies only")
+            print(f"  - Shared model initialization")
+        elif "with_patterns" in script_path:
+            print(f"✨ Using pattern mining enabled script")
+        else:
+            print(f"📊 Using standard baseline comparison")
     
     # Build command without unsupported flags
     cmd = [
@@ -345,6 +385,29 @@ def run_curriculum_stage(stage_info, start_episode, end_episode):
         "--checkpoint-dir", CHECKPOINT_DIR,
         "--output-dir", stage_output
     ]
+    
+    # Add optimization flags for the optimized version
+    if "optimized" in script_path:
+        cmd.append("--no-retries")  # Disable retries for faster execution
+    
+    # Add encoder flags if specified
+    if args.use_encoder:
+        # Create temporary config with encoder enabled
+        config_path = "config/config.json"
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        
+        # Enable encoder in config
+        config['state_encoder']['enabled'] = True
+        config['state_encoder']['model_path'] = args.encoder_path
+        
+        # Save temporary config
+        temp_config = f"/tmp/config_encoder_{RUN_ID}.json"
+        with open(temp_config, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        cmd.extend(["--config", temp_config])
+        print(f"🧠 Using supervised encoder from: {args.encoder_path}")
     
     # Add resume flag if continuing
     # Check for global resume checkpoint first (from command line)
@@ -358,36 +421,90 @@ def run_curriculum_stage(stage_info, start_episode, end_episode):
             cmd.extend(["--resume-from", checkpoint_file])
             print(f"📁 Resuming from checkpoint: {checkpoint_file}")
     
+    # Get timeout for this stage
+    stage_timeout = STAGE_TIMEOUT.get(query_set, DEFAULT_STAGE_TIMEOUT)
     print(f"Starting stage execution...")
+    print(f"  - Stage timeout: {stage_timeout}s")
+    
+    # Queue for capturing output
+    output_queue = queue.Queue()
+    
+    def enqueue_output(proc, q):
+        """Read output in separate thread to prevent blocking."""
+        try:
+            for line in iter(proc.stdout.readline, ''):
+                if line:
+                    q.put(line)
+            proc.stdout.close()
+        except Exception as e:
+            q.put(f"ERROR reading output: {e}\n")
     
     try:
-        # Run with progress monitoring
+        # Run with non-blocking I/O
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Combine stderr with stdout
+            stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            env=env
+            env=env,
+            preexec_fn=os.setsid  # Create new process group for better cleanup
         )
         
-        # Monitor progress without flooding output
+        # Start reader thread
+        reader_thread = threading.Thread(
+            target=enqueue_output,
+            args=(process, output_queue),
+            daemon=True
+        )
+        reader_thread.start()
+        
+        # Monitor with timeout and non-blocking I/O
         lines_printed = 0
-        max_lines = 100  # Increase output lines for better debugging
+        max_lines = 100
         important_lines = []
+        start_time = time.time()
+        last_output_time = time.time()
+        last_heartbeat = time.time()
         
         while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
+            # Check for timeout
+            elapsed = time.time() - start_time
+            if elapsed > stage_timeout:
+                print(f"⚠️ Stage timeout after {elapsed:.0f}s - terminating process")
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                except:
+                    process.terminate()
+                time.sleep(2)
+                if process.poll() is None:
+                    try:
+                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                    except:
+                        process.kill()
+                return False
             
-            if line:
-                # Always capture important lines for debugging
+            # Check for stall (no output for 60 seconds)
+            if time.time() - last_output_time > 60:
+                print(f"⚠️ No output for 60s - checking process status")
+                if process.poll() is not None:
+                    break
+                    
+            # Print heartbeat every 30 seconds
+            if time.time() - last_heartbeat > 30:
+                print(f"  ... Stage still running (elapsed: {elapsed:.0f}s)")
+                last_heartbeat = time.time()
+            
+            # Try to get output with timeout
+            try:
+                line = output_queue.get(timeout=1.0)
+                last_output_time = time.time()
+                
+                # Process the line
                 if any(keyword in line.lower() for keyword in 
                        ['error', 'exception', 'traceback', 'failed']):
                     important_lines.append(line.strip())
                 
-                # Print progress lines
                 if any(keyword in line.lower() for keyword in 
                        ['episode', 'checkpoint', 'completed', 'error', 'failed', '%', 'strategy']):
                     if lines_printed < max_lines:
@@ -396,8 +513,17 @@ def run_curriculum_stage(stage_info, start_episode, end_episode):
                     elif lines_printed == max_lines:
                         print("  [Output truncated for brevity...]")
                         lines_printed += 1
+                        
+            except queue.Empty:
+                # No output available, check if process is still running
+                if process.poll() is not None:
+                    # Process has terminated
+                    break
         
-        # Wait for completion
+        # Ensure thread cleanup
+        reader_thread.join(timeout=5)
+        
+        # Get final return code
         return_code = process.poll()
         
         if return_code == 0:
@@ -407,16 +533,20 @@ def run_curriculum_stage(stage_info, start_episode, end_episode):
             print(f"❌ Failed {stage_name} with return code: {return_code}")
             if important_lines:
                 print("  Error details:")
-                for line in important_lines[-10:]:  # Show last 10 error lines
+                for line in important_lines[-10:]:
                     print(f"    {line}")
             return False
             
-    except subprocess.TimeoutExpired:
-        print(f"⚠️ Timeout for {stage_name} - killing process")
-        process.kill()
-        return False
     except Exception as e:
         print(f"❌ Error in {stage_name}: {str(e)[:200]}")
+        try:
+            if 'process' in locals():
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                except:
+                    process.terminate()
+        except:
+            pass
         return False
 
 def generate_summary():

@@ -124,9 +124,12 @@
   "q_learning": {
     "learning_rate": 0.3,
     "discount_factor": 0.99,
-    "exploration_rate": 0.5,
-    "exploration_decay": 0.995,
+    "exploration_rate": 0.6,
+    "exploration_decay": 0.98,
     "min_exploration_rate": 0.01,
+    "temperature_scaling": true,
+    "initial_temperature": 1.5,
+    "temperature_decay": 0.95,
     "adaptive_decay": true,
     "decay_schedule": "exponential",
     "decay_milestones": [
@@ -140,19 +143,27 @@
     "buffer_capacity": 10000,
     "batch_size": 64,
     "update_frequency": 2,
-    "enable_learning": true
+    "enable_learning": true,
+    "use_patterns": true,
+    "use_incremental_patterns": true,
+    "pattern_min_support": 0.1,
+    "pattern_min_confidence": 0.8,
+    "pattern_batch_size": 100,
+    "pattern_decay_factor": 0.95,
+    "pattern_weight": 0.3,
+    "pattern_update_interval": 5
   },
   "dqn": {
     "enabled": true,
-    "network_type": "dueling",
+    "device": "cpu",
+    "network_type": "standard",
     "network_architecture": [
-      512,
       512,
       256,
       128
     ],
     "dropout_rate": 0.2,
-    "use_batch_norm": true,
+    "use_batch_norm": false,
     "learning_rate": 0.001,
     "discount_factor": 0.99,
     "tau": 0.001,
@@ -168,12 +179,18 @@
     "min_exploration_rate": 0.01,
     "adaptive_decay": true,
     "decay_schedule": "cosine",
-    "warmup_episodes": 200,
+    "warmup_episodes": 50,
     "prioritized_replay": true,
     "prioritized_replay_alpha": 0.6,
     "prioritized_replay_beta": 0.4,
-    "prioritized_replay_beta_increment": 0.001,
-    "device": "cpu"
+    "prioritized_replay_beta_increment": 0.001
+  },
+  "state_encoder": {
+    "enabled": false,
+    "model_path": "models/supervised_encoder_real/best_encoder.pth",
+    "encoding_dim": 50,
+    "use_for_training": false,
+    "use_for_inference": false
   },
   "intent_recognition": {
     "model": "all-MiniLM-L6-v2",
@@ -229,6 +246,71 @@
   "evaluation": {
     "enabled": true,
     "debug_rewards": true,
+    "save_state_vectors": true,
+    "state_sampling_rate": 1,
+    "max_states_per_checkpoint": 5000,
+    "checkpoint_interval": 50,
+    "state_collection_strategies": [
+      "q_learning_tabular",
+      "q_learning_dqn",
+      "random",
+      "popular",
+      "fixed_policy",
+      "greedy",
+      "context_agnostic"
+    ],
+    "strategy_sampling_rates": {
+      "q_learning_tabular": 1.0,
+      "q_learning_dqn": 1.0,
+      "random": 0.1,
+      "popular": 0.1,
+      "fixed_policy": 0.2,
+      "greedy": 0.2,
+      "context_agnostic": 0.2,
+      "others": 0.2
+    },
+    "strategy_configs": {
+      "random": {
+        "requires_intent_processing": false,
+        "requires_state_machine": false,
+        "embedding_mode": "mock"
+      },
+      "popular": {
+        "requires_intent_processing": false,
+        "requires_state_machine": false,
+        "embedding_mode": "mock"
+      },
+      "fixed_policy": {
+        "requires_intent_processing": false,
+        "requires_state_machine": false,
+        "embedding_mode": "mock"
+      },
+      "greedy": {
+        "requires_intent_processing": false,
+        "requires_state_machine": false,
+        "embedding_mode": "mock"
+      },
+      "context_agnostic": {
+        "requires_intent_processing": false,
+        "requires_state_machine": false,
+        "embedding_mode": "fast_real"
+      },
+      "q_learning_tabular": {
+        "requires_intent_processing": true,
+        "requires_state_machine": true,
+        "embedding_mode": "full_real"
+      },
+      "q_learning_dqn": {
+        "requires_intent_processing": true,
+        "requires_state_machine": true,
+        "embedding_mode": "full_real"
+      }
+    },
+    "default_embedding_mode": "mock",
+    "embedding_mode_override": null,
+    "use_intent_cache": true,
+    "batch_embeddings": true,
+    "intent_cache_size": 1000,
     "baselines": [
       "random",
       "popular",
@@ -426,11 +508,18 @@
     "health_check_interval": 60.0
   },
   "reward_calculation": {
+    "use_tool_optimized": true,
     "base_weights": {
       "success": 20.0,
       "failure": -2.0,
       "partial_success": 8.0,
       "step_progress": 0.5,
+      "task_success": 10.0,
+      "optimal_tool_match": 15.0,
+      "exact_match_bonus": 10.0,
+      "suboptimal_tool_penalty": -5.0,
+      "tool_distance_penalty": -3.0,
+      "unnecessary_tool_penalty": -8.0,
       "exploration_bonus": 0.2,
       "learning_bonus": 0.3,
       "tool_efficiency": 5.0,
