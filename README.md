@@ -437,7 +437,7 @@ This project is part of an M.Tech dissertation at BITS Pilani. All rights reserv
 
 ## 👤 Author
 
-**[Your Name]**
+**[Hari Shankar Jaiswal]**
 - M.Tech Student, BITS Pilani
 - Email: [2023aa05106@wilp.bits-pilani.ac.in]
 - GitHub: [@harijaiswal29](https://github.com/harijaiswal29)
