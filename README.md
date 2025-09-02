@@ -6,11 +6,11 @@ An AI system that enables autonomous agents to discover, learn, and optimize too
 
 ## 📊 Key Research Achievements
 
-- **50.33%** task completion rate achieved by Q-learning agents
-- **7.5%** improvement over baseline strategy average
-- **3x** better tool selection accuracy than random selection
-- **p < 0.001** statistical significance across all hypotheses
-- **600** training episodes with curriculum learning
+- Superior task completion rate achieved by Q-learning agents
+- Improvement over baseline strategy average
+- Better tool selection accuracy than random selection
+- Statistical significance across all hypotheses
+- **600** training episodes
 - **476-dimensional** state vectors for comprehensive context representation
 
 ## 🏗️ System Architecture
@@ -28,7 +28,7 @@ The system implements a 5-layer architecture for autonomous tool discovery:
 ### System Requirements
 - **Python**: 3.8 or higher (tested with 3.12.3)
 - **Operating System**: Linux, macOS, or Windows with WSL2
-- **Memory**: Minimum 8GB RAM (16GB recommended for training)
+- **Memory**: Minimum 16GB RAM for training with GPUs preferebbly 
 - **Storage**: 2GB free space for models and data
 
 ### Required Software
@@ -40,7 +40,7 @@ The system implements a 5-layer architecture for autonomous tool discovery:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/auto-tool-disc02.git
+git clone https://github.com/harijaiswal29/auto-tool-disc02.git
 cd auto-tool-disc02
 ```
 
@@ -113,36 +113,9 @@ python -c "import json; json.load(open('config/config.json')); print('✓ Config
 python src/main.py
 # Then type your query when prompted, e.g.: "Find weather information for New York"
 
-### Testing Without API Keys
-The system includes mock servers for all MCP tools, allowing full functionality testing without external API keys:
-```bash
-# Tests automatically use mock servers if API keys are not set
-pytest tests/unit/ -v
-
-# Run integration tests
-pytest tests/integration/ -v
-```
-
-### Learning System Tests
-```bash
-# Test Q-Learning with orchestrator
-python demos/demo_q_learning_orchestration.py
-
-# Test pattern mining
-python demos/demo_pattern_mining.py
-
-# Test advanced rewards
-python demos/demo_advanced_rewards.py
-
-# Test DQN implementation
-python demos/demo_dqn_learning.py
-```
-
 ## 📈 Training and Evaluation
 
 ### Training with State Vector Collection
-
-State vector collection is essential for training the supervised encoder that reduces dimensionality from 476 to 50 dimensions. This optimized training configuration collects diverse examples from all strategies with appropriate sampling rates.
 
 #### Configuration Setup
 
@@ -184,8 +157,8 @@ State vector collection is essential for training the supervised encoder that re
 2. **Update `tests/dissertation_test_suite/data/experiment_config.yaml`**:
 ```yaml
 baseline_comparison:
-  episodes: 20                    # Use 20 for testing, 200+ for full training
-  checkpoint_interval: 5          # Save every 5 episodes
+  episodes: 600                 # Use 600 episodes full training
+  checkpoint_interval: 50         # Save every 50 episodes
   runs_per_strategy: 1            # Single run for state collection
 ```
 
@@ -196,18 +169,18 @@ Execute the optimized baseline comparison with state vector collection:
 ```bash
 # Full command with all parameters
 python tests/dissertation_test_suite/scripts/run_baseline_comparison_optimized.py \
-    --episodes 20 \
+    --episodes 600 \
     --checkpoint-dir tests/state_vector_training_20ep \
-    --checkpoint-interval 5 \
+    --checkpoint-interval 50 \
     --success-criteria strict \
     --use-graded-rewards \
     --use-real-servers \
     --query-set dissertation_core
 
 # Parameters explained:
-# --episodes 20: Number of training episodes (use 200+ for full training)
+# --episodes 600: Number of training episodes (use 600+ for full training)
 # --checkpoint-dir: Directory to save checkpoints with state vectors
-# --checkpoint-interval 5: Save checkpoint every 5 episodes
+# --checkpoint-interval 5: Save checkpoint every 50 episodes
 # --success-criteria strict: All optimal tools must be selected for success
 # --use-graded-rewards: Use sophisticated reward calculation
 # --use-real-servers: Attempt to use real MCP servers (falls back to mock if unavailable)
@@ -247,30 +220,6 @@ print(f'State dimensions: {checkpoint.get(\"state_dimensions\", 0)}')
   - `reward`: Calculated reward value
   - `episode`, `query_idx`: Training position
 
-- **Collection Statistics** (for 20 episodes):
-  - Q-learning strategies: ~100 states each (100% sampling)
-  - Random/Popular: ~50-60 states (10% sampling)
-  - Other strategies: ~100 states (20% sampling)
-  - Total: ~600+ states across all strategies
-
-#### Using Collected Data for Encoder Training (Optional)
-
-Extract and prepare the collected state vectors for encoder training:
-
-```bash
-# Extract data from checkpoints
-python src/learning/encoder_data_extractor.py \
-    --checkpoint-dir tests/state_vector_training_20ep \
-    --strategy episode \
-    --balance \
-    --output data/encoder_training_data.npz
-
-# Train the supervised encoder
-python scripts/train_supervised_encoder.py \
-    --data data/encoder_training_data.npz \
-    --epochs 100 \
-    --save-dir models/supervised_encoder_real
-```
 
 ## 🔧 Configuration
 
