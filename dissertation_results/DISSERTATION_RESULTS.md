@@ -20,7 +20,6 @@ This document presents comprehensive experimental results from the dissertation 
 
 ### Key Achievements
 - **50.33%** task completion rate achieved by Q-learning agents
-- **7.5%** improvement over baseline strategy average
 - **3x** better tool selection accuracy than random selection
 - **p < 0.001** statistical significance across all hypotheses
 - **600** episodes completed with perfect scalability
