@@ -108,6 +108,9 @@ test_new_rewards/
 # Backup files
 *.backup
 config/*.backup
+config/*.backup_*
+config/config_*.json
+!config/config.json
 
 # Memory and temporary files
 :memory:
@@ -115,6 +118,10 @@ config/*.backup
 
 # Test execution scripts (temporary)
 tests/dissertation_test_suite/scripts/tmp_scripts/
+scripts/test_*.py
+scripts/testing/
+scripts/training/
+scripts/analysis/
 
 # Test files in project root (should be in tests/)
 /quick_test.py
@@ -136,3 +143,23 @@ tests/dissertation_test_suite/scripts/tmp_scripts/
 # Node.js files (not needed for Python project)
 package.json
 package-lock.json
+
+# Training data files
+data/*.npz
+data/encoder_training_data*.npz
+
+# Test results and experiments
+test_results/
+tests/baseline_comparison_final_*.json
+tests/final_test/
+tests/fix_test/
+tests/fixed_*/
+tests/fresh_training_*/
+tests/*_test/
+tests/*_test_*/
+tests/quick_encoder_test/
+tests/state_vector_*/
+
+# Documentation directories (keep only essential docs)
+docs/analysis/
+docs/troubleshooting/
