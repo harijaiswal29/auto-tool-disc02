@@ -85,9 +85,6 @@ python src/main.py --config config/custom_config.json
 
 ### Individual Components
 ```bash
-# Test MCP connection
-python src/hello_mcp.py
-
 # Run mock MCP servers
 python src/tools/mock_mcp_servers.py
 
@@ -126,9 +123,6 @@ python src/tools/notion_mcp.py
 
 ### Learning System Demos
 ```bash
-# Q-learning demo
-python src/learning/test_q_learning.py
-
 # Q-learning with orchestrator
 python demos/demo_q_learning_orchestration.py
 
@@ -146,9 +140,6 @@ python demos/demo_advanced_rewards.py
 ```bash
 # A/B testing framework (full demo with 6 scenarios)
 python demos/demo_ab_testing_framework.py
-
-# Run only Demo 5 (reward strategy comparison)
-python run_demo5_only.py
 
 # Baseline evaluation demo
 python demos/demo_baseline_evaluation.py --mode quick

@@ -7,7 +7,7 @@ This directory contains demonstration scripts showcasing various features of the
 1. **A/B Testing Framework** (`demo_ab_testing_framework.py`)
 2. **Advanced Reward Strategies** (`demo_advanced_rewards.py`)
 3. **Baseline Evaluation** (`demo_baseline_evaluation.py`)
-4. **DQN Learning** (`demo_dqn_learning.py`, `demo_dqn_simple.py`)
+4. **DQN Learning** (`demo_dqn_learning.py`)
 5. **Pattern Mining** (`demo_pattern_mining.py`)
 6. **Q-Learning Orchestration** (`demo_q_learning_orchestration.py`)
 7. **MCP Tool Demos** (GitHub, Notion, etc.)
@@ -122,11 +122,6 @@ Compares tabular Q-learning with Deep Q-Learning:
 - Performance comparison
 - Learning curves
 - Convergence analysis
-
-### Simple DQN Demo
-**File**: `demo_dqn_simple.py`
-
-Basic DQN implementation demonstration.
 
 ## Baseline Evaluation Demo
 

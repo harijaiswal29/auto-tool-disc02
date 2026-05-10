@@ -248,15 +248,10 @@ auto-tool-disc02/
 │   └── README.md               # Test suite documentation
 │
 ├── data/                       # Runtime data
-│   ├── logs/                   # Application logs (contains numerous log files)
-│   ├── databases/              # Database files
+│   ├── cache/                  # Result cache (result_cache.pkl)
+│   ├── registry/               # Tool registry database (tools.db)
 │   ├── context.db              # Context database
-│   ├── learning.db             # Learning database
-│   ├── sqlite_mcp_verification_report.json  # SQLite verification report
-│   ├── test_combined_registry.db            # Combined test registry
-│   ├── test_fs_integration_registry.db      # Filesystem integration test registry
-│   ├── test_integration_registry.db         # Integration test registry
-│   └── test_search_registry.db              # Search test registry
+│   └── learning.db             # Learning database
 │
 ├── config/                     # Configuration files
 │   └── config.json             # Main configuration
@@ -264,21 +259,15 @@ auto-tool-disc02/
 ├── demos/                      # Main demonstration scripts
 │   ├── README.md
 │   ├── demo_ab_testing_framework.py
-│   ├── demo_ab_testing_rewards.py
 │   ├── demo_advanced_rewards.py
 │   ├── demo_baseline_evaluation.py
 │   ├── demo_dqn_learning.py
-│   ├── demo_dqn_learning_fixed.py
-│   ├── demo_dqn_simple.py
 │   ├── demo_incremental_pattern_mining.py
 │   ├── demo_notion_mcp.py
 │   ├── demo_pattern_mining.py
 │   ├── demo_q_learning_orchestration.py
 │   ├── demo_realtime_monitoring.py
-│   ├── hello_mcp.py
-│   ├── pattern_qlearning_integration.py
-│   ├── run_demo5_only.py
-│   └── simple_pattern_demo.py
+│   └── pattern_qlearning_integration.py
 │
 ├── docs/                       # Documentation
 │   ├── api/                    # API documentation
