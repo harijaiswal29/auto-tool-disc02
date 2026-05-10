@@ -95,7 +95,8 @@ async def startup_event():
             "result_cache": {
                 "enabled": True,
                 "max_size": 100,
-                "ttl_seconds": 300
+                "ttl_seconds": 300,
+                "enable_persistence": False
             },
             "intent_recognition": {
                 "use_fallback": True,  # Use fallback if model fails
@@ -106,10 +107,34 @@ async def startup_event():
         orchestrator = OrchestratorAgent(config)
         await orchestrator.initialize()
         logger.info("Orchestrator initialized successfully")
+
+        await _setup_demo_servers(orchestrator)
     except Exception as e:
         logger.error(f"Failed to initialize orchestrator: {e}", exc_info=True)
         # Create a minimal orchestrator
         orchestrator = OrchestratorAgent({})
+
+
+async def _setup_demo_servers(orch: OrchestratorAgent) -> None:
+    """Register mock MCP servers so tool discovery and execution have something to act on."""
+    mcp = orch.mcp_integration
+    if mcp is None:
+        logger.warning("No MCP integration on orchestrator; skipping server setup")
+        return
+
+    server_setups = [
+        ("sqlite_main",     lambda: mcp.add_sqlite_server(db_path="data/test.db", server_id="sqlite_main", use_mock=True)),
+        ("search_main",     lambda: mcp.add_search_server(server_id="search_main", use_mock=True)),
+        ("github_main",     lambda: mcp.add_github_server(server_id="github_main", use_mock=True)),
+        ("weather_main",    lambda: mcp.add_weather_server(server_id="weather_main", use_mock=True)),
+        ("filesystem_main", lambda: mcp.add_filesystem_server(base_path=".", server_id="filesystem_main", use_mock=True)),
+    ]
+    for name, setup in server_setups:
+        try:
+            ok = await setup()
+            logger.info(f"{'✓' if ok else '✗'} {name} mock server registered")
+        except Exception as e:
+            logger.warning(f"Could not register {name}: {e}")
 
 
 @app.on_event("shutdown")
@@ -220,11 +245,10 @@ async def _process_query_async(session_id: str, query: str, context: Optional[Di
                     confidence=0.7,
                     keywords=keywords
                 ),
-                secondary_intents=[],
-                entities={},
-                context={}
+                raw_query=query,
             )
         
+        secondary = intent_result.all_intents[1:] if intent_result.all_intents else []
         session["stages"]["intent_recognition"] = {
             "status": "completed",
             "data": {
@@ -233,8 +257,8 @@ async def _process_query_async(session_id: str, query: str, context: Optional[Di
                 "keywords": intent_result.primary_intent.keywords,
                 "secondary_intents": [
                     {"type": si.type, "confidence": si.confidence}
-                    for si in intent_result.secondary_intents
-                ] if intent_result.secondary_intents else []
+                    for si in secondary
+                ]
             }
         }
         logger.info(f"Session {session_id}: Intent recognition completed")
@@ -305,6 +329,10 @@ async def _process_query_async(session_id: str, query: str, context: Optional[Di
                     }
                 ]
         
+        def _tool_type(t):
+            tid = t.get("id", "") or ""
+            return t.get("type") or t.get("server_type") or (tid.split(".", 1)[0] if "." in tid else None) or "unknown"
+
         session["stages"]["tool_discovery"] = {
             "status": "completed",
             "data": {
@@ -313,7 +341,7 @@ async def _process_query_async(session_id: str, query: str, context: Optional[Di
                     {
                         "id": tool.get("id"),
                         "name": tool.get("name"),
-                        "type": tool.get("type"),
+                        "type": _tool_type(tool),
                         "relevance_score": tool.get("relevance_score", 0)
                     }
                     for tool in discovered_tools[:5]  # Show top 5
