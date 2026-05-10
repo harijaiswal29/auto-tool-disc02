@@ -316,8 +316,8 @@ python -c "from sentence_transformers import SentenceTransformer; SentenceTransf
 
 #### 3. Database Errors
 ```bash
-# Reset database
-rm -rf data/registry/tool_registry.db
+# Reset registry database
+rm -rf data/registry/tools.db
 # Database will be recreated automatically on next run
 python src/main.py
 ```
